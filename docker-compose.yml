@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+
+  ml_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: promo_ml_service
+    restart: always
+    environment:
+      - MODEL_PATH=/app/models/model.cbm
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=promo
+      - DB_USER=promo_user
+      - DB_PASS=promo_pass
+    volumes:
+      - ./models:/app/models
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    networks:
+      - promo_net
+
+  postgres:
+    image: postgres:15
+    container_name: promo_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: promo
+      POSTGRES_USER: promo_user
+      POSTGRES_PASSWORD: promo_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - promo_net
+
+  nginx:
+    image: nginx:latest
+    container_name: promo_nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ml_service
+    networks:
+      - promo_net
+
+networks:
+  promo_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
