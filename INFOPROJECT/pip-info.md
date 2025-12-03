@@ -2,7 +2,7 @@
 
 pip install --no-index --find-links=D:\offline_wheels -r requirements.txt
 
-pip install --no-index --find-links=D:\offline_wheels pandas==2.1.4
+pip install --no-index --find-links=D:\offline_wheels ujson==5.10.0
 
 
 # СОЗДАТь локальный мини-репозитарий (локальное зеркало)

@@ -5,3 +5,9 @@
 # Активировать venv
 
 .\.venv\Scripts\activate
+
+
+# Pfgecrftv ASGI-сервер.
+## Он, в свою очередь, запускает FastAPI-приложение и обеспечивает
+
+python -m uvicorn app.main:app --reload
