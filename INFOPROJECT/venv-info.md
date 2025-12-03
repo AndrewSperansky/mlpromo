@@ -10,4 +10,6 @@
 # Pfgecrftv ASGI-сервер.
 ## Он, в свою очередь, запускает FastAPI-приложение и обеспечивает
 
-python -m uvicorn app.main:app --reload
+python -m uvicorn application.main:app --reload
+
+uvicorn app.main:application --reload
