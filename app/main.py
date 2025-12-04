@@ -12,18 +12,18 @@ from app.api.v1.ml.router import router as ml_router
 
 # Глобальные объекты
 logger = None
-model = None
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):  # _app обязательныый но неиспол
-    global logger, model
+async def lifespan(_app: FastAPI):  # _app обязательный но неиспользуемый
+    global logger
 
-    # --- startup ---
+    # --------- startup ----------
     logger = setup_logging()
     logger.info("Application starting up...")
 
-    # Здесь можно загрузить ML-модель
+    # ============ Здесь можно загрузить ML-модель =========================
+
     # from app.models.model_loader import load_model
     # model = load_model()
 
@@ -41,11 +41,12 @@ application.add_middleware(RequestLoggingMiddleware)
 # Регистрируем маршруты API v1 ---------------------------------------
 application.include_router(system_router, prefix="/api/v1/system")
 application.include_router(promo_router, prefix="/api/v1/promo")
-application.include_router(calculator_router, prefix="/api/v1/promo")
+application.include_router(calculator_router, prefix="/api/v1/calculator")
 application.include_router(ml_router, prefix="/api/v1/ml")
 # --------------------------------------------------------------------
 
 
-@application.get("/")
+@application.get("/", summary="Root")
 async def root():
+    """Service root endpoint"""
     return {"status": "ok", "service": "promo-ml"}
