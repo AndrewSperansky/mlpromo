@@ -1,85 +1,90 @@
+"""
+Logging configuration for Promo ML Backend.
+JSON logging + file + stdout.
+"""
+
 import logging
 import logging.config
 from pathlib import Path
 from pythonjsonlogger import jsonlogger
 
-# ---------------------------------------------------------
-# Создание директории logs/
-# ---------------------------------------------------------
+
+# Создаем папку logs, если ее нет
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 
 LOG_FILE = LOG_DIR / "app.log"
 
-# ---------------------------------------------------------
-# Конфигурация логирования
-# ---------------------------------------------------------
-LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
 
-    "formatters": {
-        # JSON-формат для продакшена и docker
-        "json": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "fmt": "%(asctime)s %(levelname)s %(name)s %(message)s "
-                   "%(module)s %(funcName)s %(lineno)d "
-                   "%(request_id)s %(model_version)s"
+def get_logging_config() -> dict:
+    """
+    Конфигурация логирования в формате dictConfig.
+
+    Returns:
+        dict: Конфигурация для logging.config.dictConfig
+    """
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+
+        "formatters": {
+            "json": {
+                "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+                "fmt": (
+                    "%(asctime)s %(levelname)s %(name)s %(message)s "
+                    "%(filename)s %(funcName)s %(lineno)d %(correlation_id)s"
+                ),
+            },
+            "simple": {
+                "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+            }
         },
 
-        # Стандартный формат (для fallback, если JSON отключат)
-        "default": {
-            "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-        },
-    },
-
-    "handlers": {
-        # Консоль (docker / dev)
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "json",
-            "level": "INFO",
-        },
-
-        # Файл с ротацией
-        "file": {
-            "class": "logging.handlers.RotatingFileHandler",
-            "formatter": "json",
-            "filename": str(LOG_FILE),
-            "maxBytes": 10_000_000,  # 10 MB
-            "backupCount": 5,
-            "encoding": "utf-8",
-            "level": "INFO",
-        },
-    },
-
-    "loggers": {
-        # Главный логгер проекта
-        "promo_ml": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "json",
+                "level": "INFO",
+            },
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "json",
+                "filename": str(LOG_FILE),
+                "maxBytes": 10_000_000,
+                "backupCount": 5,
+                "encoding": "utf-8",
+                "level": "INFO",
+            },
         },
 
-        # Логи uvicorn (попадают в консоль)
-        "uvicorn.error": {
-            "level": "INFO",
-            "handlers": ["console"]
+        "loggers": {
+            "promo_ml": {
+                "handlers": ["console", "file"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.error": {
+                "handlers": ["console"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "handlers": ["console"],
+                "level": "INFO",
+                "propagate": False,
+            },
         },
-        "uvicorn.access": {
-            "level": "INFO",
-            "handlers": ["console"],
-            "propagate": False
-        },
-    },
-}
+    }
 
-# ---------------------------------------------------------
-# Функция инициализации
-# ---------------------------------------------------------
+
 def setup_logging() -> logging.Logger:
-    """Настройка системы логирования приложения."""
-    logging.config.dictConfig(LOGGING_CONFIG)
+    """
+    Инициализация системы логирования.
+
+    Returns:
+        logging.Logger: корневой логгер приложения
+    """
+    logging.config.dictConfig(get_logging_config())
     logger = logging.getLogger("promo_ml")
-    logger.info("Logging configured and active.")
+    logger.info("Logging initialized")
     return logger

@@ -10,3 +10,29 @@
 2025-12-03 15:41:54,092 | INFO | promo_ml | Logging successfully configured.
 2025-12-03 15:41:54,094 | INFO | promo_ml | Application starting up...
 2025-12-03 15:47:26,608 | INFO | promo_ml | Application shutting down...
+{"asctime": "2025-12-04 17:43:28,537", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 17:43:28,549", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 25, "correlation_id": null}
+{"asctime": "2025-12-04 17:54:01,426", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 35, "correlation_id": null}
+{"asctime": "2025-12-04 17:54:04,074", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 17:54:04,075", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 25, "correlation_id": null}
+{"asctime": "2025-12-04 17:59:02,381", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 35, "correlation_id": null}
+{"asctime": "2025-12-04 17:59:04,514", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 17:59:04,515", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 25, "correlation_id": null}
+{"asctime": "2025-12-04 18:01:59,256", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 35, "correlation_id": null}
+{"asctime": "2025-12-04 18:02:01,391", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 18:02:01,392", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 25, "correlation_id": null}
+{"asctime": "2025-12-04 18:11:12,606", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 35, "correlation_id": null}
+{"asctime": "2025-12-04 18:14:15,593", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 18:14:15,594", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 31, "correlation_id": null}
+{"asctime": "2025-12-04 18:15:15,745", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 40, "correlation_id": null}
+{"asctime": "2025-12-04 18:15:18,182", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 18:15:18,183", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 31, "correlation_id": null}
+{"asctime": "2025-12-04 18:15:31,208", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 40, "correlation_id": null}
+{"asctime": "2025-12-04 18:15:33,781", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 18:15:33,782", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 31, "correlation_id": null}
+{"asctime": "2025-12-04 18:16:14,324", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 40, "correlation_id": null}
+{"asctime": "2025-12-04 18:16:16,392", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 18:16:16,392", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 31, "correlation_id": null}
+{"asctime": "2025-12-04 18:49:20,938", "levelname": "INFO", "name": "promo_ml", "message": "Application shutting down...", "filename": "main.py", "funcName": "lifespan", "lineno": 40, "correlation_id": null}
+{"asctime": "2025-12-04 18:49:23,167", "levelname": "INFO", "name": "promo_ml", "message": "Logging initialized", "filename": "logging_config.py", "funcName": "setup_logging", "lineno": 89, "correlation_id": null}
+{"asctime": "2025-12-04 18:49:23,169", "levelname": "INFO", "name": "promo_ml", "message": "Application starting up...", "filename": "main.py", "funcName": "lifespan", "lineno": 31, "correlation_id": null}
