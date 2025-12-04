@@ -1,0 +1,8 @@
+ 
+cd D:\PycharmProjects\promo-ml
+
+Удаляем старый VENV
+cmd /c "rmdir /s /q .venv"
+
+Создаем новый VENV
+python -m venv .venv

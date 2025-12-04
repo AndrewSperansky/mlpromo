@@ -1,6 +1,14 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.core.logging_config import setup_logging
+from app.middleware.logging_middleware import RequestLoggingMiddleware
+
+# ------------ РОУТЕРЫ ---------------
+from app.api.v1.system.router import router as system_router
+from app.api.v1.promo.router import router as promo_router
+from app.api.v1.calculator.router import router as calculator_router
+from app.api.v1.ml.router import router as ml_router
+
 
 # Глобальные объекты
 logger = None
@@ -25,20 +33,17 @@ async def lifespan(_app: FastAPI):  # _app обязательныый но не�
     logger.info("Application shutting down...")
 
 
-application = FastAPI(
-    title="Promo ML API",
-    lifespan=lifespan
-)
+application = FastAPI(title="Promo ML API", lifespan=lifespan)
 
-# ------------ РОУТЕРЫ ---------------
-from app.api.system.router import router as system_router
-from app.api.promo.router import router as promo_router
-from app.api.ml.router import router as ml_router
+application.add_middleware(RequestLoggingMiddleware)
 
+
+# Регистрируем маршруты API v1 ---------------------------------------
 application.include_router(system_router, prefix="/api/v1/system")
 application.include_router(promo_router, prefix="/api/v1/promo")
+application.include_router(calculator_router, prefix="/api/v1/promo")
 application.include_router(ml_router, prefix="/api/v1/ml")
-# -------------------------------------
+# --------------------------------------------------------------------
 
 
 @application.get("/")

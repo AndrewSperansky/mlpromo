@@ -1,19 +1,17 @@
-
-import os
+# app/core/config.py
 from pydantic_settings import BaseSettings
-
-DATABASE_URL = os.getenv('DATABASE_URL','postgresql://promo:promo@db:5432/promoml')
-MODEL_PATH = os.getenv('MODEL_PATH','app/ml/model_catboost.cbm')
 
 
 class Settings(BaseSettings):
-    ENV: str = "dev"
-    DATABASE_URL: str
-    REDIS_URL: str = "redis://localhost:6379"
-
-    MODEL_PATH: str = "./ml/model.pkl"
+    ENV: str = "development"
+    DEBUG: bool = True
+    DATABASE_URL: str = "postgresql://user:pass@localhost:5432/promo"
+    REDIS_URL: str = "redis://localhost:6379/0"
+    MODEL_STORE_PATH: str = "data/models_history"
+    LOG_LEVEL: str = "INFO"
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()
