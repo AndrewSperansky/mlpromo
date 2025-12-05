@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 import joblib
+import json
 
 logger = logging.getLogger("promo_ml")
 
@@ -8,7 +9,7 @@ logger = logging.getLogger("promo_ml")
 class ModelLoader:
     """
     Глобальный загрузчик ML-модели.
-    Кэширует модель после первого чтения.
+    Кэширует модель и метаданные после первого чтения.
     """
 
     MODEL_PATH = Path("data/models_history/latest_model.pkl")
@@ -20,28 +21,39 @@ class ModelLoader:
     @classmethod
     def load(cls):
         """
-        Загружает модель CatBoost/Sklearn из файла.
-        Синглтон — загружается только один раз.
+        Загружает ML-модель и метаданные.
+        Возвращает dict: {"model": ..., "meta": {...}}
         """
-        if cls._model is not None:
-            return cls._model, cls._meta
+        # already loaded (singleton)
+        if cls._model is not None and cls._meta is not None:
+            return {"model": cls._model, "meta": cls._meta}
 
-        if cls.MODEL_PATH.exists():
-            logger.info(f"Loading ML model from {cls.MODEL_PATH}")
+        if not cls.MODEL_PATH.exists():
+            logger.warning("ML model NOT FOUND at %s", cls.MODEL_PATH)
+            cls._model = None
+            cls._meta = {"feature_order": []}
+            return {"model": cls._model, "meta": cls._meta}
+
+        # Load model safely
+        try:
+            logger.info("Loading ML model from %s", cls.MODEL_PATH)
             cls._model = joblib.load(cls.MODEL_PATH)
-            if cls.META_PATH.exists():
-                import json
+        except Exception as e:
+            logger.error("Failed to load ML model: %s", e)
+            cls._model = None
 
+        # Load meta safely
+        if cls.META_PATH.exists():
+            try:
                 cls._meta = json.loads(cls.META_PATH.read_text(encoding="utf-8"))
-            else:
+            except Exception as e:
+                logger.warning("Meta file corrupted: %s", e)
                 cls._meta = {"feature_order": []}
-
-            logger.info("ML model loaded successfully")
         else:
-            logger.warning(f"ML model NOT FOUND at {cls.MODEL_PATH}")
-            cls._model, cls._meta = None, {"feature_order": []}
+            cls._meta = {"feature_order": []}
 
-        return cls._model, cls._meta
+        logger.info("ML model loaded successfully")
+        return {"model": cls._model, "meta": cls._meta}
 
     @classmethod
     def reload(cls):
@@ -49,4 +61,5 @@ class ModelLoader:
         Принудительная перезагрузка модели (после обучения).
         """
         cls._model = None
+        cls._meta = None
         return cls.load()

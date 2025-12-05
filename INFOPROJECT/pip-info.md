@@ -12,3 +12,6 @@ python -m http.server 8080
 И затем:
 
 pip install --no-index --find-links=http://localhost:8080 wheels/ fastapi
+
+
+pip freeze > requirements.txt

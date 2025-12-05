@@ -2,22 +2,19 @@ version: "3.9"
 
 services:
 
-  ml_service:
+  backend:
+    container_name: promo_ml_backend
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: promo_ml_service
+      context: ..
+      dockerfile: Dockerfile      # ← теперь путь КОРНЕВОЙ
     restart: always
     environment:
-      - MODEL_PATH=/app/models/model.cbm
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=promo
-      - DB_USER=promo_user
-      - DB_PASS=promo_pass
+      - MODEL_PATH=/app/data/models_history/latest_model.pkl
+      - ENV=prod
+      - LOG_LEVEL=INFO
     volumes:
-      - ./models:/app/models
-      - ./logs:/app/logs
+      - ../logs:/app/logs
+      - ../data:/app/data
     ports:
       - "8000:8000"
     depends_on:
@@ -40,6 +37,15 @@ services:
     networks:
       - promo_net
 
+  redis:
+    image: redis:7
+    container_name: promo_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - promo_net
+
   nginx:
     image: nginx:latest
     container_name: promo_nginx
@@ -49,7 +55,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - ml_service
+      - backend
     networks:
       - promo_net
 
