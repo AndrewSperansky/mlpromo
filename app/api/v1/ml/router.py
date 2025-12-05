@@ -1,59 +1,63 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from app.ml.model_loader import ModelLoader
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
 
-
 router = APIRouter(tags=["ml"])
-train_service = MLTrainingService()
-service = MLPredictionService()
+
+
+# ========== DEPENDENCIES ==========
+
+
+def get_prediction_service():
+    """
+    Возвращает сервис предсказаний с загруженной ML моделью.
+    """
+    model = ModelLoader.load()
+    return MLPredictionService(model)
+
+
+def get_training_service():
+    return MLTrainingService()
+
+
+# ========== REQUEST MODELS ==========
 
 
 class TrainRequest(BaseModel):
     dataset_path: str
-    config: dict
-
-
-@router.post("/train", summary="Обучение ML модели")
-def train_model(payload: TrainRequest):
-    """
-    Запускает обучение ML модели CatBoost.
-
-    Args:
-        payload (TrainRequest): Путь к датасету и параметры модели.
-
-    Returns:
-        dict: Путь к сохранённой модели.
-    """
-    model_path = train_service.train(
-        dataset={"X_train": None, "y_train": None},  # позже пришьём loader
-        config=payload.config,
-    )
-    return {"model_saved_to": model_path}
+    config: dict | None = {}
 
 
 class PredictionRequest(BaseModel):
-    # В дальнейшем заменим на конкретные поля датасета
     features: dict
 
 
+# ========== ENDPOINTS ==========
+
+
+@router.post("/train", summary="Обучение ML модели")
+def train_model(
+    payload: TrainRequest, svc: MLTrainingService = Depends(get_training_service)
+):
+    """
+    Запускает обучение модели CatBoost.
+    """
+    result = svc.train(
+        dataset_path=payload.dataset_path,
+        config=payload.config,
+    )
+    return result
+
+
 @router.post("/predict", summary="Предсказание ML модели")
-def predict(payload: PredictionRequest):
+def predict(
+    payload: PredictionRequest,
+    svc: MLPredictionService = Depends(get_prediction_service),
+):
     """
-    Выполняет предсказание ML-модели на основе входных параметров.
-
-    Args:
-        payload (PredictionRequest): Входные признаки модели.
-
-    Returns:
-        dict: Предсказание + версия модели.
+    Выполняет предсказание ML модели + SHAP объяснения.
     """
-    return service.predict(payload.features)
-
-
-""" @router.post("/predict", response_model=Dict)
-async def predict(payload: Dict, model=Depends(get_model)):
-    # здесь вызвать ваш сервис-предсказания; пример:
-    from app.services.predictor import predict_with_shap
-
-    return predict_with_shap(payload, model) """
+    return svc.predict(payload.features)
