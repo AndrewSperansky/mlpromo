@@ -7,6 +7,7 @@ import logging
 import logging.config
 from pathlib import Path
 from pythonjsonlogger import jsonlogger
+from app.core.logger import attach_correlation_filter
 
 
 # Создаем папку logs, если ее нет
@@ -26,7 +27,6 @@ def get_logging_config() -> dict:
     return {
         "version": 1,
         "disable_existing_loggers": False,
-
         "formatters": {
             "json": {
                 "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
@@ -37,9 +37,8 @@ def get_logging_config() -> dict:
             },
             "simple": {
                 "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-            }
+            },
         },
-
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
@@ -56,7 +55,6 @@ def get_logging_config() -> dict:
                 "level": "INFO",
             },
         },
-
         "loggers": {
             "promo_ml": {
                 "handlers": ["console", "file"],
@@ -86,5 +84,8 @@ def setup_logging() -> logging.Logger:
     """
     logging.config.dictConfig(get_logging_config())
     logger = logging.getLogger("promo_ml")
+
+    attach_correlation_filter(logger)
+
     logger.info("Logging initialized")
     return logger
