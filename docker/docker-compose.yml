@@ -6,7 +6,7 @@ services:
     container_name: promo_ml_backend
     build:
       context: ..
-      dockerfile: Dockerfile      # ← теперь путь КОРНЕВОЙ
+      dockerfile: Dockerfile
     restart: always
     environment:
       - MODEL_PATH=/app/data/models_history/latest_model.pkl
@@ -19,11 +19,12 @@ services:
       - "8000:8000"
     depends_on:
       - postgres
+      - redis
     networks:
       - promo_net
 
   postgres:
-    image: postgres:15
+    image: postgres:latest
     container_name: promo_postgres
     restart: always
     environment:
@@ -38,7 +39,7 @@ services:
       - promo_net
 
   redis:
-    image: redis:7
+    image: redis:latest
     container_name: promo_redis
     restart: always
     ports:
@@ -59,9 +60,53 @@ services:
     networks:
       - promo_net
 
+
+  # -------------------- LOKI --------------------
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: promo_loki
+    restart: always
+    volumes:
+      - ./loki-config.yml:/etc/loki/loki-config.yml
+    command: -config.file=/etc/loki/loki-config.yml
+    ports:
+      - "3100:3100"
+    networks:
+      - promo_net
+
+  # -------------------- PROMTAIL --------------------
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: promo_promtail
+    restart: always
+    volumes:
+      - ../logs:/var/log/promo_ml
+      - ./promtail-config.yml:/etc/promtail/promtail-config.yml
+    command: -config.file=/etc/promtail/promtail-config.yml
+    depends_on:
+      - loki
+    networks:
+      - promo_net
+
+  # -------------------- GRAFANA --------------------
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: promo_grafana
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - loki
+    networks:
+      - promo_net
+
+
 networks:
   promo_net:
     driver: bridge
 
 volumes:
   postgres_data:
+  grafana_data:

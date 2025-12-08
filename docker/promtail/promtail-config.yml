@@ -9,22 +9,44 @@ clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  # 1) Сбор логов backend-приложения из файлов
-  - job_name: promo-ml-file-logs
+  # ---- Логи FastAPI backend ----
+  - job_name: promo_ml_backend_logs
     static_configs:
       - targets:
           - localhost
         labels:
           job: promo_ml_backend
-          env: prod
-          __path__: /var/log/promo-ml/*.log
+          host: docker
+          __path__: /var/log/promo_ml/*.log
 
-  # 2) Сбор stdout docker-контейнеров backend
-  - job_name: docker-containers
-    docker_sd_configs:
-      - host: unix:///var/run/docker.sock
     pipeline_stages:
-      - docker: {}
-    relabel_configs:
-      - source_labels: ["__meta_docker_container_name"]
-        target_label: container
+      - json:
+          expressions:
+            level: levelname
+            msg: message
+            logger: name
+            file: filename
+            func: funcName
+            line: lineno
+            timestamp: asctime
+
+      - labels:
+          level:
+          logger:
+          file:
+          func:
+          line:
+
+      - timestamp:
+          source: timestamp
+          format: "2006-01-02 15:04:05.000"
+          location: "UTC"
+
+  # ---- Логи Promtail ----
+  - job_name: promtail_self
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: promtail
+          __path__: /var/log/*.log
