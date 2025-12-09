@@ -1,20 +1,18 @@
-version: "3.9"
-
 services:
 
   backend:
     container_name: promo_ml_backend
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     restart: always
     environment:
-      - MODEL_PATH=/app/data/models_history/latest_model.pkl
-      - ENV=prod
-      - LOG_LEVEL=INFO
+      MODEL_PATH: /app/data/models_history/latest_model.pkl
+      ENV: prod
+      LOG_LEVEL: INFO
     volumes:
-      - ../logs:/app/logs
-      - ../data:/app/data
+      - ./logs:/app/logs
+      - ./data:/app/data
     ports:
       - "8000:8000"
     depends_on:
@@ -24,7 +22,7 @@ services:
       - promo_net
 
   postgres:
-    image: postgres:latest
+    image: postgres:15
     container_name: promo_postgres
     restart: always
     environment:
@@ -54,41 +52,38 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - backend
     networks:
       - promo_net
 
-
-  # -------------------- LOKI --------------------
   loki:
     image: grafana/loki:2.9.2
     container_name: promo_loki
     restart: always
     volumes:
-      - ./loki-config.yml:/etc/loki/loki-config.yml
+      - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml
+      - loki-data:/var/loki
     command: -config.file=/etc/loki/loki-config.yml
     ports:
       - "3100:3100"
     networks:
       - promo_net
 
-  # -------------------- PROMTAIL --------------------
   promtail:
     image: grafana/promtail:2.9.2
     container_name: promo_promtail
     restart: always
     volumes:
-      - ../logs:/var/log/promo_ml
-      - ./promtail-config.yml:/etc/promtail/promtail-config.yml
+      - ./logs:/logs
+      - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
     command: -config.file=/etc/promtail/promtail-config.yml
     depends_on:
       - loki
     networks:
       - promo_net
 
-  # -------------------- GRAFANA --------------------
   grafana:
     image: grafana/grafana:10.2.2
     container_name: promo_grafana
@@ -102,7 +97,6 @@ services:
     networks:
       - promo_net
 
-
 networks:
   promo_net:
     driver: bridge
@@ -110,3 +104,4 @@ networks:
 volumes:
   postgres_data:
   grafana_data:
+  loki-data:
