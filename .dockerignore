@@ -1,0 +1,31 @@
+.git
+.gitignore
+.vscode
+.idea
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+logs/*
+!logs/.gitkeep
+
+# Local data — исключить (модели ты всё равно монтируешь)
+data/*
+!data/.gitkeep
+
+# Docker
+docker/loki/chunks/*
+docker/loki/index/*
+docker/loki/compactor/*
+
+# Cache
+*.log
+*.tmp
+*.cache
+
+# модели 1+ GB
+models/*
+!models/.gitkeep

@@ -2,7 +2,7 @@
 System Service: технические методы системы.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger("promo_ml")
@@ -25,6 +25,6 @@ class SystemService:
 
         return {
             "status": "ok",
-            "timestamp": datetime.now(datetime.timezon.utc).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "service": "promo-ml",
         }

@@ -1,7 +1,9 @@
 services:
 
+ # -------------------- BACKEND --------------------
   backend:
     container_name: promo_ml_backend
+    image: promo-ml:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -21,6 +23,7 @@ services:
     networks:
       - promo_net
 
+# -------------------- POSTGRES --------------------
   postgres:
     image: postgres:15
     container_name: promo_postgres
@@ -36,6 +39,7 @@ services:
     networks:
       - promo_net
 
+# -------------------- REDIS --------------------
   redis:
     image: redis:latest
     container_name: promo_redis
@@ -45,6 +49,7 @@ services:
     networks:
       - promo_net
 
+# -------------------- NGINX --------------------
   nginx:
     image: nginx:latest
     container_name: promo_nginx
@@ -58,19 +63,21 @@ services:
     networks:
       - promo_net
 
+# -------------------- LOKI --------------------
   loki:
     image: grafana/loki:2.9.2
     container_name: promo_loki
     restart: always
     volumes:
       - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml
-      - loki-data:/var/loki
+      - ./docker/loki/data:/var/loki
     command: -config.file=/etc/loki/loki-config.yml
     ports:
       - "3100:3100"
     networks:
       - promo_net
 
+# -------------------- PROMTAIL --------------------
   promtail:
     image: grafana/promtail:2.9.2
     container_name: promo_promtail
@@ -84,6 +91,7 @@ services:
     networks:
       - promo_net
 
+# -------------------- GRAFANA --------------------
   grafana:
     image: grafana/grafana:10.2.2
     container_name: promo_grafana

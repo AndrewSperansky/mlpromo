@@ -1,0 +1,8 @@
+numpy==1.26.4
+pandas==2.1.4
+scipy==1.11.4
+scikit-learn==1.5.2
+catboost==1.2.5
+shap==0.46.0
+joblib==1.4.2
+# torch и torchvision добавляй опционально в отдельный файл torch.txt, см.ниже

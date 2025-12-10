@@ -77,7 +77,7 @@ job = graphql
 ===================================================================================================
 
 
-## логи каждого контейнера
+## Логи каждого контейнера
 
 docker logs loki
 docker logs promtail
@@ -121,9 +121,9 @@ http://localhost:3100/metrics
 
 ### Если один из этих URL показывает JSON или текст — Loki работает.
 
-====================================================================================================
+===================================================================
 
-## 1️⃣ Запрос в Explore (GRAFANA):
+## 1️⃣ Запрос в Explore (UI GRAFANA):
 {job=~".+"}
 {job="3dsonet"}
 {job="graphql"}
@@ -132,8 +132,8 @@ http://localhost:3100/metrics
 ## 2️⃣ Содержимое каталога логов в контейнере Promtail:
 docker exec -it promtail ls -lR /app/logs
 
-## проверка Promtail из контейнера
-## видит ли Promtail файлы логов
+## Проверка Promtail из контейнера
+### Видит ли Promtail файлы логов
 
 docker exec -it promtail ls -lR /app/logs
 
@@ -165,10 +165,9 @@ docker logs promtail --tail=100
 
 #### Если Promtail не может подключиться к Loki — логи не появятся в Grafana.
 
-
 ### Посмотреть  контейнеры в Docker Desktop
 
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+`docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"`
 
 ### Посмотреть контейнеры название
 
@@ -187,19 +186,15 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
 `docker logs promo_promtail`
 
 
-### Проверь что логи попадают:
+### Проверить что логи попадают:
 
 http://localhost:3100/ready
 http://localhost:3100/metrics
 
 
-### Проверь Grafana:
+### Проверить Grafana:
 
 http://localhost:3000
 
 `login: admin / admin`
 
-### Удалить только Postgres volume:
-
-`docker volume ls`
-`docker volume rm promo-ml_postgres_data`
