@@ -190,6 +190,25 @@ Loki API http://localhost:3100.
 `mkdir docker/loki/data/chunks`
 `mkdir docker/loki/data/compactor`
 
-## ПРОВЕРКА КОНТЕЙНЕРА ПО СЛОЯМ
+## ПРОВЕРКА КОНТЕЙНЕРА ПО СЛОЯМ !!!!!+++++!!!!
 
-docker history promo-ml
+`docker history promo-ml`
+
+
+# Запускать сборку именно этим образом:
+
+>`docker compose build backend`   
+`docker compose up -d`
+
+
+# ПРОВЕРКА ПАПОК ВНУТРИ КОНТЕЙНЕРА
+
+ `Get-ChildItem -Recurse docker/loki/data`   
+ 
+### Проверка состояния контейнера (стартовал или restarting)
+`docker-compose exec loki sh -c "ls -l /var/loki"`   
+
+
+##  Пути к папкам контейнера
+
+ `docker inspect promo_loki --format='{{json .Mounts}}'`

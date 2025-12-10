@@ -27,13 +27,13 @@ services:
   postgres:
     image: postgres:15
     container_name: promo_postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_DB: promo
-      POSTGRES_USER: promo_user
-      POSTGRES_PASSWORD: promo_pass
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
@@ -46,6 +46,8 @@ services:
     restart: always
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
     networks:
       - promo_net
 
@@ -67,7 +69,7 @@ services:
   loki:
     image: grafana/loki:2.9.2
     container_name: promo_loki
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml
       - ./docker/loki/data:/var/loki
@@ -81,9 +83,9 @@ services:
   promtail:
     image: grafana/promtail:2.9.2
     container_name: promo_promtail
-    restart: always
+    restart: unless-stopped
     volumes:
-      - ./logs:/logs
+      - loki-data:/loki
       - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
     command: -config.file=/etc/promtail/promtail-config.yml
     depends_on:
@@ -95,11 +97,11 @@ services:
   grafana:
     image: grafana/grafana:10.2.2
     container_name: promo_grafana
-    restart: always
+    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
-      - grafana_data:/var/lib/grafana
+      - grafana-data:/var/lib/grafana
     depends_on:
       - loki
     networks:
@@ -110,6 +112,8 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-  grafana_data:
+  postgres-data:
+  grafana-data:
   loki-data:
+  redis-data:
+  logs:

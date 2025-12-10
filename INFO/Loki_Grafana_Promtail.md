@@ -25,11 +25,7 @@ HTTP → обычные .log
 ## ✔ Поддержка JSON и обычных текстовых логов
 
 
-Итоговая структура проекта
-3dsonet/
- ├─ logs/                                # ← Winston пишет сюда
- ├─ docker-compose.yml                    # ← добавим Loki + Promtail + Grafana
- ├─ promtail-config.yml                   # ← конфиг Promtail
+
 
 
 ## КАК ЗАЙТИ в Grafana
@@ -41,14 +37,14 @@ HTTP → обычные .log
 
 👉 http://localhost:3001
 
-login: admin
-password: admin
+`login: admin`  
+`password: admin`
 
 ### Grafana попросит сменить пароль — можно оставить прежний.
 
 
-## подключение Loki внутри Grafana
-========================================
+## Подключение Loki внутри Grafana
+
 
 ### В Grafana → Connections → Loki
 
@@ -59,36 +55,39 @@ http://loki:3100
 
 ### Дальше ты увидишь:
 
-job = 3dsonet
-job = graphql
+`job = promo-ml`  
+`job = graphql`
 
-и сможешь фильтровать всё что угодно.
+    и сможешь фильтровать всё что угодно
+      🎉 Стек готов!  
 
+### Получаем полноценную production-архитектуру логирования:
 
-#### 🎉 Стек готов!
+### ✔ Winston → local files
+### ✔ Docker volume → Promtail
+### ✔ Promtail → Loki
+### ✔ Loki → Grafana
 
-#### Ты получаешь полноценную production-архитектуру логирования:
-
-## ✔ Winston → local files
-## ✔ Docker volume → Promtail
-## ✔ Promtail → Loki
-## ✔ Loki → Grafana
-
-===================================================================================================
+=============================================================
 
 
 ## Логи каждого контейнера
 
-docker logs loki
-docker logs promtail
-docker logs grafana
+>`docker logs loki`  
+`docker logs promo_loki --tail 50`  
+curl http://localhost:3100/ready  
+
+>`docker logs promtail`   
+`docker logs promo_promtail --tail 50`    
+
+>`docker logs grafana`  
 
 
 ## Полный перезапуск:
 
-docker compose stop loki
-docker compose rm -f loki
-docker compose up -d loki
+>`docker compose stop loki`  
+`docker compose rm -f loki`  
+`docker compose up -d loki`  
 
 
 ## поднять права на volume Loki вручную
@@ -142,9 +141,9 @@ docker exec -it promtail ls -l /app/logs
 
 ## У приложения есть ли вообще логи в /app/logs?
 
-### Зайти в контейнер 3dsonet-app:
+### Зайти в контейнер loki:
 
-docker exec -it 3dsonet-app sh
+docker exec -it loki sh
 ls -R /app/logs
 
 
@@ -198,3 +197,10 @@ http://localhost:3000
 
 `login: admin / admin`
 
+
+### Проверка папок в контейнере
+`docker-compose exec loki sh -c "ls -l /var/loki"`  
+
+> if  "is restarting"
+
+`docker run --rm -it -v ./docker/loki/data:/var/loki alpine sh`  
