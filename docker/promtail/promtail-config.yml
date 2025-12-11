@@ -14,5 +14,5 @@ scrape_configs:
       - targets: [ localhost ]
         labels:
           job: promo_backend
-          __path__: /app/logs/*.log
+          __path__: /app/logs/*.json
 

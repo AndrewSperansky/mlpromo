@@ -1,0 +1,38 @@
+version: 1
+
+formatters:
+  json:
+    format: >
+      {"time": "%(asctime)s",
+       "level": "%(levelname)s",
+       "msg": "%(message)s",
+       "logger":"%(name)s",
+       "file":"%(filename)s",
+       "line":%(lineno)d}
+
+handlers:
+  file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: json
+    filename: /app/logs/backend.json
+    encoding: utf-8
+
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: json
+
+loggers:
+  uvicorn:
+    level: INFO
+
+  uvicorn.error:
+    level: INFO
+
+  uvicorn.access:
+    level: INFO
+
+root:
+  level: INFO
+  handlers: [file, console]

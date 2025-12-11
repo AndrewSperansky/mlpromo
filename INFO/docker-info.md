@@ -216,4 +216,17 @@ Loki API http://localhost:3100.
 ## После замены файлов ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ:
 
 `docker-compose down -v`  
-`docker-compose up -d --force-recreate --build`
+`
+
+
+## Как войти  в контейнер если он перезапускается
+
+`docker update --restart=no promo_ml_backend`  
+`docker start promo_ml_backend`   
+`docker exec -it promo_ml_backend /bin/sh`  
+затем быстро пока не упал   
+`$`  новое приглашение (не вводится)   
+`$   ls -la /app/logs`  
+`$   chmod 7777 /app/logs`  даем полные права  
+`$   chown 1000:1000 /app/log` меняем пользователя  
+`$   chmod g+w /app/logs`  даем права на запись группе   
