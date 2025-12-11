@@ -81,16 +81,21 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libgomp1 libstdc++6 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем установленный Python окружение
+# Создаём системного пользователя с UID=1000 и GID=1000
+RUN adduser --system --group --uid 1000 --shell /bin/sh appuser
+
+# Копируем установленный Python окружение (Copy python runtime from previous stage)
 COPY --from=runtime-builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
 COPY --from=runtime-builder /usr/local/bin /usr/local/bin
 
-# Копируем приложение
+# Копируем приложение (application source)
 COPY . ${APP_HOME}
 
+# Создаём директории и назначаем владельцем appuser
 RUN mkdir -p ${APP_HOME}/logs ${APP_HOME}/data/models_history \
-    && chown -R 1000:1000 ${APP_HOME}
+    && chown -R appuser:appuser ${APP_HOME}
 
+# Switch to non-root user
 USER 1000
 
 # Healthcheck (СТАТИЧНЫЙ ПОРТ!)

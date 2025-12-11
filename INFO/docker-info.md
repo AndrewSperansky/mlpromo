@@ -60,7 +60,7 @@
 
 | Цель | Команда | Комментарий |
 |------|----------|--------------|
-| Просмотр логов приложения | `docker logs -f 3dsonet-app` | Поток логов backend-приложения |
+| Просмотр логов приложения | `docker logs -f promo_loki` | Поток логов backend-приложения |
 | Просмотр логов Neo4j | `docker logs -f 3dsonet-neo4j` | Контроль запуска и ошибок Neo4j |
 | Проверить логи всех контейнеров | `docker compose logs -f` | Поток всех логов окружения |
 | Проверить объем данных | `docker system df` | Использование пространства Docker |
@@ -71,7 +71,7 @@
 
 | Цель | Команда | Комментарий |
 |------|----------|--------------|
-| Войти в backend контейнер | `docker exec -it 3dsonet-app /bin/sh` | Терминал внутри контейнера приложения |
+| Войти в backend контейнер | `docker exec -it promo_ml_backend /bin/sh` | Терминал внутри контейнера приложения |
 | Войти в PostgreSQL | `docker exec -it 3dsonet-db psql -U postgres` | Консоль PostgreSQL |
 | Войти в Redis | `docker exec -it 3dsonet-redis redis-cli` | Консоль Redis |
 | Войти в Neo4j | `docker exec -it 3dsonet-neo4j cypher-shell -u neo4j -p neo4jpassword` | Консоль Neo4j |
@@ -148,11 +148,12 @@ docker-compose down -v      `Останавливает контейнеры и 
 
 ##  ЛОГИРОВАНИЕ
 
->docker logs loki  
-docker logs promtail  
-docker logs grafana  
-docker-compose logs -f backend
-docker logs promo_nginx
+>`docker logs loki`  
+`docker logs promtail`  
+`docker logs grafana`  
+`docker-compose logs -f backend`
+`docker logs promo_nginx`
+`docker logs promo_ml_backend --tail 200`
 
 
 ## ПРОВЕРКИ ПОСЛЕ СТАРТА
@@ -170,38 +171,37 @@ Loki API http://localhost:3100.
 
 ## NGINX
 
-`docker/nginx.conf`
+`docker/nginx.conf`  
+`docker exec -it promo_nginx /bin/sh`      Зайти в контейнер  
+`#  nginx -t`  
+`# nginx -s reload`  
+`docker restart promo_nginx`  
+`docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"`
 
 
-## СПИСОК ВСЕХ ПАПОК DOCKER
+### СПИСОК ВСЕХ ПАПОК DOCKER
 
 `docker volume ls`
 
-## Удаление папок из DOCKER
+### Удаление папок из DOCKER
 
 `docker volume rm docker_loki-data`
 `docker volume rm promo-ml_loki-data`
 `docker volume rm loki-data`
 
-## Создать директории вручную (важно для Windows!)
 
-`mkdir docker/loki/data`
-`mkdir docker/loki/data/index`
-`mkdir docker/loki/data/chunks`
-`mkdir docker/loki/data/compactor`
-
-## ПРОВЕРКА КОНТЕЙНЕРА ПО СЛОЯМ !!!!!+++++!!!!
+### ПРОВЕРКА КОНТЕЙНЕРА ПО СЛОЯМ !!!!!+++++!!!!
 
 `docker history promo-ml`
 
 
-# Запускать сборку именно этим образом:
+### Запускать сборку именно этим образом:
 
 >`docker compose build backend`   
 `docker compose up -d`
 
 
-# ПРОВЕРКА ПАПОК ВНУТРИ КОНТЕЙНЕРА
+### ПРОВЕРКА ПАПОК ВНУТРИ КОНТЕЙНЕРА
 
  `Get-ChildItem -Recurse docker/loki/data`   
  
@@ -209,14 +209,14 @@ Loki API http://localhost:3100.
 `docker-compose exec loki sh -c "ls -l /var/loki"`   
 
 
-##  Пути к папкам контейнера
+###  Пути к папкам контейнера
 
  `docker inspect promo_loki --format='{{json .Mounts}}'`
  
-## После замены файлов ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ:
+### После замены файлов ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ:
 
 `docker-compose down -v`  
-`
+
 
 
 ## Как войти  в контейнер если он перезапускается
@@ -230,3 +230,39 @@ Loki API http://localhost:3100.
 `$   chmod 7777 /app/logs`  даем полные права  
 `$   chown 1000:1000 /app/log` меняем пользователя  
 `$   chmod g+w /app/logs`  даем права на запись группе   
+
+## Доступ к папке контейнера
+ docker run --rm -it -v promo-ml_logs:/logs alpine ls -l /logs
+ 
+## список volume-ов (ищите те, что начинаются с promo-ml или promo_)
+docker volume ls
+
+## какие mount'ы у backend (внимательно посмотрите Destination)
+docker inspect promo_ml_backend --format '{{json .Mounts}}' .
+
+## какие mount'ы у nginx
+docker inspect promo_nginx --format '{{json .Mounts}}' .
+
+
+>docker rm — удаление контейнера.  
+-f — принудительное удаление (даже запущенного контейнера).  
+Пример: docker rm -f my_container.   
+docker exec — выполнение команд в запущенном контейнере.  
+-it — интерактивный режим.
+Пример: docker exec -it my_container /bin/bash — вход в контейнер через терминал.   
+docker logs — просмотр логов контейнера.  
+-f — слежение за логами в реальном времени.  
+--tail <N> — показ последних N строк.  
+Пример: docker logs -f my_container.  
+
+
+>Управление томами  
+docker volume create — создание тома.  
+docker volume ls — список томов.  
+docker volume rm — удаление тома.  
+docker volume prune — удаление неиспользуемых томов.  
+
+
+>docker ps — выводит список запущенных контейнеров.  
+-a — показывает все контейнеры, включая остановленные.  
+-q — выводит только ID контейнеров.  
