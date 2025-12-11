@@ -212,3 +212,8 @@ Loki API http://localhost:3100.
 ##  Пути к папкам контейнера
 
  `docker inspect promo_loki --format='{{json .Mounts}}'`
+ 
+## После замены файлов ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ:
+
+`docker-compose down -v`  
+`docker-compose up -d --force-recreate --build`
