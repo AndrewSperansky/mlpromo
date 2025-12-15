@@ -1,11 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+# from starlette.responses import Response
 from contextlib import asynccontextmanager
+from app.ml.model_manager import ModelManager
+import asyncio
+import logging
 
 # ---- Core Logging ----
 from app.core.logging_config import setup_logging
 
 # ---- Middleware ----
 from app.middleware.logging_middleware import RequestLoggingMiddleware
+# from starlette.middleware.base import BaseHTTPMiddleware
 
 # ---- Routers ----
 from app.api.v1.system.router import router as system_router
@@ -16,9 +21,11 @@ from app.api.v1.ml.router import router as ml_router
 
 logger = None  # Глобальный логгер приложения
 
+model_manager = ModelManager("/models/latest_model.pkl", check_interval=5)
+
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):  # _app обязательный, но неиспользуемый
+async def lifespan(_app: FastAPI):
     """
     Глобальный цикл жизни приложения.
     Выполняет инициализацию логирования, загрузку ML-моделей (если нужно),
@@ -30,14 +37,32 @@ async def lifespan(_app: FastAPI):  # _app обязательный, но неи
     logger = setup_logging()
     logger.info("Application starting up...")
 
-    # --- Место для загрузки ML-модели ---
-    # from app.models.model_loader import load_model
-    # model = load_model()
+    # Загрузка ML‑модели
+    try:
+        model_manager.load()
+        logger.info("ML model loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load ML model: {e}")
 
-    yield
+    # Запуск watcher в фоновом режиме
+    watcher_task = asyncio.create_task(model_manager.watch())
+    logger.info("Watcher task started")
 
-    # --- Shutdown ---
-    logger.info("Application shutting down...")
+    try:
+        yield  # Передача управления приложению
+    finally:
+        # --- Shutdown ---
+        logger.info("Application shutting down...")
+
+        # Корректная остановка watcher‑задачи
+        if not watcher_task.done():
+            watcher_task.cancel()
+            try:
+                await watcher_task
+            except asyncio.CancelledError:
+                logger.info("Watcher task cancelled successfully")
+            except Exception as e:
+                logger.error(f"Error during watcher task cancellation: {e}")
 
 
 # ------------------------------------------------------
@@ -52,7 +77,8 @@ application = FastAPI(
 # ------------------------------------------------------
 # Подключение middleware
 # ------------------------------------------------------
-# ❗ ОСТАВЛЯЕМ только 1 middleware — второго быть НЕ должно
+
+# noinspection PyTypeChecker
 application.add_middleware(RequestLoggingMiddleware)
 
 
@@ -70,5 +96,10 @@ application.include_router(ml_router, prefix="/api/v1/ml")
 # ------------------------------------------------------
 @application.get("/", summary="Root endpoint")
 async def root():
-    """Корневой эндпоинт сервиса."""
+    """Корневой энд-поинт сервиса."""
     return {"status": "ok", "service": "promo-ml"}
+
+
+
+
+

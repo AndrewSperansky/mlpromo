@@ -58,10 +58,27 @@ git checkout main
 git pull origin main
 
 
-Создаём новую ветку для фичи или бага
+## Создаём новую ветку для фичи или бага и сразу переходим в нее
 
-git checkout -b feature/<имя_фичи>
+`git checkout -b feature/<имя_фичи>`
 
+## Просто переходим на ветку
+
+`git checkout  service`
+
+## Узнать в какой ветке работаем
+
+`git branch`
+
+`git status`
+
+`git branch --show-current`
+
+## Удалить ветку
+
+`git branch -d service`   Safe delete     
+
+`git branch -D service`   Force delete
 
 Пример:
 

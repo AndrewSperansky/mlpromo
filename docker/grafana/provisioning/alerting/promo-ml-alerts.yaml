@@ -1,0 +1,36 @@
+apiVersion: 1
+
+groups:
+  - name: promo-ml-backend
+    folder: Promo-ML
+    interval: 1m
+
+    rules:
+      - uid: promo_ml_backend_high_error_rate
+        title: High error rate in promo-ml backend
+        condition: A > 5
+        for: 2m
+
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              queryType: range
+              expr: |
+                sum(
+                  rate(
+                    {job="promo_ml_backend"} |= "ERROR" [1m]
+                  )
+                )
+
+        labels:
+          severity: critical
+          service: promo-ml-backend
+
+        annotations:
+          summary: High error rate in backend
+          description: More than 5 ERROR logs per minute in promo_ml_backend
