@@ -252,3 +252,12 @@ curl -u admin:admin http://localhost:3000/api/datasources
 #### Ожидаемо:
 
 `"uid": "loki"`
+
+
+## Проверка promtail   
+`docker logs promo_ml_backend --tail 100`
+
+## Пересборка Loki, promtail, grafana после внесения изменений
+
+`docker compose down`
+`docker compose up -d --force-recreate promtail loki grafana`

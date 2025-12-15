@@ -9,10 +9,17 @@ clients:
   - url: http://promo_loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: promo_ml_backend_logs
-    static_configs:
-      - targets: [ localhost ]
-        labels:
-          job: promo_backend
-          __path__: /app/logs/*.json
+  - job_name: promo_ml_backend
 
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+
+    relabel_configs:
+      # 👇 ЯВНО задаём job — без условий
+      - target_label: job
+        replacement: promo_ml_backend
+
+      # имя контейнера как label (очень полезно)
+      - source_labels: [__meta_docker_container_name]
+        target_label: container

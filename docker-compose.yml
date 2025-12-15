@@ -143,6 +143,7 @@ services:
     volumes:
       - backend-logs:/app/logs
       - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       loki:
         condition: service_healthy
