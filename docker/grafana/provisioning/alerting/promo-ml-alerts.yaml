@@ -1,15 +1,15 @@
 apiVersion: 1
 
 groups:
-  - name: promo-ml-backend
+  - name: promo-ml-backend-alerts
     folder: Promo-ML
     interval: 1m
 
     rules:
-      - uid: promo_ml_backend_high_error_rate
-        title: High error rate in promo-ml backend
-        condition: A > 5
-        for: 2m
+      - uid: backend_high_error_rate
+        title: BackendHighErrorRate
+
+        condition: A
 
         data:
           - refId: A
@@ -21,16 +21,20 @@ groups:
               refId: A
               queryType: range
               expr: |
-                sum(
+                sum by (job) (
                   rate(
-                    {job="promo_ml_backend"} |= "ERROR" [1m]
+                    {job="promo_ml_backend", level="ERROR"}[1m]
                   )
                 )
+              intervalMs: 60000
+              maxDataPoints: 43200
+
+        for: 2m
 
         labels:
           severity: critical
-          service: promo-ml-backend
+          service: backend
 
         annotations:
-          summary: High error rate in backend
-          description: More than 5 ERROR logs per minute in promo_ml_backend
+          summary: "High error rate in backend"
+          description: "More than 5 ERROR logs per minute in promo_ml_backend."

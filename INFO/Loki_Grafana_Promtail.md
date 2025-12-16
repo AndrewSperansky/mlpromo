@@ -261,3 +261,11 @@ curl -u admin:admin http://localhost:3000/api/datasources
 
 `docker compose down`
 `docker compose up -d --force-recreate promtail loki grafana`
+
+## Grafana
+### Правило должно быть ЛИБО:
+
+>`alert + expr + for (Prometheus-совместимый стиль)`  
+ЛИБО  
+`data + model + condition (Unified Alerting)`
+

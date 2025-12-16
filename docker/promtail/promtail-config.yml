@@ -9,17 +9,30 @@ clients:
   - url: http://promo_loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: promo_ml_backend
+  - job_name: promo_ml_backend_logs
+    static_configs:
+      - targets: [ localhost ]
+        labels:
+          job: promo_ml_backend
+          service: backend
+          __path__: /app/logs/app.log
 
-    docker_sd_configs:
-      - host: unix:///var/run/docker.sock
-        refresh_interval: 5s
+    pipeline_stages:
+      - json:
+          expressions:
+            levelname: levelname
+            logger: name
+            correlation_id: correlation_id
+            filename: filename
+            lineno: lineno
 
-    relabel_configs:
-      # 👇 ЯВНО задаём job — без условий
-      - target_label: job
-        replacement: promo_ml_backend
+      - labels:
+          levelname:
+          logger:
 
-      # имя контейнера как label (очень полезно)
-      - source_labels: [__meta_docker_container_name]
-        target_label: container
+      # correlation_id — НЕ label по умолчанию!
+      # будем использовать как derived field
+
+      - output:
+          source: message
+
