@@ -48,12 +48,17 @@ services:
     image: postgres:15
     container_name: promo_postgres
     restart: unless-stopped
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+
     environment:
       POSTGRES_DB: promo
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+
     volumes:
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - postgres-data:/var/lib/postgresql/data
+      - postgres-logs:/var/log/postgresql
     ports:
       - "5432:5432"
     networks:
@@ -62,10 +67,24 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       retries: 5
+
     deploy:
       resources:
         limits:
           memory: 1G
+
+  # ------------ POSTGRES EXPORTER ------------------
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: promo_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://promo:promo@postgres:5432/promo?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+
 
   # -------------------- REDIS --------------------
   redis:
@@ -86,6 +105,17 @@ services:
       resources:
         limits:
           memory: 512M
+
+  # ------------- REDIS EXPORTER ----------------
+
+  redis-exporter:
+    image: oliver006/redis_exporter
+    container_name: promo_redis_exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://promo_redis:6379
+    ports:
+      - "9121:9121"
 
   # -------------------- NGINX --------------------
   nginx:
@@ -144,6 +174,7 @@ services:
       - backend-logs:/app/logs
       - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - postgres-logs:/var/log/postgresql:ro
     depends_on:
       loki:
         condition: service_healthy
@@ -172,6 +203,27 @@ services:
         limits:
           memory: 512M
 
+  # -------------------- PROMETHEUS --------------------
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: promo_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+    networks:
+      - promo_net
+
+
+
+
 # -------------------- NETWORKS --------------------
 networks:
   promo_net:
@@ -180,8 +232,10 @@ networks:
 # -------------------- VOLUMES --------------------
 volumes:
   postgres-data:
+  postgres-logs:
   grafana-data:
   loki-data:
   redis-data:
   backend-logs:
   nginx-logs:
+  prometheus-data:

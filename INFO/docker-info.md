@@ -171,7 +171,7 @@ Loki API http://localhost:3100.
 
 ## NGINX
 
-`docker/nginx.conf`  
+`docker/nginx.conf`    Папка 
 `docker exec -it promo_nginx /bin/sh`      Зайти в контейнер  
 `#  nginx -t`  
 `# nginx -s reload`  
@@ -215,7 +215,7 @@ Loki API http://localhost:3100.
  
 ### После замены файлов ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ:
 
-`docker-compose down -v`  
+`docker-compose down -v`  -- Данные будут потеряны
 
 
 
@@ -265,4 +265,45 @@ docker volume prune — удаление неиспользуемых томов
 
 >docker ps — выводит список запущенных контейнеров.  
 -a — показывает все контейнеры, включая остановленные.  
--q — выводит только ID контейнеров.  
+-q — выводит только ID контейнеров. 
+
+
+## Какой командой пересобрать приложение после изменений?
+
+### Зависит что именно менялось. Вот точная таблица 👇
+
+### 🔁 A. Меняли ТОЛЬКО конфиги (promtail / grafana / alerts)
+`docker compose up -d --force-recreate promtail grafana loki`
+
+
+❌ backend / postgres / redis НЕ трогаем
+
+### 🐍 B. Меняли backend код или logging
+`docker compose build promo_ml_backend`  
+`docker compose up -d promo_ml_backend`
+
+
+или короче:
+
+`docker compose up -d --build promo_ml_backend`
+
+### 🐘 C. Меняли postgres.config, promtail-config.yaml
+`docker compose up -d --force-recreate postgres`
+`docker compose up -d --force-recreate promtail`
+
+
+
+⚠️ Образ не пересобирается — только рестарт контейнера
+
+### 📊 D. Добавляем Prometheus + exporters (СКОРО)
+`docker compose up -d --build prometheus redis-exporter`
+
+### 🧹 E. Полный жёсткий рестарт (редко!)
+`docker compose down`  
+`docker compose up -d --build`
+
+Используем только если сломали сеть или volume
+
+### 🔐 !!!! Важное правило !!!!!!
+
+## ⚠️Никогда не делай down -v, если не хочешь потерять данные

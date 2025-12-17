@@ -1,0 +1,59 @@
+apiVersion: 1
+
+groups:
+  - name: redis-alerts
+    folder: Promo-ML
+    interval: 1m
+
+    rules:
+      - uid: redis_high_memory_usage
+        alert: RedisHighMemoryUsage
+        title: Redis High Memory Usage
+        condition: A
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              queryType: range
+              expr: |
+                redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+              intervalMs: 60000
+              maxDataPoints: 43200
+
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis memory usage > 80%"
+
+      - uid: redis_evictions
+        alert: RedisEvictions
+        title: Redis Evictions Detected
+        condition: A
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              queryType: range
+              expr: |
+                rate(redis_evicted_keys_total[5m]) > 0
+              intervalMs: 60000
+              maxDataPoints: 43200
+
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis evictions detected"

@@ -1,14 +1,17 @@
 apiVersion: 1
 
 groups:
+  # ======================
+  # Backend (Loki)
+  # ======================
   - name: promo-ml-backend-alerts
     folder: Promo-ML
     interval: 1m
 
     rules:
       - uid: backend_high_error_rate
-        title: BackendHighErrorRate
-
+        alert: BackendHighErrorRate
+        title: Backend High Error Rate
         condition: A
 
         data:
@@ -21,20 +24,51 @@ groups:
               refId: A
               queryType: range
               expr: |
-                sum by (job) (
+                sum(
                   rate(
-                    {job="promo_ml_backend", level="ERROR"}[1m]
+                    {job="promo_ml_backend"} | json | levelname="ERROR" [5m]
                   )
-                )
+                ) > 5
               intervalMs: 60000
               maxDataPoints: 43200
 
         for: 2m
-
         labels:
           severity: critical
           service: backend
-
         annotations:
           summary: "High error rate in backend"
-          description: "More than 5 ERROR logs per minute in promo_ml_backend."
+
+  # ======================
+  # Postgres (Prometheus)
+  # ======================
+  - name: promo-ml-postgres-alerts
+    folder: Promo-ML
+    interval: 1m
+
+    rules:
+      - uid: postgres_slow_queries_burst
+        alert: PostgresSlowQueriesBurst
+        title: Postgres Slow Queries Burst
+        condition: A
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              queryType: range
+              expr: |
+                rate(pg_stat_statements_total_time_seconds[5m]) > 5
+              intervalMs: 60000
+              maxDataPoints: 43200
+
+        for: 2m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "Postgres slow queries burst"

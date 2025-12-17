@@ -1,0 +1,37 @@
+# Минимальный
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # =====================
+  # Prometheus self
+  # =====================
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # =====================
+  # Redis exporter
+  # =====================
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # =====================
+  # Postgres exporter
+  # =====================
+
+  - job_name: postgres
+    static_configs:
+      - targets: [ 'postgres-exporter:9187' ]
+
+
+  # =====================
+  # Backend (если добавим /metrics позже)
+  # =====================
+  # - job_name: promo_ml_backend
+  #   static_configs:
+  #     - targets: ["promo_ml_backend:8000"]

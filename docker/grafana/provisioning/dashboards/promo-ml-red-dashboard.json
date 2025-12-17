@@ -1,0 +1,131 @@
+{
+  "uid": "promo_red_001",
+  "title": "Promo-ML — RED / SRE Dashboard",
+  "tags": ["promo-ml", "red", "sre", "infra"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Backend — Request Rate",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 }
+    },
+
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Backend — Error Rate",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "rate({job=\"promo_ml_backend\"} | json | levelname=\"ERROR\" [1m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 }
+    },
+
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Backend — Latency (p95)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 6 }
+    },
+
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Nginx — Requests",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(nginx_http_requests_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 6, "w": 8, "h": 6 }
+    },
+
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Nginx — 5xx Errors",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(nginx_http_requests_total{status=~\"5..\"}[1m]))",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 8, "y": 6, "w": 8, "h": 6 }
+    },
+
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Postgres — Slow Queries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(pg_stat_statements_total_time_seconds[5m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 6 }
+    },
+
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Redis — Ops/sec",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(redis_commands_processed_total[1m])",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 6 }
+    },
+
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Redis — Memory Usage",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent" }
+      },
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 6 }
+    }
+
+  ]
+}

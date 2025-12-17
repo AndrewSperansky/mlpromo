@@ -9,7 +9,12 @@ clients:
   - url: http://promo_loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: promo_ml_backend_logs
+
+  # =========================
+  # Backend (FastAPI / Uvicorn)
+  # =========================
+  - job_name: promo_ml_backend
+
     static_configs:
       - targets: [ localhost ]
         labels:
@@ -18,21 +23,92 @@ scrape_configs:
           __path__: /app/logs/app.log
 
     pipeline_stages:
+      # Парсим JSON
       - json:
           expressions:
             levelname: levelname
             logger: name
             correlation_id: correlation_id
-            filename: filename
-            lineno: lineno
+            src_file: filename
+            src_line: lineno
+            message: message
 
+      # Нормализуем уровень
+      - template:
+          source: levelname
+          template: '{{ ToUpper .Value }}'
+
+      # Labels — ТОЛЬКО стабильные
       - labels:
           levelname:
           logger:
 
-      # correlation_id — НЕ label по умолчанию!
-      # будем использовать как derived field
+      # correlation_id — НЕ label (используем как derived field)
 
+      # Финальный текст лога
       - output:
           source: message
 
+
+  # =========================
+  # NGINX access logs
+  # =========================
+  - job_name: nginx_access
+
+    static_configs:
+      - targets: [ localhost ]
+        labels:
+          job: nginx
+          service: nginx
+          __path__: /var/log/nginx/access.log
+
+    pipeline_stages:
+      # Парсим JSON access log
+      - json:
+          expressions:
+            status: status
+            method: method
+            uri: uri
+            request_time: request_time
+
+      # Labels — минимально необходимые
+      - labels:
+          status:
+          method:
+
+      # Оставляем URI как тело сообщения
+      - output:
+          source: uri
+
+
+# =========================
+# PostgreSQL logs
+# =========================
+  - job_name: postgres_logs
+
+    static_configs:
+      - targets: [ localhost ]
+        labels:
+          job: postgres
+          service: postgres
+          __path__: /var/log/postgresql/postgresql-*.log
+
+    pipeline_stages:
+
+      # Пример строки:
+      # 2025-12-17 09:06:49.713 UTC [1] promo@promo LOG:  statement: SELECT ...
+
+      - regex:
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) \w+ \[\d+\] (?P<user>\w+)@(?P<db>\w+) (?P<level>[A-Z]+):\s+(?P<message>.*)$'
+
+      - labels:
+          level:
+          user:
+          db:
+
+      - timestamp:
+          source: ts
+          format: "2006-01-02 15:04:05.000"
+
+      - output:
+          source: message
