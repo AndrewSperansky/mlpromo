@@ -284,3 +284,34 @@ curl -u admin:admin http://localhost:3000/api/datasources
 ## Проверка сетей для контейнеров (должны быть одинаковые)
 
 `docker inspect promo_grafana promo_prometheus --format='{{.Name}} -> {{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'`
+
+## Проверяем, что Loki реально принимает логи    
+### Проверка изнутри контейнера Grafana
+
+`docker exec -it promo_grafana sh`  
+`wget -qO- "http://loki:3100/loki/api/v1/labels"`
+
+Если 
+{"status":"success","data":["filename","job","levelname","logger","service"]}  
+>— Loki работает корректно.
+✅ Loki жив
+✅ Grafana ↔ Loki связаны
+✅ Promtail успешно пишет логи
+
+## Проверяем, есть ли сами записи логов  
+### Прямой запрос логов backend
+
+`exec -it promo_grafana sh`
+`wget -qO- "http://loki:3100/loki/api/v1/query_range?query={job=\"promo_ml_backend\"}&limit=5"`
+
+>👉 Ответ пустой = Loki жив, но логов с job="promo_ml_backend" в хранилище НЕТ.
+>Значит:
+>Grafana ❌ не виновата
+>Loki ❌ не виноват
+>Dashboard ❌ не виноват
+>Проблема строго между backend → promtail → loki.
+
+## Проверяем: Promtail вообще читает файлы?  
+### Проверка targets Promtail
+
+`docker exec -it promo_promtail wget -qO- http://localhost:9080/targets`

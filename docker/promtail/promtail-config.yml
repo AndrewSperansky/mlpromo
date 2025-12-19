@@ -60,7 +60,7 @@ scrape_configs:
         labels:
           job: nginx
           service: nginx
-          __path__: /var/log/nginx/access.log
+          __path__: /var/log/nginx/access.json
 
     pipeline_stages:
       # Парсим JSON access log
@@ -85,7 +85,6 @@ scrape_configs:
 # PostgreSQL logs
 # =========================
   - job_name: postgres_logs
-
     static_configs:
       - targets: [ localhost ]
         labels:
@@ -99,12 +98,21 @@ scrape_configs:
       # 2025-12-17 09:06:49.713 UTC [1] promo@promo LOG:  statement: SELECT ...
 
       - regex:
-          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) \w+ \[\d+\] (?P<user>\w+)@(?P<db>\w+) (?P<level>[A-Z]+):\s+(?P<message>.*)$'
+          expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \w+) \[(?P<pid>\d+)\] (?:(?P<user>[\w-]+)@(?P<db>[\w-]+) )?(?P<level>\w+):\s+(?P<message>.*)$'
+          # expression: '^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) \w+ \[\d+\] (?P<user>\w+)@(?P<db>\w+) (?P<level>[A-Z]+):\s+(?P<message>.*)$'
+
+      - drop:
+          source: message
+          regex: 'checkpoint complete|listening on'
 
       - labels:
           level:
           user:
           db:
+
+      - template:
+          source: level
+          template: '{{ ToUpper .Value }}'
 
       - timestamp:
           source: ts
