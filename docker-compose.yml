@@ -91,10 +91,12 @@ services:
     image: redis:latest
     container_name: promo_redis
     restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - promo_net
     healthcheck:
@@ -176,6 +178,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - postgres-logs:/var/log/postgresql:ro
       - nginx-logs:/var/log/nginx:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro  # ✅ ОБЯЗАТЕЛЬНО
     depends_on:
       loki:
         condition: service_healthy
@@ -221,9 +225,6 @@ services:
 
     networks:
       - promo_net
-
-
-
 
 # -------------------- NETWORKS --------------------
 networks:

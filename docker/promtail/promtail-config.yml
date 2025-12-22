@@ -81,9 +81,9 @@ scrape_configs:
           source: uri
 
 
-# =========================
-# PostgreSQL logs
-# =========================
+  # =========================
+  # PostgreSQL logs
+  # =========================
   - job_name: postgres_logs
     static_configs:
       - targets: [ localhost ]
@@ -120,3 +120,42 @@ scrape_configs:
 
       - output:
           source: message
+
+  # =========================
+  # REDIS logs
+  # =========================
+  - job_name: docker-redis
+    docker_sd_configs:
+        - host: unix:///var/run/docker.sock
+          refresh_interval: 5s
+
+    # 🔐 ГАРАНТИРОВАННЫЕ МЕТКИ
+#    labels:
+#      job: redis
+#      service: redis
+
+
+    relabel_configs:
+      - target_label: job
+        replacement: redis
+        action: replace
+      - target_label: service
+        replacement: redis
+        action: replace
+
+
+      # дополнительные метки (НЕ критичные)
+      # Устанавливаем метку с именем контейнера
+      - source_labels: [ __meta_docker_container_name ]
+        target_label: container
+        action: replace
+
+      # Устанавливаем метку с именем образа
+      - source_labels: [ __meta_docker_container_image_name ]
+        target_label: image
+        action: replace
+
+      - source_labels: [ job, service ]  # Проверка: если метки есть, они попадут в ключ
+        target_label: __debug_labels
+        action: replace
+

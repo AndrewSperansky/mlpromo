@@ -315,3 +315,9 @@ curl -u admin:admin http://localhost:3000/api/datasources
 ### Проверка targets Promtail
 
 `docker exec -it promo_promtail wget -qO- http://localhost:9080/targets`
+
+## Проверка файла как он есть в конфигурации
+`docker exec promo_promtail cat /etc/promtail/promtail-config.yml`
+
+
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
