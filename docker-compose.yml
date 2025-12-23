@@ -175,10 +175,9 @@ services:
     volumes:
       - backend-logs:/app/logs
       - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - postgres-logs:/var/log/postgresql:ro
       - nginx-logs:/var/log/nginx:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/containers:/var/lib/docker/containers:ro  # ✅ ОБЯЗАТЕЛЬНО
     depends_on:
       loki:

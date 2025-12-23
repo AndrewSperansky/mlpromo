@@ -321,3 +321,8 @@ curl -u admin:admin http://localhost:3000/api/datasources
 
 
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+## Проверьте доступность Loki из контейнера Promtail:
+docker exec promo_promtail curl -v http://promo_loki:3100/ready
+
+

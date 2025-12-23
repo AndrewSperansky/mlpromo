@@ -101,6 +101,12 @@ redis:
 `docker exec -it promo_redis tail -n 5 /data/redis.log`
 
 
+## Realtime logs
+`docker logs --tail 0 -f promo_promtail`
+`docker logs --tail 10 -f promo_promtail`
+
+
+
 Узнаем ID у promo_redis
  docker inspect -f '{{.Id}}' promo_redis
 f915e5cee0c8bd3a6bb1453cde1a880b37a6a06d6198f9be9c495494cc9a8833
