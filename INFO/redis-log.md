@@ -110,3 +110,40 @@ redis:
 Узнаем ID у promo_redis
  docker inspect -f '{{.Id}}' promo_redis
 f915e5cee0c8bd3a6bb1453cde1a880b37a6a06d6198f9be9c495494cc9a8833
+
+
+## Скопировать promtail-config.yml в контейнер promo_promtail из хоста
+
+docker cp D:\PycharmProjects\promo-ml\docker\promtail\promtail-config.yml promo_promtail:/etc/promtail/config.yml
+
+## Проверить, что файл promtail-config.yml попал в контейнер
+bash
+docker exec promo_promtail cat /etc/promtail/config.yml
+
+
+Целевой файл логов найден
+key="/var/lib/docker/containers/*/*-json.log:{container_name=\"promo_redis\", job=\"redis\", service=\"redis\"}"
+
+## Посмотреть логи в контейнере redis
+
+docker logs promo_redis --tail 10
+1:M 23 Dec 2025 08:47:46.126 * <search> Loading event starts
+1:M 23 Dec 2025 08:47:46.126 * <search> Enabled workers threadpool of size 4
+1:M 23 Dec 2025 08:47:46.126 * Loading RDB produced by version 8.2.2
+1:M 23 Dec 2025 08:47:46.126 * RDB age 3 seconds
+1:M 23 Dec 2025 08:47:46.126 * RDB memory usage when created 0.94 Mb
+1:M 23 Dec 2025 08:47:46.126 * Done loading RDB, keys loaded: 0, keys expired: 0.
+1:M 23 Dec 2025 08:47:46.126 * <search> Disabled workers threadpool of size 4
+1:M 23 Dec 2025 08:47:46.126 * <search> Loading event ends
+1:M 23 Dec 2025 08:47:46.126 * DB loaded from disk: 0.000 seconds
+1:M 23 Dec 2025 08:47:46.127 * Ready to accept connections tcp
+
+Найти реальный путь к логам redis
+
+docker inspect promo_redis | grep LogPath
+
+
+## найти актуальные логи контейнеров — попробуйте эту команду:
+
+bash
+docker inspect --format='{{.LogPath}}' $(docker ps -q)
