@@ -137,12 +137,12 @@ wget -qO- "http://loki:3100/loki/api/v1/query_range?query={job=\"postgres\"}&lim
 
 
 ## Найти путь к файлу postgresql.conf в контейнере promo_postgres
-docker exec -it promo_postgres find / -path "/proc" -prune -o -name "postgresql.conf" -print 2>$null
+`docker exec -it promo_postgres find / -path "/proc" -prune -o -name "postgresql.conf" -print 2>$null`
 
 
 ## Убедиться что promtail пишет новые логи
 
-docker exec -it promo_promtail sh
+`docker exec -it promo_promtail sh`
 tail -f /var/log/postgresql/postgresql-2025-12-18.log
 
 ## Эмуляция медленного запроса (>500 мс)  
@@ -153,5 +153,41 @@ SELECT * FROM table_that_does_not_exist;
 
 
 
+# ORM
+
+## Инициализация Alembic в проекте
+`python -m alembic init migrations`
+
+В корне проекта появится:
+
+>alembic.ini
+>migrations/
+  ├─ env.py
+  ├─ script.py.mako
+  └─ versions/
+> 
+
+## 📦 Миграция alembic
+`alembic revision --autogenerate`  
+`python -m alembic revision --autogenerate -m "initial models with mixins"`
+вместе с
+## 📦 Применение миграции
+`alembic upgrade head`
+→ БД меняется
+→ в таблице alembic_version фиксируется версия
+
+## 📦 Миграция под миксины
+`alembic revision --autogenerate -m "refactor models with mixins"`
+
+## Удалить пустую миграцию
+`del migrations\versions\f85b934f5c57_initial_models_with_mixins.py`
 
 
+
+## Процессы использующие порт 5432
+
+`netstat -ano | findstr :5432`
+ 
+## Узнаем владельцев процессов
+
+`tasklist /FI "PID eq 6752"`

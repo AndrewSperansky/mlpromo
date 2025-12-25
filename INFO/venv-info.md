@@ -15,3 +15,13 @@ python -m uvicorn application.main:app --reload
 uvicorn app.main:application --reload
 
 
+ 
+cd D:\PycharmProjects\promo-ml
+
+Удаляем старый VENV
+cmd /c "rmdir /s /q .venv"
+
+Создаем новый VENV
+python -m venv .venv
+
+
