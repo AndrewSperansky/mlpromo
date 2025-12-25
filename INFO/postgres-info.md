@@ -69,7 +69,7 @@ GRANT ALL PRIVILEGES ON DATABASE promo TO promo;
 
 ### пробуем:
 
-`docker exec -it promo_postgres psql -U promo -d promo`
+`docker exec -it promo_postgres psql -U postgres -d postgres`
 
 ### Если зашёл — идеально ✔️
 
@@ -172,15 +172,29 @@ SELECT * FROM table_that_does_not_exist;
 `python -m alembic revision --autogenerate -m "initial models with mixins"`
 вместе с
 ## 📦 Применение миграции
-`alembic upgrade head`
+
+`alembic upgrade head`   — выполняет миграции, но может молча пропускать ошибки (например, если таблица уже существует).
+`alembic --raiseerr upgrade head`   — обязательно прерывает выполнение при любой ошибке и выводит детальный лог.
+ alembic stamp head   -- очень, очень редко. Лучше не использовать (только все путает)
 → БД меняется
 → в таблице alembic_version фиксируется версия
+`alembic --debug upgrade 99d37dda7ea0`
 
 ## 📦 Миграция под миксины
-`alembic revision --autogenerate -m "refactor models with mixins"`
+`alembic revision --autogenerate -m "create initial models with mixins"`
+
+## 📦 Создать миграцию вручную
+
+`alembic revision --autogenerate -m "initial"`
 
 ## Удалить пустую миграцию
 `del migrations\versions\f85b934f5c57_initial_models_with_mixins.py`
+
+## История миграций
+`alembic history` 
+
+## Откат до версии
+`alembic downgrade 99d37dda7ea0`
 
 
 
@@ -191,3 +205,77 @@ SELECT * FROM table_that_does_not_exist;
 ## Узнаем владельцев процессов
 
 `tasklist /FI "PID eq 6752"`
+
+
+## Вход в консоль POSTGRES  
+`docker exec -it promo_postgres psql -U postgres -d postgres`
+
+## Проверка наличия таблиц
+
+`SELECT tablename FROM pg_tables WHERE schemaname = 'public';`
+
+`SHOW TABLES`
+
+## История миграций
+`SELECT * FROM alembic_version;`
+
+
+## Отладочный аппендикс (1) в env.py
+
+print("=== Таблицы в метаданных ===")
+for table in target_metadata.tables:
+    print(f"  {table}")
+print("=== Конец списка ===")
+
+alembic revision --autogenerate -m "debug_tables"
+
+### Запускаем командой  
+`alembic revision --autogenerate -m "test"`
+
+print("\n=== ТАБЛИЦЫ В METADATA (проверка) ===")
+for table_name in Base.metadata.tables:
+    table = Base.metadata.tables[table_name]
+    print(f"  Таблица: {table_name}")
+    print(f"  Поля: {list(table.columns.keys())}")
+    print(f"    Первичный ключ: {list(table.primary_key)})")
+print("=== КОНЕЦ СПИСКА ===")
+
+### Запускаем командой  
+`alembic revision --autogenerate -m "debug_tables"`
+
+## 1) Проверка наличия таблиц  
+>SELECT tablename 
+FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename IN ('ml_model', 'prediction', 'promo_position');
+
+## 2) Очистить таблицу alembic_version (если она существует):
+>DELETE FROM alembic_version;
+
+
+
+
+## Скрипт для консоли Python для проверки подключения к БД
+
+>from sqlalchemy import create_engine, text
+>
+>url = "postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/promo"
+engine = create_engine(url)
+>
+>try:
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT current_database(), current_user"))
+        db_name, user = result.fetchone()
+        print(f"Подключено к БД: {db_name}, пользователь: {user}")
+except Exception as e:
+    print(f"Ошибка подключения: {e}")
+
+
+## Подключение  к Postgres в контейнере !!!!!!!!!!!!!!!!
+ `docker exec -it promo_postgres psql -U postgres -d promo`
+
+## Посмотреть структуру таблицы
+ \d promo
+ \d ml_promo
+ \d <table_name>
+     

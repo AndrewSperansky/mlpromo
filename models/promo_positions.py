@@ -3,6 +3,10 @@ from datetime import date
 from sqlalchemy import ForeignKey, Date, Float, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from models.mixins.id import IDMixin
+from models.mixins.audit import AuditMixin
+from models.mixins.soft_delete import SoftDeleteMixin
+
 from db.base import Base
 
 if TYPE_CHECKING:
@@ -10,10 +14,10 @@ if TYPE_CHECKING:
     from models.product import Product
 
 
-class PromoPosition(Base):
+class PromoPosition(IDMixin, AuditMixin, SoftDeleteMixin, Base):
     __tablename__ = "promo_position"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    #id: Mapped[int] = mapped_column(primary_key=True)
 
     promo_id: Mapped[int] = mapped_column(
         ForeignKey("promo.id"),
@@ -37,5 +41,13 @@ class PromoPosition(Base):
     discount: Mapped[float] = mapped_column(Float, nullable=False)
     sales_qty: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    promo: Mapped["Promo"] = relationship("Promo")
-    product: Mapped["Product"] = relationship("Product")
+    # promo: Mapped["Promo"] = relationship("Promo")
+    # product: Mapped["Product"] = relationship("Product")
+
+    promo: Mapped["Promo"] = relationship(
+        back_populates="positions"
+    )
+
+    product: Mapped["Product"] = relationship(
+        back_populates="promo_positions"
+    )
