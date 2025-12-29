@@ -1,4 +1,13 @@
-# app/api/v1/product/router.py
+"""
+ POST   /api/v1/product
+ GET    /api/v1/product/{id}
+ GET    /api/v1/product
+ PATCH  /api/v1/product/{id}
+ DELETE /api/v1/product/{id}   (soft delete)
+
+"""
+
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 

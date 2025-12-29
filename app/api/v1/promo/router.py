@@ -1,5 +1,10 @@
 """
 Promo API — операции над промо и расчёт эффективности.
+POST   /api/v1/promo
+GET    /api/v1/promo/{id}
+GET    /api/v1/promo
+PATCH  /api/v1/promo/{id}
+DELETE /api/v1/promo/{id}   (soft delete)
 """
 
 # app/api/v1/promo/router.py
