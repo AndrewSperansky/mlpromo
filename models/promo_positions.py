@@ -7,7 +7,7 @@ from models.mixins.id import IDMixin
 from models.mixins.audit import AuditMixin
 from models.mixins.soft_delete import SoftDeleteMixin
 
-from db.base import Base
+from app.db.base import Base
 
 if TYPE_CHECKING:
     from models.promo import Promo

@@ -4,7 +4,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-from db.base import Base
+from app.db.base import Base
 
 # 🔴 ОБЯЗАТЕЛЬНО: импорт всех моделей
 

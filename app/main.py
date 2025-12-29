@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request
-# from starlette.responses import Response
+from fastapi import FastAPI
+from fastapi import Response
 from contextlib import asynccontextmanager
 from app.ml.model_manager import ModelManager
 import asyncio
+from typing import cast, Callable
 import logging
 
 # ---- Core Logging ----
@@ -13,10 +14,9 @@ from app.middleware.logging_middleware import RequestLoggingMiddleware
 # from starlette.middleware.base import BaseHTTPMiddleware
 
 # ---- Routers ----
-from app.api.v1.system.router import router as system_router
-from app.api.v1.promo.router import router as promo_router
-from app.api.v1.calculator.router import router as calculator_router
-from app.api.v1.ml.router import router as ml_router
+from app.api.v1.router import router as v1_router
+from app.core.config import settings
+from starlette.routing import Route, Mount, Router
 
 
 logger = None  # Глобальный логгер приложения
@@ -41,8 +41,12 @@ async def lifespan(_app: FastAPI):
     try:
         model_manager.load()
         logger.info("ML model loaded successfully")
+
+    except FileNotFoundError:
+        logger.warning("ML model not found yet, running without ML")
+
     except Exception as e:
-        logger.error(f"Failed to load ML model: {e}")
+        logger.exception("Unexpected error while loading ML model")
 
     # Запуск watcher в фоновом режиме
     watcher_task = asyncio.create_task(model_manager.watch())
@@ -65,13 +69,17 @@ async def lifespan(_app: FastAPI):
                 logger.error(f"Error during watcher task cancellation: {e}")
 
 
+
+
 # ------------------------------------------------------
 # Создание FastAPI приложения
 # ------------------------------------------------------
-application = FastAPI(
+app = FastAPI(
     title="Promo ML API",
     lifespan=lifespan,
 )
+
+
 
 
 # ------------------------------------------------------
@@ -79,27 +87,68 @@ application = FastAPI(
 # ------------------------------------------------------
 
 # noinspection PyTypeChecker
-application.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 
-# ------------------------------------------------------
-# Регистрация API v1
-# ------------------------------------------------------
-application.include_router(system_router, prefix="/api/v1/system")
-application.include_router(promo_router, prefix="/api/v1/promo")
-application.include_router(calculator_router, prefix="/api/v1/calculator")
-application.include_router(ml_router, prefix="/api/v1/ml")
 
 
 # ------------------------------------------------------
 # Root endpoint
 # ------------------------------------------------------
-@application.get("/", summary="Root endpoint")
+@app.get("/", summary="Root endpoint")
 async def root():
-    """Корневой энд-поинт сервиса."""
+    """Корневой эндпоинт сервиса."""
     return {"status": "ok", "service": "promo-ml"}
 
 
+# ------------------------------------------------------
+# Health endpoint
+# ------------------------------------------------------
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# ------------------------------------------------------
+# Эндпоинт для просмотра всех маршрутов
+# ------------------------------------------------------
+
+
+@app.get("/routes", response_class=Response)
+def list_routes_plain():
+    lines = []
+
+    for r in app.routes:
+        if not isinstance(r, Route):
+            continue
+
+        if r.path in {
+            "/openapi.json",
+            "/docs",
+            "/redoc",
+            "/docs/oauth2-redirect",
+        }:
+            continue
+
+        methods = ",".join(sorted(r.methods)) if r.methods else "-"
+        name = r.name or "-"
+
+        endpoint = cast(Callable, r.endpoint)
+        module = endpoint.__module__
+
+        line = f"{methods:<7} {r.path:<45} → {name} ({module})"
+        lines.append(line)
+
+    lines.sort()
+    return Response(
+        "\n".join(lines),
+        media_type="text/plain; charset=utf-8"
+    )
 
 
 
+# ------------------------------------------------------
+# Регистрация API v1
+# ------------------------------------------------------
+
+app.include_router(v1_router)

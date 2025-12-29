@@ -1,17 +1,17 @@
 # app/core/config.py
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
-    ENV: str = "development"
-    DEBUG: bool = True
-    DATABASE_URL: str = "postgresql://user:pass@localhost:5432/promo"
-    REDIS_URL: str = "redis://localhost:6379/0"
-    MODEL_STORE_PATH: str = "data/models_history"
-    LOG_LEVEL: str = "INFO"
+    database_url: str
+    sqlalchemy_echo: bool = Field(default=False, alias="SQLALCHEMY_ECHO")
 
-    class Config:
-        env_file = ".env"
-
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="forbid",
+        populate_by_name=True,
+    )
 
 settings = Settings()
+

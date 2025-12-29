@@ -11,11 +11,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-logs/
 data/
 models_history/
 lib/
 lib64/
+logs/
 parts/
 sdist/
 var/
