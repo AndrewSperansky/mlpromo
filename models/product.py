@@ -10,7 +10,7 @@ from models.mixins.soft_delete import SoftDeleteMixin
 from app.db.base import Base
 
 if TYPE_CHECKING:
-    from models.promo_positions import PromoPosition
+    from models.promo_position import PromoPosition
 
 
 class Product(IDMixin, AuditMixin, SoftDeleteMixin, Base):

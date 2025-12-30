@@ -10,22 +10,20 @@ from datetime import datetime
 from sqlalchemy.orm import relationship
 
 if TYPE_CHECKING:
-    from models.promo_positions import PromoPosition
+    from models.promo_position import PromoPosition
 
 class Promo(IDMixin, AuditMixin, SoftDeleteMixin, Base):
     __tablename__ = "promo"
 
-    promo_code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False,)
 
     start_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
         nullable=False,
     )
 
     end_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
         nullable=False,
     )
 

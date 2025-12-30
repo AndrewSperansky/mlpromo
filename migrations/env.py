@@ -8,7 +8,7 @@ from app.db.base import Base
 
 # 🔴 ОБЯЗАТЕЛЬНО: импорт всех моделей
 
-from models import (ml_model, prediction, promo_positions, promo, product,)  # noqa: F401
+from models import (ml_model, prediction, promo_position, promo, product, )  # noqa: F401
 
 config = context.config
 

@@ -69,7 +69,7 @@ GRANT ALL PRIVILEGES ON DATABASE promo TO promo;
 
 ### пробуем:
 
-`docker exec -it promo_postgres psql -U postgres -d postgres`
+`docker exec -it promo_postgres psql -U postgres -d promo`
 
 ### Если зашёл — идеально ✔️
 
@@ -175,7 +175,7 @@ SELECT * FROM table_that_does_not_exist;
 
 `alembic upgrade head`   — выполняет миграции, но может молча пропускать ошибки (например, если таблица уже существует).
 `alembic --raiseerr upgrade head`   — обязательно прерывает выполнение при любой ошибке и выводит детальный лог.
- alembic stamp head   -- очень, очень редко. Лучше не использовать (только все путает)
+ !!!! alembic stamp head   -- очень, очень редко. Лучше не использовать (только все путает)
 → БД меняется
 → в таблице alembic_version фиксируется версия
 `alembic --debug upgrade 99d37dda7ea0`
