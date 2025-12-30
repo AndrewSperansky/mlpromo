@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+
 from app.ml.model_loader import ModelLoader
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
@@ -61,3 +66,40 @@ def predict(
     Выполняет предсказание ML модели + SHAP объяснения.
     """
     return svc.predict(payload.features)
+
+
+# Read-only ML-dataset API
+
+@router.get("/dataset", summary="ML dataset (read-only)")
+def get_ml_dataset(
+    limit: int = 1000,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+):
+    query = text("""
+        SELECT
+            date,
+            promo_code,
+            sku,
+            price,
+            discount,
+            target_sales_qty,
+            avg_sales_7d,
+            avg_discount_7d,
+            promo_days_left
+        FROM promo_ml_dataset_v1
+        ORDER BY date, promo_code, sku
+        LIMIT :limit
+        OFFSET :offset
+    """)
+
+    result = db.execute(
+        query,
+        {"limit": limit, "offset": offset},
+    )
+
+    rows = result.mappings().all()
+    return {
+        "count": len(rows),
+        "items": rows,
+    }
