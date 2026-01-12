@@ -9,9 +9,12 @@ from app.db.session import get_db
 from app.ml.model_loader import ModelLoader
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
+from app.api.v1.ml.predict import router as predict_router
 
-router = APIRouter(tags=["ml"])
+router = APIRouter(prefix="/ml", tags=["ml"])
+router.include_router(predict_router)
 
+# POST /api/v1/ml/predict
 
 # ========== DEPENDENCIES ==========
 
