@@ -4,7 +4,7 @@ System Service: технические методы системы.
 
 from datetime import datetime, timezone
 import logging
-from app.core.config import settings
+from app.core.settings import settings
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 

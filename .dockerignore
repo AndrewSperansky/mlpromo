@@ -27,5 +27,5 @@ docker/loki/compactor/*
 *.cache
 
 # модели 1+ GB
-models/*
+!models/**
 !models/.gitkeep

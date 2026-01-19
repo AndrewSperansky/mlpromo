@@ -1,3 +1,8 @@
+Cкачать pgAdmin
+https://www.pgadmin.org/download/
+Откройте pgAdmin в браузере:
+http://localhost:5050
+
 ## Перезапуск PostgreSQL после изменений в postgresql.conf
 docker compose up -d --force-recreate postgres
 
@@ -71,10 +76,8 @@ GRANT ALL PRIVILEGES ON DATABASE promo TO promo;
 
 `docker exec -it promo_postgres psql -U postgres -d promo`
 
-### Если зашёл — идеально ✔️
 
-
-##  Выйти из длинного вывода (END)
+##  Выйти из длинного вывода  (END - Pager)
 `q` без Enter
 
 ## 🛠 Как вообще отключить pager (чтобы больше не бесило)
@@ -105,10 +108,7 @@ GRANT ALL PRIVILEGES ON DATABASE promo TO promo;
 docker inspect promo_postgres --format='OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}}'
 
 
-## Прочитать логи в контейнере promo_grafana
 
-`docker exec -it --user root promo_grafana sh`            
-wget -qO- "http://loki:3100/loki/api/v1/query_range?query={job=\"postgres\"}&limit=5"
 
 
 ## Определение директории для логов в контейнере promo_postgres
@@ -116,9 +116,7 @@ wget -qO- "http://loki:3100/loki/api/v1/query_range?query={job=\"postgres\"}&lim
 результат: log_directory = '/var/log/postgresql'
 
 
-## Прочитать логи в контейнере promtail
 
-`docker exec -it promo_promtail sh`  
 
 ### Видит ли promtail нужные файлы  
 `ls -la /var/log/postgresql/`  
@@ -150,53 +148,6 @@ SELECT pg_sleep(0.55);
 
 ## Эмуляция ERROR  
 SELECT * FROM table_that_does_not_exist;  
-
-
-
-# ORM
-
-## Инициализация Alembic в проекте
-`python -m alembic init migrations`
-
-В корне проекта появится:
-
->alembic.ini
->migrations/
-  ├─ env.py
-  ├─ script.py.mako
-  └─ versions/
-> 
-
-## 📦 Миграция alembic
-`alembic revision --autogenerate`  
-`python -m alembic revision --autogenerate -m "initial models with mixins"`
-вместе с
-## 📦 Применение миграции
-
-`alembic upgrade head`   — выполняет миграции, но может молча пропускать ошибки (например, если таблица уже существует).
-`alembic --raiseerr upgrade head`   — обязательно прерывает выполнение при любой ошибке и выводит детальный лог.
- !!!! alembic stamp head   -- очень, очень редко. Лучше не использовать (только все путает)
-→ БД меняется
-→ в таблице alembic_version фиксируется версия
-`alembic --debug upgrade 99d37dda7ea0`
-
-## 📦 Миграция под миксины
-`alembic revision --autogenerate -m "create initial models with mixins"`
-
-## 📦 Создать миграцию вручную
-
-`alembic revision --autogenerate -m "initial"`
-
-## Удалить пустую миграцию
-`del migrations\versions\f85b934f5c57_initial_models_with_mixins.py`
-
-## История миграций
-`alembic history` 
-
-## Откат до версии
-`alembic downgrade 99d37dda7ea0`
-
-
 
 ## Процессы использующие порт 5432
 
@@ -278,4 +229,43 @@ except Exception as e:
  \d promo
  \d ml_promo
  \d <table_name>
-     
+ \dt public.*
+
+## Создание  BACKUP БД
+`docker exec -t promo_postgres pg_dump -U postgres promo > backup_$(Get-Date -Format "yyyy-MM-dd_HH-mm").sql`
+   
+
+##  📌 Восстановление БД (не сработает если есть битые символы)
+docker exec -i promo_postgres psql -U postgres promo < backup_2026-01-14_15-23.sql  
+
+
+## ШАГ 1. Перекодировать дамп В UTF-8 БЕЗ BOM
+### ⚠️ Делать в WSL / Linux, не в Notepad.
+
+`iconv -f UTF-16LE -t UTF-8 backup_2026-01-14_15-23.sql > backup_utf8.sql`
+
+
+## ШАГ 2. Загрузить перекодированный дамп (bash)
+`docker exec -i promo_postgres psql -U postgres -d promo  < backup_utf8.sql`
+
+
+## Как восстановить БЕЗ ошибок (правильно)
+### ✅ Вариант A — самый правильный (рекомендую)
+
+- На Windows:  
+
+`chcp 65001`
+`pg_dump -U postgres -d promo --encoding=UTF8 > backup_utf8.sql`
+
+- Потом:  
+`docker exec -i promo_postgres psql -U postgres -d promo < backup_utf8.sql`
+
+
+- docker compose build postgres
+- docker compose up -d postgres
+- docker compose up -d --force-recreate postgres
+
+
+## IP‑адрес контейнера (опционально)
+- docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' promo_postgres
+

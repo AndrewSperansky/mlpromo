@@ -1,3 +1,5 @@
+# app/repositories/promo_repository.py
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from collections.abc import Sequence

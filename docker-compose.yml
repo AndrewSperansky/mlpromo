@@ -1,4 +1,4 @@
-
+# . docker-compose.yml
 services:
 
   # -------------------- BACKEND --------------------
@@ -33,7 +33,7 @@ services:
       interval: 30s          # проверять каждые 30 секунд
       timeout: 10s         # ждать ответа не более 10 секунд
       retries: 3          # после 3 неудач считать контейнер unhealthy
-      start_period: 60s   # игнорировать проверки первые 60 секунд после старта
+      start_period: 30s   # игнорировать проверки первые 60 секунд после старта
     deploy:
       resources:
         limits:

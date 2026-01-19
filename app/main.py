@@ -1,3 +1,4 @@
+# app/main.py
 from fastapi import FastAPI
 from fastapi import Response
 from contextlib import asynccontextmanager
@@ -15,59 +16,66 @@ from app.middleware.logging_middleware import RequestLoggingMiddleware
 
 # ---- Routers ----
 from app.api.v1.router import router as v1_router
-from app.core.config import settings
+from app.core.settings import settings
 from starlette.routing import Route, Mount, Router
 
+from app.ml.contract_check import check_ml_contract
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
-logger = None  # Глобальный логгер приложения
+
+logger = logging.getLogger("promo_ml")
 
 model_manager = ModelManager("/models/latest_model.pkl", check_interval=5)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """
-    Глобальный цикл жизни приложения.
-    Выполняет инициализацию логирования, загрузку ML-моделей (если нужно),
-    а также корректно логирует shutdown.
-    """
     global logger
 
-    # --- Startup ---
+    # ---------- STARTUP ----------
     logger = setup_logging()
-    logger.info("Application starting up...")
+    logger.info("Starting Promo ML service ...")
 
-    # Загрузка ML‑модели
+    # --- ML Contract check ---
+    contract = check_ml_contract()
+    ML_RUNTIME_STATE["checked"] = True
+    ML_RUNTIME_STATE["contract"] = contract
+
+    if contract["status"] == "ok":
+        logger.info("ML contract OK", extra=contract)
+    else:
+        logger.warning("ML contract DEGRADED", extra=contract)
+
+    # --- Load ML model ---
     try:
         model_manager.load()
         logger.info("ML model loaded successfully")
-
     except FileNotFoundError:
         logger.warning("ML model not found yet, running without ML")
-
-    except Exception as e:
+    except Exception:
         logger.exception("Unexpected error while loading ML model")
 
-    # Запуск watcher в фоновом режиме
+    # --- Start watcher ---
     watcher_task = asyncio.create_task(model_manager.watch())
-    logger.info("Watcher task started")
+    logger.info("ML watcher task started")
 
-    try:
-        yield  # Передача управления приложению
-    finally:
-        # --- Shutdown ---
-        logger.info("Application shutting down...")
+    # ---------- APP RUN ----------
+    yield
 
-        # Корректная остановка watcher‑задачи
-        if not watcher_task.done():
-            watcher_task.cancel()
-            try:
-                await watcher_task
-            except asyncio.CancelledError:
-                logger.info("Watcher task cancelled successfully")
-            except Exception as e:
-                logger.error(f"Error during watcher task cancellation: {e}")
+    # ---------- SHUTDOWN ----------
+    logger.info("Shutting down Promo ML service")
 
+    if not watcher_task.done():
+        watcher_task.cancel()
+        try:
+            await watcher_task
+        except asyncio.CancelledError:
+            logger.info("Watcher task cancelled successfully")
+        except Exception as exc:
+            logger.error(
+                "Error during watcher task cancellation",
+                extra={"error": str(exc)},
+            )
 
 
 
@@ -77,6 +85,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Promo ML API",
     lifespan=lifespan,
+    debug=True
 )
 
 

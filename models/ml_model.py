@@ -2,6 +2,7 @@
 # ML-модели (реестр моделей)
 
 from sqlalchemy import String, Boolean, JSON, Text, DateTime, func, Integer
+from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -29,7 +30,7 @@ class MLModel(IDMixin, AuditMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    trained_at: Mapped[DateTime] = mapped_column(
+    trained_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,

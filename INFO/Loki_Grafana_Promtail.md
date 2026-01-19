@@ -326,3 +326,16 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 docker exec promo_promtail curl -v http://promo_loki:3100/ready
 
 
+## Прочитать логи в контейнере promo_grafana
+
+`docker exec -it --user root promo_grafana sh`            
+wget -qO- "http://loki:3100/loki/api/v1/query_range?query={job=\"postgres\"}&limit=5"
+
+
+## Прочитать логи в контейнере promtail
+
+`docker exec -it promo_promtail sh`  
+
+
+### Видит ли promtail нужные файлы  
+`ls -la /var/log/postgresql/`  

@@ -1,7 +1,25 @@
-# 🧭 Docker Cheatsheet — 3D SoNet
+# 🧭 Docker Cheatsheet
+
+`docker desktop stop --force`
+
+
+`docker compose build backend`
+`docker compose restart backend`
+`docker compose restart`
+`docker compose up -d backend`
+
+
+## Приведение файла Dockerfile к последнему сохраненному состоянию
+
+`git checkout -- Dockerfile`  
 
 # Таблица для управления окружением проекта
 ### Включает все команды для запуска, проверки, мониторинга и отладки контейнеров.
+
+`===================================================================================`  
+`docker ps --format "table {{.Names}}\t{{.ID}}\t{{.Status}}\t{{.Ports}}"`    
+docker compose ps -a
+`===================================================================================`  
 
 ---
 ## Сборка (Монтировка)
@@ -19,7 +37,8 @@
 
 Аналогично docker-compose up -d --no-deps backend     
 Если меняются только файлы конфигурайии (nginx.conf, promtail-config.yml, loki-config.yml)
->`docker restart promo_loki`\
+
+`docker restart promo_loki`\
 `docker restart promo_promtail`\
 `docker restart promo_nginx`
 
@@ -270,6 +289,15 @@ docker volume prune — удаление неиспользуемых томов
 
 ## Какой командой пересобрать приложение после изменений?
 
+`docker desktop stop --force`
+
+
+`docker compose build backend`
+`docker compose restart backend`
+`docker restart promo_ml_backend`
+`docker compose restart`
+`docker compose up -d backend`
+
 ### Зависит что именно менялось. Вот точная таблица 👇
 
 ### 🔁 A. Меняли ТОЛЬКО конфиги (promtail / grafana / alerts)
@@ -279,13 +307,13 @@ docker volume prune — удаление неиспользуемых томов
 ❌ backend / postgres / redis НЕ трогаем
 
 ### 🐍 B. Меняли backend код или logging
-`docker compose build promo_ml_backend`  
-`docker compose up -d promo_ml_backend`
+`docker compose build backend`  
+`docker compose up -d backend`
 
 
 или короче:
 
-`docker compose up -d --build promo_ml_backend`
+`docker compose up -d --build backend`
 
 ### 🐘 C. Меняли postgres.config, promtail-config.yaml
 `docker compose up -d --force-recreate postgres`
@@ -307,3 +335,86 @@ docker volume prune — удаление неиспользуемых томов
 ### 🔐 !!!! Важное правило !!!!!!
 
 ## ⚠️Никогда не делай down -v, если не хочешь потерять данные
+
+##  Вход в контейнер и запуск редактора bash
+docker exec -it promo_ml_backend bash 
+pwd
+ls
+/app$ find / -maxdepth 3 -type d -name app 2>/dev/null
+ls /app/app
+ls /app/app/api
+ls /app/app/api/v1
+ls /app/app/api/v1/ml
+
+
+## Узнаем имена сервисов
+`docker compose config --services` 
+`docker compose ps`
+>loki
+grafana
+postgres
+postgres-exporter
+redis
+backend
+nginx
+prometheus
+promtail
+redis-exporter
+
+`docker compose build --no-cache backen`
+
+## Docker CLI  команда
+`docker build --no-cache -t promo_ml_backend . `
+
+>NAMES STATUS PORTS promo_nginx Up 3 hours (healthy) 0.0.0.0:80->80/tcp, [::]:80->80/tcp   
+promo_ml_backend Up 3 hours (healthy) 0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp  
+promo_postgres_exporter Up 3 hours 0.0.0.0:9187->9187/tcp, [::]:9187->9187/tcp  
+promo_promtail Up 3 hours promo_grafana Up 3 hours 0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp   
+promo_postgres Up 3 hours (healthy) 0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp   
+promo_redis Up 3 hours (healthy) 0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp   
+promo_prometheus Up 3 hours 0.0.0.0:9090->9090/tcp, [::]:9090->9090/tcp   
+promo_loki Up 3 hours (healthy) 0.0.0.0:3100->3100/tcp, [::]:3100->3100/tcp   
+promo_redis_exporter Up 3 hours 0.0.0.0:9121->9121/tcp, [::]:9121->9121/tcp  
+
+
+
+ Container promo_grafana            Removed                                                                                                                                                                                  7.2s 
+ ✔ Container promo_redis_exporter     Removed                                                                                                                                                                                  3.6s 
+ ✔ Container promo_prometheus         Removed                                                                                                                                                                                  8.6s 
+ ✔ Container promo_postgres_exporter  Removed                                                                                                                                                                                  5.9s 
+ ✔ Container promo_promtail           Removed                                                                                                                                                                                  8.7s 
+ ✔ Container promo_nginx              Removed                                                                                                                                                                                  8.1s 
+ ✔ Container promo_ml_backend         Removed                                                                                                                                                                                  4.1s 
+ ✔ Container promo_loki               Removed                                                                                                                                                                                  4.1s 
+ ✔ Container promo_postgres           Removed                                                                                                                                                                                  3.9s 
+ ✔ Container promo_redis              Removed                                                                                                                                                                                  3.4s 
+ ✔ Network promo-ml_default           Removed                                                                                                                                                                                  0.5s 
+ ✔ Network promo-ml_promo_net         Removed       
+
+
+
+`===================================================================================`  
+`docker ps --format "table {{.Names}}\t{{.ID}}\t{{.Status}}\t{{.Ports}}"`     
+`===================================================================================`  
+
+
+docker compose down
+docker compose build --no-cache promo_ml_backend
+docker compose up -d
+
+
+## Вход в ИМИДЖ если контейнер ХОЛДНЫЙ !!!
+bash: 
+`/mnt/d/PycharmProjects/promo-ml$ docker run --rm -it \
+  --entrypoint sh \
+  promo-ml:latest`
+
+## Вход в СЕРВИС если контейнер ХОЛДНЫЙ !!!
+- docker compose run --rm backend sh
+
+## Вход в ГОРЯЧИЙ контейнер
+- docker exec -it promo_ml_backend sh
+
+
+ls -la /app
+ls -la /app/model

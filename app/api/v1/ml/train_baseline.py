@@ -1,15 +1,19 @@
 # app/api/v1/ml/train_baseline.py   (c логикой time-based split)
 import pandas as pd
+from pathlib import Path
+import joblib
+
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-import joblib
-from pathlib import Path
 from sqlalchemy.orm import Session
+from sqlalchemy import update
 
 from app.api.v1.ml.dataset import load_dataset
-from models import MLModel
+from app.db.session import SessionLocal
+from models.ml_model import MLModel
 
-MODEL_PATH = Path("models/baseline_catboost.pkl")
+
+MODEL_PATH = Path("/app/models/baseline_catboost.pkl")   # так в контейнере
 
 FEATURES = [
     "price",
@@ -20,7 +24,7 @@ FEATURES = [
 
 TARGET = "target_sales_qty"
 
-
+# функции PANDA
 def time_train_val_split(df: pd.DataFrame, val_days: int = 4):
     df["date"] = pd.to_datetime(df["date"])
     max_date = df["date"].max()
@@ -32,15 +36,15 @@ def time_train_val_split(df: pd.DataFrame, val_days: int = 4):
     return train_df, val_df
 
 
-def train():
+def train() -> dict:
     df = load_dataset(limit=10_000)
 
     train_df, val_df = time_train_val_split(df, val_days=4)
 
-    X_train = train_df[FEATURES]
+    x_train = train_df[FEATURES]
     y_train = train_df[TARGET]
 
-    X_val = val_df[FEATURES]
+    x_val = val_df[FEATURES]
     y_val = val_df[TARGET]
 
     model = CatBoostRegressor(
@@ -53,13 +57,13 @@ def train():
     )
 
     model.fit(
-        X_train,
+        x_train,
         y_train,
-        eval_set=(X_val, y_val),
+        eval_set=(x_val, y_val),
         use_best_model=True,
     )
 
-    preds = model.predict(X_val)
+    preds = model.predict(x_val)
 
     rmse = mean_squared_error(y_val, preds, squared=False)
     mae = mean_absolute_error(y_val, preds)
@@ -68,41 +72,74 @@ def train():
     print(f"📊 Validation MAE: {mae:.2f}")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(model, MODEL_PATH)
+    # joblib.dump(model, MODEL_PATH)       # Удалена
+    model.save_model(str(MODEL_PATH), format="cbm")  # ВАЖНО: format="cbm"
 
     print(f"✅ Model saved to {MODEL_PATH}")
+
+    return {
+        "rmse": rmse,
+        "mae": mae,
+    }
+
 
 def register_model(
     db: Session,
     *,
     name: str,
+    algorithm: str,
     version: str,
     model_type: str,
+    target: str,
     model_path: str,
     features: list[str],
     metrics: dict | None = None,
     ):
-    # deactivate old
-    db.query(MLModel).filter(
-        MLModel.name == name,
-        MLModel.is_active == True,
-    ).update({"is_active": False})
 
-    model = MLModel(
+    # деактивируем старые модели с таким же именем
+    db.execute(
+        update(MLModel)
+        .where(MLModel.name == name)
+        .values(is_active=False)
+    )
+
+    ml_model = MLModel(
         name=name,
+        algorithm=algorithm,
         version=version,
         model_type=model_type,
-        target="sales_qty",
+        target=target,
         features=features,
         metrics=metrics,
         model_path=model_path,
         is_active=True,
     )
 
-    db.add(model)
+    db.add(ml_model)
     db.commit()
+    db.refresh(ml_model)
 
-
+    return ml_model
 
 if __name__ == "__main__":
-    train()
+    training_metrics = train()
+
+    session = SessionLocal()
+
+    try:
+        register_model(
+            db=session,
+            name="baseline_catboost",
+            algorithm="catboost",
+            version="v1",
+            model_type="regression",
+            target="sales_qty",
+            model_path=str(MODEL_PATH),
+            features=FEATURES,
+            metrics=training_metrics,
+        )
+        print("✅ Model registered in ml_model")
+    finally:
+        session.close()
+
+

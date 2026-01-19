@@ -1,3 +1,4 @@
+# api/v1/calculator/router.py
 """
 Calculator API — расширенные финансовые и маркетинговые расчёты.
 """

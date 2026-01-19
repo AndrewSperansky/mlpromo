@@ -1,16 +1,18 @@
 # app/api/v1/ml/schemas.py
-from datetime import date
+
+from datetime import date, datetime
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class PredictionRequest(BaseModel):
-    date: date = Field(..., description="Дата прогноза")
+    prediction_date: date = Field(..., description="Дата прогноза")  # Изменено, что делать?
     price: float = Field(..., gt=0)
     discount: float = Field(..., ge=0)
     avg_sales_7d: float = Field(..., ge=0)
     promo_days_left: int = Field(..., ge=0)
-    promo_code: str = Field(..., json_schema_extra={"example": "PROMO_DAIRY_JAN"})
-    sku: str = Field(..., json_schema_extra={"example": "MILK_1L"})
+    promo_code: str = Field(..., description="Код промо")
+    sku: str = Field(..., description="SKU товара")
 
 
 
@@ -20,10 +22,11 @@ class PredictionResponse(BaseModel):
     sku: str
     date: date
 
-    predicted_sales_qty: float
+    prediction: float
 
-    model_name: str
-    model_version: str
-    trained_at: str
+    model_id: str           # Изменено, что делать?
+    version: str            # Изменено, что делать?
+    trained_at: Optional[datetime] = None   # ✅ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
 
+    features: dict
     fallback_used: bool

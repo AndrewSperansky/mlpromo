@@ -1,7 +1,7 @@
 # app/api/dependencies.py
 from functools import lru_cache
 from typing import Any
-from app.api.ml.model_loader import load_model  # путь подкорректируй если нужно
+from app.api.v1.ml.model_io import load_model
 
 @lru_cache()
 def get_model() -> Any:

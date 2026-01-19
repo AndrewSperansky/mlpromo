@@ -27,3 +27,4 @@ var/
 .vscode/
 .idea/
 *.sqlite3
+offline_wheels/
