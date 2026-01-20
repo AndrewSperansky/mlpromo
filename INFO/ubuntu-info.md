@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ### Что делает команда chmod +x scripts/smoke_test.sh?
 chmod (от change mode) — команда в Linux/Unix‑системах для изменения прав доступа к файлам и директориям.
 
@@ -48,3 +49,27 @@ jq '.age' data.json
 >bash  
 jq '.hobbies[] | select(length > 6)' data.json  
 Вывод: "swimming"  
+=======
+### вход  
+win+r  
+wsl
+
+
+```
+echo $HOME
+ls -la $HOME/
+ls -la $HOME/.ssh/
+mkdir -p $HOME/.ssh && chmod 700 $HOME/.ssh
+chmod 700 $HOME/.ssh  # важные права: только для владельца
+```
+
+### Просмотр файла
+cat $HOME/.ssh/id_ed25519.pub
+
+
+ssh -T git@github.com
+
+## В GitHub:
+Настройки профиля → SSH and GPG keys → New SSH key.
+Вставьте ключ, укажите название (например, WSL-Key) и сохраните.
+>>>>>>> stage2

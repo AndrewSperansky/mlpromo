@@ -177,6 +177,15 @@ docker logs promtail --tail=100
 
 #### Если Promtail не может подключиться к Loki — логи не появятся в Grafana.
 
+
+##  ЛОГИРОВАНИЕ
+
+>`docker logs loki`  
+`docker logs promtail`  
+`docker logs grafana`  
+`docker-compose logs -f backend`
+`docker logs promo_nginx`
+
 ### Посмотреть  контейнеры в Docker Desktop
 
 `docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"`

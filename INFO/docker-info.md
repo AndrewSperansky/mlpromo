@@ -166,10 +166,6 @@ docker-compose down -v      `Останавливает контейнеры и 
 `docker compose -f docker/docker-compose.yml config`
 
 ##  ЛОГИРОВАНИЕ
-
->`docker logs loki`  
-`docker logs promtail`  
-`docker logs grafana`  
 `docker-compose logs -f backend`
 `docker logs promo_nginx`
 `docker logs promo_ml_backend --tail 200`
@@ -336,6 +332,7 @@ docker volume prune — удаление неиспользуемых томов
 
 ## ⚠️Никогда не делай down -v, если не хочешь потерять данные
 
+<<<<<<< HEAD
 ##  Вход в контейнер и запуск редактора bash
 docker exec -it promo_ml_backend bash 
 pwd
@@ -418,3 +415,36 @@ bash:
 
 ls -la /app
 ls -la /app/model
+=======
+
+
+## РАБОТА С DOCKER HUB
+### 1. Войдите в Docker Hub
+docker login
+
+### 2. Соберите образ (если ещё не собран)
+docker build -t ваш_логин/название_образа:тег .
+
+### 3. Проверьте список образов
+docker images
+
+### 4. Существует ли образ локально
+docker images | grep promo-ml   
+
+### 5. Тегируем latest как stage1
+`docker tag promo-ml:latest asperansky/promo-ml:stage1`  
+🔹 Важно:  
+Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
+
+### 6. Собрать образ (если еще не собран)
+`docker build -t asperansky/promo-ml:stage1 . ` 
+🔹  -t     задает имя  
+🔹 (.)    путь к Dockerfile (текущая директория)
+
+
+### 7. Отправить образ на Docker Hub
+`docker push asperansky/promo-ml:stage1`
+
+### 8. Проверка на Docker Hub
+docker inspect asperansky/promo-ml:stage1 | grep Id
+>>>>>>> stage2
