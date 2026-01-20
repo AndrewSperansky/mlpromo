@@ -19,3 +19,13 @@ Workflow:
 - requirements = спецификация
 - offline_wheels = артефакт
 - Docker = тупо runtime
+
+🧾 Зафиксируем ML File Contract (как документ)
+ML FILE CONTRACT v1
+
+1. Model type: CatBoost
+2. Model format: .cbm
+3. Save: CatBoostRegressor.save_model(format="cbm")
+4. Load: CatBoostRegressor.load_model()
+5. joblib — ЗАПРЕЩЁН для CatBoost
+6. Path → всегда str()

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 import joblib
 import json
+from app.core.settings import settings
 
 logger = logging.getLogger("promo_ml")
 
@@ -14,8 +15,11 @@ class ModelLoader:
     Кэширует модель и метаданные после первого чтения.
     """
 
-    MODEL_PATH = Path("/app/models/baseline_catboost.pkl")
-    META_PATH = Path("app/models/baseline_catboost.meta.json")
+    MODEL_PATH = Path(settings.ML_MODEL_PATH)
+    META_PATH = Path(settings.ML_META_PATH)
+
+    _model = None
+    _meta = None
 
     @classmethod
     def load(cls):
@@ -23,29 +27,41 @@ class ModelLoader:
         Загружает ML-модель и метаданные.
         Возвращает dict: {"model": ..., "meta": {...}}
         """
+        if cls._model is not None and cls._meta is not None:
+            return {"model": cls._model, "meta": cls._meta}
 
         if not cls.MODEL_PATH.exists():
             logger.warning("ML model NOT FOUND at %s", cls.MODEL_PATH)
-            return {"model": None, "meta": {"feature_order": []}}
+            cls._model = None
+            cls._meta = {"feature_order": []}
+            return {"model": cls._model, "meta": cls._meta}
 
         # ===============  Load model safely  ===========================
         try:
             logger.info("Loading ML model from %s", cls.MODEL_PATH)
-            model = joblib.load(cls.MODEL_PATH)
+            cls._model = joblib.load(cls.MODEL_PATH)
         except Exception as e:
             logger.error("Failed to load ML model: %s", e)
-            model = None
+            cls._model = None
 
         # ===============  Load meta safely  =============================
         if cls.META_PATH.exists():
             try:
-                meta = json.loads(cls.META_PATH.read_text(encoding="utf-8"))
+                cls._meta = json.loads(
+                    cls.META_PATH.read_text(encoding="utf-8")
+                )
             except Exception as e:
                 logger.warning("Meta file corrupted: %s", e)
-                meta = {"feature_order": []}
+                cls._meta = {"feature_order": []}
         else:
-            meta = {"feature_order": []}
+            cls._meta = {"feature_order": []}
 
-        return {"model": model, "meta": meta}
+        return {"model": cls._model, "meta": cls._meta}
+
+    @classmethod
+    def reload(cls):
+        cls._model = None
+        cls._meta = None
+        return cls.load()
 
 

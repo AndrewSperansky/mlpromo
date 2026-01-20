@@ -11,9 +11,10 @@ from sqlalchemy import update
 from app.api.v1.ml.dataset import load_dataset
 from app.db.session import SessionLocal
 from models.ml_model import MLModel
+from app.core.settings import settings
 
 
-MODEL_PATH = Path("/app/models/baseline_catboost.pkl")   # так в контейнере
+MODEL_PATH = Path(settings.ML_MODEL_PATH)   # так в контейнере
 
 FEATURES = [
     "price",
@@ -72,7 +73,8 @@ def train() -> dict:
     print(f"📊 Validation MAE: {mae:.2f}")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    # joblib.dump(model, MODEL_PATH)       # Удалена
+
+    # 🔒 ML FILE CONTRACT
     model.save_model(str(MODEL_PATH), format="cbm")  # ВАЖНО: format="cbm"
 
     print(f"✅ Model saved to {MODEL_PATH}")
@@ -80,6 +82,7 @@ def train() -> dict:
     return {
         "rmse": rmse,
         "mae": mae,
+        "model_path": str(MODEL_PATH),
     }
 
 
