@@ -3,7 +3,7 @@
 import logging
 import time
 from typing import Dict, List, Any
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from app.api.v1.ml.schemas import PredictionRequest  # Импорт Pydantic-модели
 from app.core.settings import settings
 
@@ -51,7 +51,7 @@ class MLPredictionService:
 
         else:
             try:
-                self.explainer = shap.TreeExplainer(self.model)
+                self.explainer = shap.TreeExplainer(self.model)  # 📌 Решение для Stage 3
             except Exception as exc:
                 logger.warning(
                     "SHAP explainer initialization failed",
@@ -135,6 +135,7 @@ class MLPredictionService:
                 "baseline": None,
                 "uplift": None,
                 "shap": [],
+                "features": None,
                 "model_id": self.model_id,
                 "version": self.version,
                 "trained_at": self.trained_at,
