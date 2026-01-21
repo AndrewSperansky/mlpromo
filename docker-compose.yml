@@ -4,18 +4,18 @@ services:
   # -------------------- BACKEND --------------------
   backend:
     container_name: promo_ml_backend
-    image: promo-ml:latest
+    image: asperansky/promo-ml:stage1
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      MODEL_PATH: /app/data/models_history/latest_model.pkl
+      ML_MODEL_PATH: /app/models/model.cbm
       ENV: prod
       LOG_LEVEL: INFO
     volumes:
       - backend-logs:/app/logs
-      - ./data:/app/data                 # Данные модели
+      - ./models:/app/models
     ports:
       - "8000:8000"
     depends_on:

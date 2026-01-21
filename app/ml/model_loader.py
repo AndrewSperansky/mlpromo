@@ -5,6 +5,8 @@ from pathlib import Path
 import joblib
 import json
 from app.core.settings import settings
+from catboost import CatBoostRegressor
+
 
 logger = logging.getLogger("promo_ml")
 
@@ -38,10 +40,12 @@ class ModelLoader:
 
         # ===============  Load model safely  ===========================
         try:
-            logger.info("Loading ML model from %s", cls.MODEL_PATH)
-            cls._model = joblib.load(cls.MODEL_PATH)
+            logger.info("Loading CatBoost model from %s", cls.MODEL_PATH)
+            model = CatBoostRegressor()
+            model.load_model(str(cls.MODEL_PATH), format="cbm")
+            cls._model = model
         except Exception as e:
-            logger.error("Failed to load ML model: %s", e)
+            logger.error("Failed to load CatBoost model: %s", e)
             cls._model = None
 
         # ===============  Load meta safely  =============================

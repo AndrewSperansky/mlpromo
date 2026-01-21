@@ -12,10 +12,11 @@ downloads/
 eggs/
 .eggs/
 data/
-models_history/
+data/models_history/
 lib/
 lib64/
 logs/
+models/model.cbm
 parts/
 sdist/
 var/
@@ -28,3 +29,6 @@ var/
 .idea/
 *.sqlite3
 offline_wheels/
+.env
+.env.*
+docker-compose.override.yml

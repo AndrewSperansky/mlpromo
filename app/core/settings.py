@@ -11,11 +11,14 @@ from pydantic import Field
 class Settings(BaseSettings):
     ENV: str = "dev"  # dev / prod
     DEBUG: bool = True
-    VERSION: str = Field(default="dev", alias="VERSION")
+    API_CONTRACT_VERSION: str = Field(
+        default="ml-predict.v1",
+        description="ML API contract version"
+    )
     LOG_LEVEL: str = "INFO"
 
     # ===== ML FILE CONTRACT =====
-    ML_MODEL_PATH: str = "/app/models/baseline_catboost.pkl"
+    ML_MODEL_PATH: str = "/app/models/model.cbm"
     ML_META_PATH: str = "/app/models/baseline_catboost.meta.json"
     # ============================
 

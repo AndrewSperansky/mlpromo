@@ -1,3 +1,6 @@
+ curl http://localhost:8000/api/v1/ml/model-status
+
+
  curl -X POST http://localhost:8000/api/v1/ml/predict \
   -H "Content-Type: application/json" \
   -d '{

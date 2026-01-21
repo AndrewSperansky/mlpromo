@@ -447,4 +447,4 @@ docker images | grep promo-ml
 
 ### 8. Проверка на Docker Hub
 docker inspect asperansky/promo-ml:stage1 | grep Id
->>>>>>> stage2
+>> stage2

@@ -5,6 +5,7 @@ import time
 from typing import Dict, List, Any
 from datetime import datetime, date, timezone
 from app.api.v1.ml.schemas import PredictionRequest  # Импорт Pydantic-модели
+from app.core.settings import settings
 
 import numpy as np
 import shap
@@ -18,7 +19,6 @@ logger = logging.getLogger("promo_ml")
 class MLPredictionService:
     """
     Сервис ML-предсказаний и SHAP-объяснений.
-    Работает с ПЛОСКИМИ признаками (НЕ dict features).
     """
 
     def __init__(self) -> None:
@@ -67,6 +67,25 @@ class MLPredictionService:
             },
         )
 
+    def _validate_features(self, features: Dict[str, Any]) -> None:
+        if not self.feature_order:
+            return           # нет контракта — нечего валидировать
+
+        missing = set(self.feature_order) - set(features.keys())
+        if missing:
+            raise ValueError(f"Missing features: {sorted(missing)}")
+
+        for name in self.feature_order:
+            value = features.get(name)
+            if value is None:
+                raise ValueError(f"Feature '{name}' is None")
+
+            if not isinstance(value, (int, float)):
+                raise TypeError(
+                    f"Feature '{name}' must be numeric, got {type(value).__name__}"
+                )
+
+
     def _build_feature_vector(self, features: Dict[str, float]) -> np.ndarray:
         """
         Приводит входные features к порядку feature_order.
@@ -90,8 +109,17 @@ class MLPredictionService:
         Выполняет предсказание ML-модели + SHAP объяснение.
         """
 
-        # ======== ML CONTRACT GUARD ========
+        # ======== ML CONTRACT DEGRADED GUARD ========
         contract = ML_RUNTIME_STATE.get("contract", {})
+
+        logger.info(
+            "ML API called",
+            extra={
+                "contract": settings.API_CONTRACT_VERSION,
+                "promo_code": payload.promo_code,
+                "sku": payload.sku,
+            },
+        )
 
         if contract.get("status") != "ok":
             logger.warning(
@@ -113,7 +141,7 @@ class MLPredictionService:
                 "fallback_used": True,
                 "reason": "ml_contract_degraded",
             }
-        # ======== END CONTRACT GUARD ========
+        # ======== END CONTRACT DEGRADED GUARD ========
 
         features = {
             "price": payload.price,
@@ -123,6 +151,8 @@ class MLPredictionService:
         }
 
         logger.info("ML prediction started", extra=features)
+
+        # ======== FALLBACK ========
 
         if self.model is None:
             logger.error("Model is not loaded, fallback used")
@@ -140,10 +170,37 @@ class MLPredictionService:
                 "reason": "model_not_loaded",
             }
 
-        # ---------- 1. Features ----------
+        # ---------- 1. Feature validation ----------
+        try:
+            self._validate_features(features)
+        except Exception as exc:
+            logger.error(
+                "Feature validation failed",
+                extra={
+                    "error": str(exc),
+                    "features": features,
+                },
+            )
+
+            return {
+                "promo_code": payload.promo_code,
+                "sku": payload.sku,
+                "date": payload.prediction_date,
+                "prediction": None,
+                "baseline": None,
+                "uplift": None,
+                "model_id": self.model_id,
+                "version": self.version,
+                "trained_at": self.trained_at,
+                "features": features,
+                "fallback_used": True,
+                "reason": "feature_validation_failed",
+            }
+
+        # ---------- 2. Build feature vector ----------
         X = self._build_feature_vector(features)
 
-        # ---------- 2. Predict ----------
+        # ---------- 3. Predict ----------
         start = time.time()
         y_pred = float(self.model.predict(X)[0])
         duration = round(time.time() - start, 5)
@@ -156,7 +213,7 @@ class MLPredictionService:
             },
         )
 
-        # ---------- 3. SHAP ----------
+        # ---------- 4. SHAP ----------
         shap_output: List[Dict[str, float]] = []
 
         if self.explainer:
@@ -183,7 +240,7 @@ class MLPredictionService:
                     extra={"error": str(exc)},
                 )
 
-        # ---------- 4. Response ----------
+        # ---------- 5. Response ----------
         return {
             "promo_code": payload.promo_code,
             "sku": payload.sku,

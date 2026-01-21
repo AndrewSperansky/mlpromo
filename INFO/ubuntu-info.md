@@ -1,4 +1,7 @@
-<<<<<<< HEAD
+### ВХОД 
+win+r  
+wsl
+
 ### Что делает команда chmod +x scripts/smoke_test.sh?
 chmod (от change mode) — команда в Linux/Unix‑системах для изменения прав доступа к файлам и директориям.
 
@@ -50,10 +53,10 @@ jq '.age' data.json
 jq '.hobbies[] | select(length > 6)' data.json  
 Вывод: "swimming"  
 =======
-### вход  
-win+r  
-wsl
 
+
+
+## Работа с файлами
 
 ```
 echo $HOME
@@ -69,7 +72,28 @@ cat $HOME/.ssh/id_ed25519.pub
 
 ssh -T git@github.com
 
-## В GitHub:
+### В GitHub:
 Настройки профиля → SSH and GPG keys → New SSH key.
 Вставьте ключ, укажите название (например, WSL-Key) и сохраните.
->>>>>>> stage2
+
+
+`mkdir -p ./models`
+
+Что делает:  
+Создаёт директорию models в текущей рабочей папке (./).  
+Ключ -p гарантирует:  
+если папка уже существует — ошибки не будет;  
+если нужны промежуточные папки — они создадутся автоматически.
+
+
+`cp model_stage2.cbm ./models/model.cbm`
+
+Что делает:  
+Копирует файл model_stage2.cbm из текущего каталога в папку ./models/.  
+При копировании переименовывает файл в model.cbm.  
+./models/ — целевая папка;  
+model.cbm — новое имя файла.  
+
+
+
+

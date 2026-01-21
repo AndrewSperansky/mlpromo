@@ -20,8 +20,8 @@ Workflow:
 - offline_wheels = артефакт
 - Docker = тупо runtime
 
-🧾 Зафиксируем ML File Contract (как документ)
-ML FILE CONTRACT v1
+
+🧾ML FILE CONTRACT v1
 
 1. Model type: CatBoost
 2. Model format: .cbm
@@ -29,3 +29,11 @@ ML FILE CONTRACT v1
 4. Load: CatBoostRegressor.load_model()
 5. joblib — ЗАПРЕЩЁН для CatBoost
 6. Path → всегда str()
+
+Stage 2:
+- Model: CatBoost (.cbm)
+- Delivery: Docker volume
+- Path: /app/models/model.cbm
+- Reload: container restart
+
+Итог: идемпотентность — это «безопасность повтора»
