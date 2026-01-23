@@ -10,6 +10,6 @@ def load_model() -> Any:
     Позже: pickle / joblib / catboost
     """
     return {
-        "model_id": "dummy-model",
+        "ml_model_id": "dummy-model",
         "version": settings.VERSION,
     }

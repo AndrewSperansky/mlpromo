@@ -1,0 +1,14 @@
+{
+  "model_id": "promo-baseline-catboost",
+  "version": "1.0.0",
+  "trained_at": "2026-01-23T11:14:56.154761+00:00",
+  "feature_order": [
+    "price",
+    "discount",
+    "avg_sales_7d",
+    "promo_days_left"
+  ],
+  "target": "sales",
+  "framework": "catboost",
+  "task": "regression"
+}

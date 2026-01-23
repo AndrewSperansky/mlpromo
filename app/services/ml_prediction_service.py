@@ -32,7 +32,7 @@ class MLPredictionService:
 
         self.feature_order: List[str] = self.meta.get("feature_order", [])
 
-        self.model_id: str = self.meta.get("model_id", "unknown")
+        self.ml_model_id: str = self.meta.get("ml_model_id", "unknown")
         self.version: str = self.meta.get("version", "dev")
         self.trained_at: datetime = self.meta.get(
             "trained_at", datetime.now(timezone.utc)

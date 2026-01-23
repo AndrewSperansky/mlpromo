@@ -27,7 +27,7 @@ def health():
         "status": "ok",
         "service": "promo-ml",
         "environment": settings.ENV,
-        "version": settings.VERSION,
+        "version": settings.API_CONTRACT_VERSION,
     }
 
 

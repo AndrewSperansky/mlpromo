@@ -26,7 +26,7 @@ class PredictionResponse(BaseModel):
     baseline: Optional[float] = None
     uplift: Optional[float] = None
 
-    model_id: str
+    ml_model_id: str
     version: str
     trained_at: Optional[datetime] = None
 
