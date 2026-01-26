@@ -61,7 +61,7 @@ class MLPredictionService:
         logger.info(
             "ML model loaded",
             extra={
-                "model_id": self.model_id,
+                "ml_model_id": self.ml_model_id,
                 "version": self.version,
                 "features": self.feature_order,
             },
@@ -136,7 +136,7 @@ class MLPredictionService:
                 "uplift": None,
                 "shap": [],
                 "features": None,
-                "model_id": self.model_id,
+                "ml_model_id": self.ml_model_id,
                 "version": self.version,
                 "trained_at": self.trained_at,
                 "fallback_used": True,
@@ -163,7 +163,7 @@ class MLPredictionService:
                 "sku": payload.sku,
                 "date": payload.prediction_date,
                 "prediction": None,
-                "model_id": self.model_id,
+                "ml_model_id": self.ml_model_id,
                 "version": self.version,
                 "trained_at": self.trained_at,
                 "features": features,
@@ -190,7 +190,7 @@ class MLPredictionService:
                 "prediction": None,
                 "baseline": None,
                 "uplift": None,
-                "model_id": self.model_id,
+                "ml_model_id": self.ml_model_id,
                 "version": self.version,
                 "trained_at": self.trained_at,
                 "features": features,
@@ -215,7 +215,7 @@ class MLPredictionService:
         )
 
         # ---------- 4. SHAP ----------
-        shap_output: List[Dict[str, float]] = []
+        shap_output: List[Dict[str, Any]] = []
 
         if self.explainer:
             try:
@@ -247,7 +247,7 @@ class MLPredictionService:
             "sku": payload.sku,
             "date": payload.prediction_date,
             "prediction": y_pred,
-            "model_id": self.model_id,
+            "ml_model_id": self.ml_model_id,
             "version": self.version,
             "trained_at": self.trained_at,
             "features": features,

@@ -15,6 +15,9 @@ class PredictionRequest(BaseModel):
     sku: str = Field(..., description="SKU товара")
 
 
+class ShapValue(BaseModel):
+    feature: str
+    effect: float
 
 
 class PredictionResponse(BaseModel):
@@ -31,7 +34,8 @@ class PredictionResponse(BaseModel):
     trained_at: Optional[datetime] = None
 
     features: Optional[Dict[str, Any]] = None
-    shap: List[Dict[str, float]] = []
+    shap: List[ShapValue] = Field(default_factory=list)
 
     fallback_used: bool
     reason: Optional[str] = None
+
