@@ -58,6 +58,17 @@ origin  https://github.com/AndrewSperansky/3dsonet.git (push)
 git remote set-url origin https://github.com/AndrewSperansky/3dsonet.git
 
 
+## Работа с тэгами
+
+### Создание и отправка на GitHub
+git tag stage2-demo-ready  
+git push origin stage2-demo-ready
+
+Тэг привязывается к текущему коммиту!
+
+### Посмотреть тэги
+git tag       
+
 
 
 

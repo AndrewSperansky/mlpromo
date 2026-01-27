@@ -1,7 +1,37 @@
 # 🧭 Docker Cheatsheet
 
-`docker desktop stop --force`
+## Узнааем имена имиджей
+`docker images `
 
+## Узнаем имена сервисов
+`docker compose config --services` 
+`docker compose ps`
+
+## Узнаем имена контейнеров, ID Контейнеров
+
+`docker ps --format "table {{.Names}}\t{{.ID}}\t{{.Status}}\t{{.Ports}}"`     
+
+
+## Вход в ИМИДЖ если контейнер ХОЛДНЫЙ !!!
+bash: 
+`/mnt/d/PycharmProjects/promo-ml$ docker run --rm -it \
+  --entrypoint sh \
+  promo-ml:latest`
+
+## Вход в СЕРВИС если контейнер ХОЛДНЫЙ !!!
+- docker compose run --rm backend sh
+
+## Вход в ГОРЯЧИЙ контейнер
+- docker exec -it promo_ml_backend sh
+
+
+ls -la /app
+ls -la /app/model  
+===============================================
+
+
+
+`docker desktop stop --force`
 
 `docker compose build backend`
 `docker compose restart backend`
@@ -306,6 +336,9 @@ docker volume prune — удаление неиспользуемых томов
 `docker compose build backend`  
 `docker compose up -d backend`
 
+docker compose build backend && docker compose restart backend
+
+
 
 или короче:
 
@@ -314,9 +347,6 @@ docker volume prune — удаление неиспользуемых томов
 ### 🐘 C. Меняли postgres.config, promtail-config.yaml
 `docker compose up -d --force-recreate postgres`
 `docker compose up -d --force-recreate promtail`
-
-
-
 ⚠️ Образ не пересобирается — только рестарт контейнера
 
 ### 📊 D. Добавляем Prometheus + exporters (СКОРО)
@@ -332,7 +362,7 @@ docker volume prune — удаление неиспользуемых томов
 
 ## ⚠️Никогда не делай down -v, если не хочешь потерять данные
 
-<<<<<<< HEAD
+
 ##  Вход в контейнер и запуск редактора bash
 docker exec -it promo_ml_backend bash 
 pwd
@@ -342,6 +372,29 @@ ls /app/app
 ls /app/app/api
 ls /app/app/api/v1
 ls /app/app/api/v1/ml
+
+==========================================
+
+## Узнааем имена имиджей
+`docker images `
+
+REPOSITORY                              TAG       IMAGE ID       CREATED          SIZE
+asperansky/promo-ml                     stage1    ecab8105a31a   51 minutes ago   2.15GB
+promo-ml                                latest    5af976602ab3   7 days ago       2.15GB
+postgres                                15        0f34b3378f89   7 weeks ago      627MB
+alpine                                  latest    51183f2cfa63   7 weeks ago      13MB
+oliver006/redis_exporter                latest    bac9872da2b4   2 months ago     14.5MB
+nginx                                   latest    553f64aecdc3   2 months ago     225MB
+neo4j                                   latest    d10819963652   2 months ago     1.07GB
+redis                                   latest    4521b581dbdd   3 months ago     200MB
+prometheuscommunity/postgres-exporter   latest    fb96c4413985   3 months ago     37.2MB
+hello-world                             latest    56433a6be3fd   5 months ago     20.3kB
+prom/prometheus                         v2.52.0   5c435642ca4d   20 months ago    382MB
+grafana/grafana                         10.2.2    e3e9c2b5776f   2 years ago      538MB
+grafana/loki                            2.9.2     6074e01dbe03   2 years ago      101MB
+grafana/promtail                        2.9.2     3ec78a089e5c   2 years ago      285MB
+
+
 
 
 ## Узнаем имена сервисов
@@ -360,22 +413,13 @@ redis-exporter
 
 `docker compose build --no-cache backen`
 
-## Docker CLI  команда
-`docker build --no-cache -t promo_ml_backend . `
+## Узнаем имена контейнеров, ID Контейнеров
 
->NAMES STATUS PORTS promo_nginx Up 3 hours (healthy) 0.0.0.0:80->80/tcp, [::]:80->80/tcp   
-promo_ml_backend Up 3 hours (healthy) 0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp  
-promo_postgres_exporter Up 3 hours 0.0.0.0:9187->9187/tcp, [::]:9187->9187/tcp  
-promo_promtail Up 3 hours promo_grafana Up 3 hours 0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp   
-promo_postgres Up 3 hours (healthy) 0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp   
-promo_redis Up 3 hours (healthy) 0.0.0.0:6379->6379/tcp, [::]:6379->6379/tcp   
-promo_prometheus Up 3 hours 0.0.0.0:9090->9090/tcp, [::]:9090->9090/tcp   
-promo_loki Up 3 hours (healthy) 0.0.0.0:3100->3100/tcp, [::]:3100->3100/tcp   
-promo_redis_exporter Up 3 hours 0.0.0.0:9121->9121/tcp, [::]:9121->9121/tcp  
+`===================================================================================`  
+`docker ps --format "table {{.Names}}\t{{.ID}}\t{{.Status}}\t{{.Ports}}"`     
+`===================================================================================`  
 
-
-
- Container promo_grafana            Removed                                                                                                                                                                                  7.2s 
+ ✔ Container promo_grafana            Removed                                                                                                                                                                                  7.2s 
  ✔ Container promo_redis_exporter     Removed                                                                                                                                                                                  3.6s 
  ✔ Container promo_prometheus         Removed                                                                                                                                                                                  8.6s 
  ✔ Container promo_postgres_exporter  Removed                                                                                                                                                                                  5.9s 
@@ -389,10 +433,8 @@ promo_redis_exporter Up 3 hours 0.0.0.0:9121->9121/tcp, [::]:9121->9121/tcp
  ✔ Network promo-ml_promo_net         Removed       
 
 
-
-`===================================================================================`  
-`docker ps --format "table {{.Names}}\t{{.ID}}\t{{.Status}}\t{{.Ports}}"`     
-`===================================================================================`  
+## Docker CLI  команда
+`docker build --no-cache -t promo_ml_backend . 
 
 
 docker compose down
@@ -414,8 +456,8 @@ bash:
 
 
 ls -la /app
-ls -la /app/model
-=======
+ls -la /app/model  
+================================
 
 
 ## РАБОТА С DOCKER HUB

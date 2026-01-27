@@ -269,3 +269,13 @@ docker exec -i promo_postgres psql -U postgres promo < backup_2026-01-14_15-23.s
 ## IP‑адрес контейнера (опционально)
 - docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' promo_postgres
 
+##  Логи
+`docker logs promo_postgres --tail=50`
+
+### Проверить строку "DATABASE_URL"
+`docker exec -it promo_ml_backend python -c "
+from app.core.settings import settings; 
+print(settings.DATABASE_URL)
+"`  
+Должно быть:  
+postgresql+psycopg2://postgres:postgres@postgres:5432/promo
