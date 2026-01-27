@@ -3,6 +3,7 @@
 from datetime import date, datetime
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
+from uuid import UUID
 
 
 class PredictionRequest(BaseModel):
@@ -39,3 +40,14 @@ class PredictionResponse(BaseModel):
     fallback_used: bool
     reason: Optional[str] = None
 
+
+class OneCPredictRequest(BaseModel):
+    request_id: UUID
+    data: Dict[str, Any]
+
+
+class OneCPredictResponse(BaseModel):
+    request_id: UUID
+    prediction: float
+    model_id: str
+    version: str

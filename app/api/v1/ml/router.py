@@ -1,22 +1,30 @@
 # app/api/v1/ml/router.py
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import text
+from uuid import UUID
+import json
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from fastapi import APIRouter, Depends
+from sqlalchemy import text
+
+
 from app.db.session import get_db
+from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
 
 from app.api.v1.ml.schemas import (
     PredictionRequest,
     PredictionResponse,
+    OneCPredictRequest,
+    OneCPredictResponse,
 )
 
 
-from app.ml.runtime_state import ML_RUNTIME_STATE
 
-router = APIRouter(tags=["ml"])
+
+router = APIRouter(tags=["ml-1c"])
 
 # ========== DEPENDENCIES ==========
 
@@ -129,3 +137,62 @@ def model_status():
         "warnings": ML_RUNTIME_STATE.get("warnings", []),
     }
 
+
+@router.post("/1c/predict", response_model=OneCPredictResponse)
+def predict_from_1c(
+    payload: OneCPredictRequest,
+    db: Session = Depends(get_db),
+    svc: MLPredictionService = Depends(),
+):
+    if not ML_RUNTIME_STATE.get("model_loaded"):
+        raise HTTPException(status_code=503, detail="ML model not ready")
+
+    # idempotency
+    exists = db.execute(
+        text("SELECT 1 FROM ml_prediction_request WHERE id = :id"),
+        {"id": payload.request_id},
+    ).first()
+
+    if exists:
+        raise HTTPException(status_code=409, detail="Request already processed")
+
+    # store request
+    db.execute(
+        text("""
+        INSERT INTO ml_prediction_request (id, source, payload)
+        VALUES (:id, '1C', CAST(:payload AS JSONB))
+        """),
+        {
+            "id": str(payload.request_id),    # ← убедитесь, что UUID → str
+            "payload": json.dumps(payload.data)  # ← dict → JSON-строка
+        },
+    )
+
+    # predict
+    prediction, shap = svc.predict_raw(payload.data)
+
+    # store result
+    db.execute(
+        text("""
+        INSERT INTO ml_prediction_result
+        (request_id, model_id, model_version, prediction_value, shap_values)
+        VALUES (:rid, :mid, :ver, :pred, CAST(:shap AS JSONB))
+        """),
+        {
+            "rid": str(payload.request_id),
+            "mid": ML_RUNTIME_STATE["model_id"],
+            "ver": ML_RUNTIME_STATE["version"],
+            "pred": prediction,
+            "shap": json.dumps(shap),
+        },
+
+    )
+
+    db.commit()
+
+    return OneCPredictResponse(
+        request_id=payload.request_id,
+        prediction=prediction,
+        model_id=ML_RUNTIME_STATE["model_id"],
+        version=ML_RUNTIME_STATE["version"],
+    )

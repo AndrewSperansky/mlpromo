@@ -103,6 +103,66 @@ class MLPredictionService:
         return np.array([list(features.values())], dtype=float)
 
 
+    # -------- ЯДРО ML  ------------------------------
+
+    def predict_from_features(self, features: Dict[str, float]) -> Dict[str, Any]:
+        """
+        Базовое ML-предсказание по словарю фич.
+        Используется 1С, batch, internal calls.
+        """
+
+        # ---------- 1. Validation ----------
+        self._validate_features(features)
+
+        # ---------- 2. Vector ----------
+        X = self._build_feature_vector(features)
+
+        # ---------- 3. Predict ----------
+        y_pred = float(self.model.predict(X)[0])
+
+        # ---------- 4. SHAP ----------
+        shap_output: List[Dict[str, Any]] = []
+
+        if self.explainer:
+            try:
+                shap_values = self.explainer.shap_values(X)
+                values = shap_values[0] if isinstance(shap_values, list) else shap_values[0]
+                feature_names = self.feature_order or list(features.keys())
+
+                shap_output = [
+                    {"feature": f, "effect": float(v)}
+                    for f, v in zip(feature_names, values)
+                ]
+            except Exception as exc:
+                logger.warning("SHAP calculation failed", extra={"error": str(exc)})
+
+        return {
+            "prediction": y_pred,
+            "shap_values": shap_output,
+            "features": features,
+            "ml_model_id": self.ml_model_id,
+            "version": self.version,
+            "trained_at": self.trained_at,
+        }
+
+
+    # ---------- ИНТЕГРАЦИИ  (1C / Batch) ----------------------
+
+    def predict_raw(self, features: dict) -> tuple[float, dict]:
+        """
+        Низкоуровневое предсказание для 1С:
+        возвращает (prediction, shap_values)
+        без DTO и FastAPI схем
+        """
+        result = self.predict_from_features(features)
+
+        return (
+            result["prediction"],
+            result.get("shap_values", {}),
+        )
+
+
+    # ------------  API / Swagger  ---------------------------
 
     def predict(self, payload: PredictionRequest) -> Dict[str, Any]:
         """
