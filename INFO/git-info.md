@@ -2,7 +2,9 @@
 ## Проверка удаленного репозитория:
 git remote -v 
 
-git config --list  # проверьте user.name, user.email, remote.origin.url
+
+## проверить user.name, user.email, remote.origin.url
+git config --list  
 
 ## Статус репозитория:
 
@@ -22,6 +24,18 @@ git push -u origin main
 ## Создаём новую ветку для фичи или бага и сразу переходим в нее
 
 `git checkout -b feature/<имя_фичи>`
+
+
+## Удалить ненужную ветку (смерженную)  
+git branch -d stage2
+
+### Если Git вдруг скажет, что есть несмёрженные коммиты
+git branch -D stage2
+
+## Удаляем удалённую ветку (если она уже была пушена)
+git push origin --delete stage2
+
+
 
 
 ## Привязываем локальный проект к GitHub

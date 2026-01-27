@@ -1,8 +1,16 @@
-#  app/ml/runtime_state.py
+# app/ml/runtime_state.py
 
-from typing import Dict, Any
-
-ML_RUNTIME_STATE: Dict[str, Any] = {
+ML_RUNTIME_STATE = {
     "checked": False,
-    "contract": {},
+    "status": "unknown",
+
+    "model_loaded": False,
+    "model_id": None,
+    "version": None,
+    "feature_order": None,
+
+    "checksum_verified": False,
+
+    "errors": [],
+    "warnings": [],
 }

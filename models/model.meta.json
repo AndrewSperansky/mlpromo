@@ -1,14 +1,24 @@
 {
-  "model_id": "promo-baseline-catboost",
-  "version": "1.0.0",
-  "trained_at": "2026-01-23T11:14:56.154761+00:00",
+  "ml_model_id": "cb_promo_v1",
+  "version": "stage2",
+  "trained_at": "2026-01-26T08:10:00Z",
+
+  "framework": "catboost",
+  "framework_version": "1.2.3",
+
+  "target": "promo_sales",
+
   "feature_order": [
     "price",
     "discount",
     "avg_sales_7d",
-    "promo_days_left"
+    "avg_discount_7d",
+    "promo_days_left",
+    "promo_code",
+    "sku"
   ],
-  "target": "sales",
-  "framework": "catboost",
-  "task": "regression"
+  "artifact": {
+    "algo": "sha256",
+    "model_checksum": "38ABDC2A61309E2ECD1E066093854420A80A864A2AB560F8DE6C252CAAE2DCBD"
+  }
 }

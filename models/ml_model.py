@@ -9,6 +9,11 @@ from app.db.base import Base
 from models.mixins.id import IDMixin
 from models.mixins.audit import AuditMixin
 
+
+from pathlib import Path
+from catboost import CatBoostRegressor
+
+
 class MLModel(IDMixin, AuditMixin, Base):
     __tablename__ = "ml_model"
 
@@ -37,7 +42,24 @@ class MLModel(IDMixin, AuditMixin, Base):
     )
 
 
+class MLModelManager:
+    def __init__(self, model_path: Path):
+        self.model_path = model_path
+        self.model: CatBoostRegressor | None = None
 
+    def load(self) -> bool:
+        if not self.model_path.exists():
+            return False
+
+        model = CatBoostRegressor()
+        model.load_model(str(self.model_path))
+
+        # 🔥 ВАЖНО: сохраняем модель
+        self.model = model
+        return True
+
+    def is_loaded(self) -> bool:
+        return self.model is not None
 
 
 

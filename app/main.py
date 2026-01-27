@@ -7,6 +7,9 @@ import asyncio
 from typing import cast, Callable
 import logging
 
+# ---- Settings ----
+from app.core.settings import settings
+
 # ---- Core Logging ----
 from app.core.logging_config import setup_logging
 
@@ -25,11 +28,15 @@ from app.ml.runtime_state import ML_RUNTIME_STATE
 
 logger = logging.getLogger("promo_ml")
 
-model_manager = ModelManager("/models/latest_model.pkl", check_interval=5)
+model_manager = ModelManager(
+    model_path=settings.ML_MODEL_PATH,
+    check_interval=5
+    )
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+
     global logger
 
     # ---------- STARTUP ----------

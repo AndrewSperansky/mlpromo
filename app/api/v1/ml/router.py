@@ -120,5 +120,12 @@ def get_ml_dataset(
 def model_status():
     return {
         "checked": ML_RUNTIME_STATE["checked"],
-        **ML_RUNTIME_STATE["contract"],
+        "status": ML_RUNTIME_STATE["status"],
+        "model_loaded": ML_RUNTIME_STATE["model_loaded"],
+        "model_id": ML_RUNTIME_STATE["model_id"],
+        "version": ML_RUNTIME_STATE["version"],
+        "checksum_verified": ML_RUNTIME_STATE["checksum_verified"],
+        "errors": ML_RUNTIME_STATE.get("errors", []),
+        "warnings": ML_RUNTIME_STATE.get("warnings", []),
     }
+
