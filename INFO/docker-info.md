@@ -488,5 +488,39 @@ docker images | grep promo-ml
 `docker push asperansky/promo-ml:stage1`
 
 ### 8. Проверка на Docker Hub
-docker inspect asperansky/promo-ml:stage1 | grep Id
->> stage2
+docker inspect asperansky/promo-ml:stage1 | grep Id  
+
+stage2
+
+
+
+## Docker Tagging Policy (фиксируем правило)
+### 🎯 Цели
+
+воспроизводимость demo / prod
+быстрый rollback
+прозрачная связь: код → модель → образ
+
+### 📦 Структура тегов  
+🔹 Основной формат  
+<service>:<stage>-<semver>-<git_sha>  
+
+🔹 Примеры
+promo-ml:stage2-1.0.0-a3f9c21  
+promo-ml:stage2-1.0.1-b91de77  
+promo-ml:stage2-prod-1.0.0  
+
+### 🏷 Обязательные теги
+Тег	Назначение  
+stage2-latest	последняя стабильная сборка stage2  
+stage2-prod	текущий prod  
+stage2-prod-1.0.0	зафиксированная версия  
+sha-<git_sha>	полная воспроизводимость  
+
+
+### 🔒 Правила
+
+❌ Запрещено деплоить latest в prod  
+✅ Prod только из */prod веток  
+✅ Один prod-тег = один git commit  
+🔁 Rollback = смена тега  
