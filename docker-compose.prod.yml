@@ -1,0 +1,40 @@
+
+services:
+
+  backend:
+    image: asperansky/promo-ml:stage2
+    container_name: promo_ml_backend
+    restart: always
+    env_file:
+      - .env.prod
+    volumes:
+      - ./models:/models:ro
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - promo_net
+
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: promo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - promo_net
+
+  redis:
+    image: redis:7
+    restart: always
+    networks:
+      - promo_net
+
+volumes:
+  pgdata:
+
+networks:
+  promo_net:
