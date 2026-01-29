@@ -5,7 +5,7 @@ ML_RUNTIME_STATE = {
     "status": "unknown",
 
     "model_loaded": False,
-    "model_id": None,
+    "ml_model_id": None,
     "version": None,
     "feature_order": None,
 

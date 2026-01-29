@@ -49,5 +49,5 @@ class OneCPredictRequest(BaseModel):
 class OneCPredictResponse(BaseModel):
     request_id: UUID
     prediction: float
-    model_id: str
+    ml_model_id: str
     version: str

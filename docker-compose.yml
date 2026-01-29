@@ -4,7 +4,7 @@ services:
   # -------------------- BACKEND --------------------
   backend:
     container_name: promo_ml_backend
-    image: asperansky/promo-ml:stage1
+    image: promo-ml:latest
     build:
       context: .
       dockerfile: Dockerfile

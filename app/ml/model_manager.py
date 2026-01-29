@@ -26,7 +26,7 @@ class ModelManager:
         """Обновляет ML_RUNTIME_STATE при ошибке загрузки."""
         ML_RUNTIME_STATE.update({
             "model_loaded": False,
-            "model_id": None,
+            "ml_model_id": None,
             "version": None,
             "feature_order": None,
             "checksum_verified": False,
@@ -132,7 +132,7 @@ class ModelManager:
         # ---- update runtime state ----
         ML_RUNTIME_STATE.update({
             "model_loaded": True,
-            "model_id": meta.get("ml_model_id"),
+            "ml_model_id": meta.get("ml_model_id"),
             "version": meta.get("version"),
             "feature_order": meta.get("feature_order"),
             "checksum_verified": checksum_verified,
@@ -147,7 +147,7 @@ class ModelManager:
         logger.info(
             "ML model loaded",
             extra={
-                "model_id": ML_RUNTIME_STATE.get("model_id"),
+                "ml_model_id": ML_RUNTIME_STATE.get("ml_model_id"),
                 "version": ML_RUNTIME_STATE.get("version"),
                 "checksum_verified": checksum_verified,
                 "warnings": warnings,

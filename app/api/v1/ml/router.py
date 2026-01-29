@@ -130,7 +130,7 @@ def model_status():
         "checked": ML_RUNTIME_STATE["checked"],
         "status": ML_RUNTIME_STATE["status"],
         "model_loaded": ML_RUNTIME_STATE["model_loaded"],
-        "model_id": ML_RUNTIME_STATE["model_id"],
+        "ml_model_id": ML_RUNTIME_STATE["ml_model_id"],
         "version": ML_RUNTIME_STATE["version"],
         "checksum_verified": ML_RUNTIME_STATE["checksum_verified"],
         "errors": ML_RUNTIME_STATE.get("errors", []),
@@ -180,7 +180,7 @@ def predict_from_1c(
         """),
         {
             "rid": str(payload.request_id),
-            "mid": ML_RUNTIME_STATE["model_id"],
+            "mid": ML_RUNTIME_STATE["ml_model_id"],
             "ver": ML_RUNTIME_STATE["version"],
             "pred": prediction,
             "shap": json.dumps(shap),
@@ -193,6 +193,6 @@ def predict_from_1c(
     return OneCPredictResponse(
         request_id=payload.request_id,
         prediction=prediction,
-        model_id=ML_RUNTIME_STATE["model_id"],
+        ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
         version=ML_RUNTIME_STATE["version"],
     )
