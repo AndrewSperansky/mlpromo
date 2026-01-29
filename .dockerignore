@@ -1,5 +1,6 @@
 .git
 .gitignore
+.dockerignore
 .vscode
 .idea
 .venv
@@ -20,7 +21,8 @@ data/*
 docker/loki/chunks/*
 docker/loki/index/*
 docker/loki/compactor/*
-
+INFO/
+offline_wheels/
 # Cache
 *.log
 *.tmp

@@ -14,6 +14,7 @@ eggs/
 .eggs/
 data/
 data/models_history/
+INFO/
 lib/
 lib64/
 logs/

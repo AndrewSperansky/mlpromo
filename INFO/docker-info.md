@@ -497,7 +497,8 @@ docker inspect asperansky/promo-ml:stage1 | grep Id
 docker inspect asperansky/promo-ml:stage2 | grep Id  
 
 
-
+### 🧪 Smoke-test (обязательно!)
+`docker compose -f docker-compose.stage2-prod.yml up -d`
 
 
 ## Docker Tagging Policy (фиксируем правило)
