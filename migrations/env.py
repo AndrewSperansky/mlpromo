@@ -1,3 +1,5 @@
+# migrations/env.py
+
 import logging
 from logging.config import fileConfig
 
@@ -6,11 +8,31 @@ from alembic import context
 
 from app.db.base import Base
 
+from app.core.settings import settings
+
 # 🔴 ОБЯЗАТЕЛЬНО: импорт всех моделей
 
-from models import (ml_model, prediction, promo_position, promo, product, )  # noqa: F401
+from models import (
+    ml_model,
+    prediction,
+    promo_position,
+    promo,
+    product,
+    ml_prediction,
+    )  # noqa: F401
+
+from models.ml_prediction import (
+    MLPredictionRequest,
+    MLPredictionResult,
+)
+
 
 config = context.config
+
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.DATABASE_URL
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -68,10 +90,10 @@ logging.getLogger('alembic').setLevel(logging.INFO)
 logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
 
 
-# print("\n=== ТАБЛИЦЫ В METADATA (проверка) ===")
-# for table_name in Base.metadata.tables:
-#     table = Base.metadata.tables[table_name]
-#     print(f"  Таблица: {table_name}")
-#     print(f"  Поля: {list(table.columns.keys())}")
-#     print(f"  Первичный ключ: {list(table.primary_key.columns.keys())}")
-# print("=== КОНЕЦ СПИСКА ===")
+print("\n=== ТАБЛИЦЫ В METADATA (проверка) ===")
+for table_name in Base.metadata.tables:
+    table = Base.metadata.tables[table_name]
+    print(f"  Таблица: {table_name}")
+    print(f"  Поля: {list(table.columns.keys())}")
+    print(f"  Первичный ключ: {list(table.primary_key.columns.keys())}")
+print("=== КОНЕЦ СПИСКА ===")
