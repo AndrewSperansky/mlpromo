@@ -22,13 +22,6 @@ SET default_tablespace = '';
 
 SET default_table_access_method = heap;
 
---
--- Name: alembic_version; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.alembic_version (
-    version_num character varying(32) NOT NULL
-);
 
 
 --
@@ -379,13 +372,6 @@ ALTER TABLE ONLY public.promo ALTER COLUMN id SET DEFAULT nextval('public.promo_
 ALTER TABLE ONLY public.promo_position ALTER COLUMN id SET DEFAULT nextval('public.promo_position_id_seq'::regclass);
 
 
---
--- Data for Name: alembic_version; Type: TABLE DATA; Schema: public; Owner: -
---
-
-COPY public.alembic_version (version_num) FROM stdin;
-7e6016d1dcbb
-\.
 
 
 --
@@ -519,13 +505,6 @@ SELECT pg_catalog.setval('public.promo_id_seq', 1, true);
 
 SELECT pg_catalog.setval('public.promo_position_id_seq', 28, true);
 
-
---
--- Name: alembic_version alembic_version_pkc; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alembic_version
-    ADD CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num);
 
 
 --
