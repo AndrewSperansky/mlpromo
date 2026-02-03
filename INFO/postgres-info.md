@@ -260,6 +260,59 @@ docker exec -i promo_postgres psql -U postgres promo < backup_2026-01-14_15-23.s
 - Потом:  
 `docker exec -i promo_postgres psql -U postgres -d promo < backup_utf8.sql`
 
+## Создание дампа внутри контейнера (bush)  на хосте
+
+`docker exec -t promo_postgres   pg_dump -Fc -U postgres promo > backup_before_audit_tables.dump`
+docker exec -t promo_postgres   pg_dump -Fc -U postgres promo > promo_ml_backup_before_ml_model_refactor.dump
+
+или
+
+=============================================================  
+pg_dump \
+  -h localhost \
+  -p 5432 \
+  -U postgres \
+  -d promo \
+  -F c \
+  -E UTF8 \
+  --no-owner \
+  --no-privileges \
+  -f backup/promo_$(date +%Y%m%d_%H%M).dump
+
+==============================================================
+
+3️⃣ Делаем SQL dump (.sql) — ДЛЯ РЕВЬЮ
+pg_dump \
+  -h localhost \
+  -p 5432 \
+  -U postgres \
+  -d promo \
+  -F p \
+  -E UTF8 \
+  --no-owner \
+  --no-privileges \
+  --encoding=UTF8 \
+  -f backup/promo_$(date +%Y%m%d_%H%M).sql
+
+
+## Создание дампа внутри контейнера (bush)  в  контейнере
+docker exec -it promo_postgres /bin/bash
+pg_dump -U postgres -d promo -Fc -f /tmp/promo_ml_backup_before_ml_model_refactor.dump
+
+
+### Скопировать дамп на хост
+docker cp promo_postgres:/tmp/promo_ml_backup.dump ./promo_ml_backup_before_ml_model_refactor.dump
+
+####  Проверка
+ `dir backup_before_audit_tables.dump`  
+
+Дролжно быть: backup_before_audit_tables.dump
+
+🧷 sql
+SHOW server_encoding;
+SHOW client_encoding;
+
+
 
 - docker compose build postgres
 - docker compose up -d postgres
@@ -267,7 +320,7 @@ docker exec -i promo_postgres psql -U postgres promo < backup_2026-01-14_15-23.s
 
 
 ## IP‑адрес контейнера (опционально)
-- docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' promo_postgres
+`- docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' promo_postgres `
 
 ##  Логи
 `docker logs promo_postgres --tail=50`
@@ -275,7 +328,161 @@ docker exec -i promo_postgres psql -U postgres promo < backup_2026-01-14_15-23.s
 ### Проверить строку "DATABASE_URL"
 `docker exec -it promo_ml_backend python -c "
 from app.core.settings import settings; 
-print(settings.DATABASE_URL)
+print(settings.ML_DATABASE_URL)
 "`  
 Должно быть:  
 postgresql+psycopg2://postgres:postgres@postgres:5432/promo
+
+
+## ПРОВЕРКА РАБОТОСПОСОБНОСТИ Postgres
+
+### 0. Базовая картина
+docker ps -a
+docker compose -f docker-compose.prod.yml ps
+
+
+Смотрим:
+
+статус promo_postgres
+
+unhealthy vs exited
+
+### 📜 1. Логи (ты уже сделал, но фиксируем стандарт)
+docker logs promo_postgres --tail=200
+
+
+Если надо онлайн:
+
+docker logs -f promo_postgres
+
+### 🧠 2. Проверка env внутри контейнера
+
+Очень важно — часто тут косяк.
+
+`docker inspect promo_postgres --format='{{range .Config.Env}}{{println .}}{{end}}'  `
+
+
+Ищем:
+
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+POSTGRES_DB=
+
+### 🧪 3. Попробовать залогиниться вручную (внутри контейнера)
+`docker exec -it promo_postgres bash`
+
+
+Внутри:
+
+`psql -U postgres`
+
+
+или явно:
+
+psql -U postgres -d promo
+
+
+❌ Если тут password failed → 100% проблема в volume / инициализации
+✅ Если зашло → проблема в healthcheck или внешнем клиенте
+
+### 🧱 4. Проверка, не "залип" ли старый volume
+
+Это классика.
+
+docker volume ls
+docker volume inspect promo-ml_postgres-data
+
+
+Если volume создан раньше, чем ты поменял пароль — Postgres его НЕ пересоздаёт.
+
+### 💣 5. Жёсткий, но честный тест (СНОС ДАННЫХ)
+
+⚠️ Делай только если это не prod с данными.
+
+`docker compose -f docker-compose.prod.yml down -v`
+`docker compose -f docker-compose.prod.yml up -d`
+
+
+👉 В 80% случаев это сразу чинит password authentication failed
+
+### 🧬 6. Проверка pg_hba.conf (раз уж он фигурирует в логах)
+docker exec -it promo_postgres bash
+
+##### Внутри:
+
+`cat /var/lib/postgresql/data/pg_hba.conf | sed -n '1,200p' `
+
+Ищем:
+
+`host all all all scram-sha-256  `
+
+
+➡️ это норма, проблема не тут, а в пароле
+
+### 🩺 7. Проверка healthcheck вручную
+
+`docker exec promo_postgres pg_isready -U postgres`
+
+Если тут no response или rejecting connections — контейнер формально жив, но auth сломан.
+
+
+### 🌐 8. Проверка подключения из другого контейнера (backend)
+
+`docker exec -it promo_ml_backend bash`
+
+Внутри:
+
+`psql -h promo_postgres -U postgres -d promo`
+
+(пароль спросит)
+
+### 🔐 9. Проверка, не подсовывается ли пароль из .env
+
+Get-Content .env
+Get-Content .env.prod
+
+
+И потом:
+
+`docker compose -f docker-compose.prod.yml config`
+
+## Запуск psql внутри контейнера
+ docker exec -it promo_postgres bash
+ psql -h localhost -U postgres -d promo
+ 
+### Посмотреть содержание settings.DATABASE_URL
+`python -c "from app.core.settings import settings; print(settings.DATABASE_URL)"`
+
+Должно быть: postgresql+psycopg2://postgres:postgres@postgres:5432/promo
+
+
+
+
+
+# WARNING  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Внешний ключ ml_prediction_result_model_id_fkey ссылается на столбец id таблицы ml_model, который имеет тип integer. 
+При изменении типа model_id на text возникает конфликт:
+
+
+
+### -- 1. Удаляем внешний ключ
+
+ALTER TABLE public.ml_prediction_result 
+DROP CONSTRAINT ml_prediction_result_model_id_fkey;
+
+###  -- 2. Меняем тип в дочерней таблице
+Для безопасного преобразования integer → text используйте USING:
+
+ALTER TABLE public.ml_prediction_result
+ALTER COLUMN model_id TYPE TEXT USING model_id::text;
+
+
+### -- 3. Меняем тип в родительской таблице
+ALTER TABLE public.ml_model
+ALTER COLUMN id TYPE TEXT USING id::text;
+
+### -- 4. Восстанавливаем внешний ключ
+ALTER TABLE public.ml_prediction_result
+ADD CONSTRAINT ml_prediction_result_model_id_fkey
+FOREIGN KEY (model_id) REFERENCES ml_model(id);
+

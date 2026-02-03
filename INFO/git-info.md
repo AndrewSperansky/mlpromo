@@ -117,8 +117,9 @@ git pull origin main
 
 ## Удалить ветку
 
-`git branch -d service`   Safe delete     
-`git branch -D service`   Force delete
+`git branch -d service`   Safe delete  локально   
+`git branch -D service`   Force delete  локально
+`git push origin --delete service`   Удаляет ветку на удаленном репозитории
 
 Пример:
 
@@ -624,3 +625,5 @@ git cherry-pick <hash>
 
 ### если конфликт
 git cherry-pick --abort
+
+

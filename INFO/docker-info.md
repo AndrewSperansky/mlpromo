@@ -478,46 +478,19 @@ docker images | grep promo-ml
 🔹 Важно:  
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
-###  Локальный тест
-docker compose -f docker-compose.prod.yml up -d
-
-
 ### 6. Собрать образ (если еще не собран)
 `docker build -t asperansky/promo-ml:stage1 . ` 
-`docker build -t asperansky/promo-ml:stage2 . `
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
 
 ### 7. Отправить образ на Docker Hub
-`docker push asperansky/promo-ml:stage2`
+`docker push asperansky/promo-ml:stage1`
 
 ### 8. Проверка на Docker Hub
-docker inspect asperansky/promo-ml:stage1 | grep Id 
-docker inspect asperansky/promo-ml:stage2 | grep Id  
+docker inspect asperansky/promo-ml:stage1 | grep Id  
 
-
-### 🧪 Smoke-test (обязательно!)
-`docker compose -f docker-compose.stage2-prod.yml up -d`
-
-
-## Docker Tagging Policy (фиксируем правило)
-### 🎯 Цели
-
-воспроизводимость demo / prod
-быстрый rollback
-прозрачная связь: код → модель → образ
+stage2
 
 
 
-## Удаление имиджа локально, не затрагивает Docker Hub
-docker images | grep promo-ml
-docker rmi asperansky/promo-ml:stage1
-
-
-### 🔒 Правила
-
-❌ Запрещено деплоить latest в prod  
-✅ Prod только из */prod веток  
-✅ Один prod-тег = один git commit  
-🔁 Rollback = смена тега  
