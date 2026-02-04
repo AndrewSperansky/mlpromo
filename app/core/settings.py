@@ -9,7 +9,7 @@ from pydantic import Field
 
 
 class Settings(BaseSettings):
-    ENV: str = "dev"  # dev / prod
+    ENV: str = "prod"  # dev / prod
     DEBUG: bool = True
     API_CONTRACT_VERSION: str = Field(
         default="ml-predict.v1",

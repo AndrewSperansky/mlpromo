@@ -13,3 +13,6 @@ def load_model() -> Any:
         "ml_model_id": "dummy-model",
         "version": settings.VERSION,
     }
+
+
+# Дергает файл app/api/dependencies.py  - чисто тестовая фича

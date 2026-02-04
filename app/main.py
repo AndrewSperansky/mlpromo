@@ -41,7 +41,12 @@ async def lifespan(_app: FastAPI):
 
     # ---------- STARTUP ----------
     logger = setup_logging()
-    logger.info("Starting Promo ML service ...")
+    logger.info("🚀 Starting Promo ML service",
+                extra={
+                    "env": settings.ENV,
+                    "mode": "PRODUCTION" if settings.ENV == "prod" else "DEV",
+                }
+                )
 
     # --- ML Contract check ---
     contract = check_ml_contract()

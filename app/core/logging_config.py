@@ -3,10 +3,10 @@ Logging configuration for Promo ML Backend.
 JSON logging + file + stdout.
 """
 
+import os
 import logging
 import logging.config
 from pathlib import Path
-from pythonjsonlogger import jsonlogger
 from app.core.logger import attach_correlation_filter
 
 
@@ -18,12 +18,31 @@ LOG_FILE = LOG_DIR / "app.log"
 
 
 def get_logging_config() -> dict:
-    """
-    Конфигурация логирования в формате dictConfig.
+    env = os.getenv("ENV", "dev")
 
-    Returns:
-        dict: Конфигурация для logging.config.dictConfig
-    """
+    handlers = {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+            "level": "INFO",
+            "stream": "ext://sys.stdout",
+        }
+    }
+
+    promo_handlers = ["console"]
+
+    if env != "prod":
+        handlers["file"] = {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "json",
+            "filename": str(LOG_FILE),
+            "maxBytes": 10_000_000,
+            "backupCount": 5,
+            "encoding": "utf-8",
+            "level": "INFO",
+        }
+        promo_handlers.append("file")
+
     return {
         "version": 1,
         "disable_existing_loggers": False,
@@ -34,30 +53,12 @@ def get_logging_config() -> dict:
                     "%(asctime)s %(levelname)s %(name)s %(message)s "
                     "%(filename)s %(funcName)s %(lineno)d %(correlation_id)s"
                 ),
-            },
-            "simple": {
-                "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-            },
+            }
         },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "json",
-                "level": "INFO",
-            },
-            "file": {
-                "class": "logging.handlers.RotatingFileHandler",
-                "formatter": "json",
-                "filename": str(LOG_FILE),
-                "maxBytes": 10_000_000,
-                "backupCount": 5,
-                "encoding": "utf-8",
-                "level": "INFO",
-            },
-        },
+        "handlers": handlers,
         "loggers": {
             "promo_ml": {
-                "handlers": ["console", "file"],
+                "handlers": promo_handlers,
                 "level": "INFO",
                 "propagate": False,
             },
