@@ -103,7 +103,7 @@ git pull origin main
 
 ## Создаём новую ветку для фичи или бага и сразу переходим в нее
 
-`git checkout -b feature/<имя_фичи>`
+`git checkout -b stage3`
 
 ## Просто переходим на ветку
 
@@ -627,3 +627,13 @@ git cherry-pick <hash>
 git cherry-pick --abort
 
 
+## Удалить ветку
+
+`git branch -d stage3`   Safe delete  локально   
+`git branch -D stage3`   Force delete  локально
+`git push origin --delete stage3`   Удаляет ветку на удаленном репозитории
+
+
+## Создаём новую ветку для фичи или бага и сразу переходим в нее
+
+`git checkout -b stage3`
