@@ -321,8 +321,10 @@ curl http://localhost:8000/api/v1/ml/dataset | jq '.count'
   ]
 }
 
-
 ✔ число > 0
+
+
+===============================================================
 
 ✅ 3. Predict (КЛЮЧЕВОЕ)
 curl -X POST http://localhost:8000/api/v1/ml/predict \
@@ -351,7 +353,7 @@ curl -X POST http://localhost:8000/api/v1/ml/predict \
 }
 
 =========================================================================
- -H "Content-Type: application/json"   -d '{
+  curl -X POST http://localhost:8000/api/v1/ml/1c/predict   -H "Content-Type: application/json"   -d '{
     "request_id": "33333333-3333-3333-3333-333333333333",
     "data": {
       "price": 120,
@@ -361,6 +363,8 @@ curl -X POST http://localhost:8000/api/v1/ml/predict \
     }
   }'
 
+
+✔ ОЖИДАЕМ:
 {
     "request_id":"33333333-3333-3333-3333-333333333333",
     "prediction":151.81549452722453,
