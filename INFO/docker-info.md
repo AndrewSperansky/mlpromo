@@ -479,16 +479,18 @@ docker images | grep promo-ml
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
 ### 6. Собрать образ (если еще не собран)
-`docker build -t asperansky/promo-ml:stage1 . ` 
+`docker build -t asperansky/promo-ml:stage2 . ` 
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
 
 ### 7. Отправить образ на Docker Hub
-`docker push asperansky/promo-ml:stage1`
+`docker push asperansky/promo-ml:stage2`
 
 ### 8. Проверка на Docker Hub
-docker inspect asperansky/promo-ml:stage1 | grep Id  
+docker inspect asperansky/promo-ml:stage2 | grep Id 
+docker images asperansky/promo-ml:prod2
+docker inspect asperansky/promo-ml:prod2 --format='{{.Id}}'
 
 stage2
 
