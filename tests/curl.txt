@@ -1,0 +1,16 @@
+ curl http://localhost:8000/api/v1/ml/model-status
+
+
+ curl -X POST http://localhost:8000/api/v1/ml/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prediction_date": "2025-01-15",
+    "price": 100,
+    "discount": 10,
+    "avg_sales_7d": 120,
+    "promo_days_left": 5,
+    "promo_code": "PROMO_TEST",
+    "sku": "SKU_TEST"
+  }'
+
+

@@ -637,3 +637,14 @@ git cherry-pick --abort
 ## Создаём новую ветку для фичи или бага и сразу переходим в нее
 
 `git checkout -b stage3`
+
+
+## Отмена незакоммиченных изменений:
+
+`git restore .   `            все изменения!!!!!  
+`git restore models/model.cbm`
+`git checkout --  models/model.cbm `   Устаревшая
+
+## Отмена последнего коммита (не push):
+
+git reset --soft HEAD~1
