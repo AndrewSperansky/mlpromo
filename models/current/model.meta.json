@@ -1,0 +1,15 @@
+{
+  "model_name": "promo_uplift",
+  "trained_at": "2026-02-06T15:16:10.909587+00:00",
+  "features": [
+    "price",
+    "discount",
+    "avg_sales_7d",
+    "promo_days_left"
+  ],
+  "status": "candidate",
+  "artifacts": {
+    "model": "model.cbm",
+    "shap_summary": "shap_summary.json"
+  }
+}

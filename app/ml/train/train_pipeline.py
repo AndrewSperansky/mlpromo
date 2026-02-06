@@ -13,9 +13,11 @@ from app.ml.train.shap_utils import (
     save_shap_artifacts,
 )
 
+from models.model_manager import promote_candidate
 
-def get_models_dir() -> Path:
-    return Path(os.getenv("MODELS_DIR", "models"))
+
+BASE_MODELS_DIR = Path(os.getenv("MODELS_DIR", "models"))
+CANDIDATE_DIR = BASE_MODELS_DIR / "_candidate"
 
 
 def _prepare_training_data():
@@ -34,9 +36,13 @@ def _prepare_training_data():
     return X, y
 
 
-def train_pipeline():
-    MODELS_DIR = get_models_dir()
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+def train_pipeline(promote: bool = False) -> dict:
+    """
+    Train model and produce candidate artifacts.
+    promote=True → делает модель активной
+    """
+
+    CANDIDATE_DIR.mkdir(parents=True, exist_ok=True)
 
     X_train, y_train = _prepare_training_data()
     feature_names = X_train.columns.tolist()
@@ -52,7 +58,7 @@ def train_pipeline():
 
     model.fit(X_train, y_train)
 
-    model_path = MODELS_DIR / "model.cbm"
+    model_path = CANDIDATE_DIR / "model.cbm"
     model.save_model(str(model_path))
 
     shap_values, expected_value = compute_shap_catboost(
@@ -64,20 +70,28 @@ def train_pipeline():
         shap_values=shap_values,
         expected_value=expected_value,
         feature_names=feature_names,
-        models_dir=MODELS_DIR,
+        models_dir=CANDIDATE_DIR,
     )
 
     meta = {
         "model_name": "promo_uplift",
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "features": feature_names,
+        "status": "candidate",
         "artifacts": {
             "model": "model.cbm",
             "shap_summary": "shap_summary.json",
         },
     }
 
-    with open(MODELS_DIR / "model.meta.json", "w") as f:
+    with open(CANDIDATE_DIR / "model.meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
-    return {"status": "trained"}
+    if promote:
+        promote_candidate(CANDIDATE_DIR)
+
+    return {
+        "status": "trained",
+        "promoted": promote,
+        "candidate_dir": str(CANDIDATE_DIR),
+    }
