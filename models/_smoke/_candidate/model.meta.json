@@ -1,6 +1,6 @@
 {
   "model_name": "promo_uplift",
-  "trained_at": "2026-02-09T08:16:18.507884+00:00",
+  "trained_at": "2026-02-09T09:09:17.851910+00:00",
   "features": [
     "price",
     "discount",
