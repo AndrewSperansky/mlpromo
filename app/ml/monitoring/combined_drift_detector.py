@@ -1,10 +1,12 @@
-#   app/ml/monitoring/combined_drift_detector.py
-#   — ОБНОВЛЁННЫЙ COMBINED DRIFT (БЕЗ ВЕРСИЙ)
-
+# app/ml/monitoring/combined_drift_detector.py
+# — COMBINED DRIFT DETECTOR + PIPELINE WRAPPER
 
 from typing import Dict, Any
 from pathlib import Path
 import json
+
+from app.ml.monitoring.alert_engine import decide_action            # ✨ NEW
+from app.ml.monitoring.retrain_trigger import handle_retrain_if_needed  # ✨ NEW
 
 
 MODELS_DIR = Path("models")
@@ -59,3 +61,31 @@ def detect_combined_drift(
             combined["combined_drift_detected"] = True
 
     return combined
+
+
+# ───────────────────────────────────────────────────────────────
+# ✨ NEW: High-level pipeline (drift → alert → retrain)
+# ───────────────────────────────────────────────────────────────
+
+def run_drift_pipeline(
+    shap_drift_report: Dict[str, Any],
+    data_drift_report: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Полный pipeline:
+    SHAP drift + data drift → combined → alert → retrain trigger
+    """
+
+    combined = detect_combined_drift(
+        shap_drift_report=shap_drift_report,
+        data_drift_report=data_drift_report,
+    )
+
+    alert = decide_action(combined)                     # ✨ NEW
+    retrain = handle_retrain_if_needed(alert)           # ✨ NEW
+
+    return {
+        "combined_drift": combined,
+        "alert": alert,
+        "retrain": retrain,
+    }
