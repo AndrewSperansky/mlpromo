@@ -1,5 +1,7 @@
+
 # app/ml/train/train_pipeline.py
-# — TRAIN PIPELINE WITH VERSIONING SUPPORT (FIXED ARCHIVE CONTRACT)
+# — TRAIN PIPELINE WITH VERSIONING + ARCHIVE CONTRACT + LINEAGE (FIXED)
+
 
 from pathlib import Path
 from datetime import datetime, timezone
@@ -12,6 +14,8 @@ from app.ml.train.shap_utils import (
     compute_shap_catboost,
     save_shap_artifacts,
 )
+
+from app.ml.model_registry.lineage import enrich_meta_with_lineage  # ✨ NEW
 
 
 def _get_models_dir() -> Path:
@@ -38,7 +42,10 @@ def _prepare_training_data():
     return X, y
 
 
-def train_pipeline(promote: bool = False) -> dict:
+def train_pipeline(
+    promote: bool = False,
+    trigger: str = "manual",  # ✨ NEW
+) -> dict:
     """
     promote=False → candidate
     promote=True  → current + archive previous
@@ -55,6 +62,9 @@ def train_pipeline(promote: bool = False) -> dict:
     current_dir.mkdir(parents=True, exist_ok=True)
     archive_dir.mkdir(parents=True, exist_ok=True)
 
+    # =========================
+    # 1️⃣ TRAIN MODEL
+    # =========================
     X_train, y_train = _prepare_training_data()
     feature_names = X_train.columns.tolist()
 
@@ -72,6 +82,9 @@ def train_pipeline(promote: bool = False) -> dict:
     model_path = candidate_dir / "model.cbm"
     model.save_model(str(model_path))
 
+    # =========================
+    # 2️⃣ SHAP ARTIFACTS
+    # =========================
     shap_values, expected_value = compute_shap_catboost(
         model=model,
         X=X_train,
@@ -84,9 +97,15 @@ def train_pipeline(promote: bool = False) -> dict:
         models_dir=candidate_dir,
     )
 
+    # =========================
+    # 3️⃣ METADATA + LINEAGE
+    # =========================
+    model_id = datetime.now(timezone.utc).isoformat()  # ✨ NEW
+
     meta = {
+        "model_id": model_id,                         # ✨ NEW
         "model_name": "promo_uplift",
-        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "trained_at": model_id,
         "features": feature_names,
         "artifacts": {
             "model": "model.cbm",
@@ -95,15 +114,24 @@ def train_pipeline(promote: bool = False) -> dict:
         "stage": "candidate",
     }
 
+    # ✨ NEW: lineage enrichment
+    meta = enrich_meta_with_lineage(
+        meta=meta,
+        trigger=trigger,
+    )
+
     with open(candidate_dir / "model.meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
     promoted = False
 
+    # =========================
+    # 4️⃣ PROMOTION + ARCHIVE
+    # =========================
     if promote:
         # 🟨 если current уже есть — архивируем
         if any(current_dir.iterdir()):
-            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             archived_version = archive_dir / ts
             archived_version.mkdir(parents=True)
 
@@ -119,5 +147,8 @@ def train_pipeline(promote: bool = False) -> dict:
     return {
         "status": "trained",
         "promoted": promoted,
-        "models_dir": str(candidate_dir),
+        "model_id": model_id,          # ✨ NEW
+        "stage": "current" if promoted else "candidate",
     }
+
+
