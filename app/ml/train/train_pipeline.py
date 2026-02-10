@@ -1,6 +1,5 @@
-
 # app/ml/train/train_pipeline.py
-# — TRAIN PIPELINE WITH VERSIONING + ARCHIVE CONTRACT + LINEAGE (FIXED)
+# — TRAIN PIPELINE WITH VERSIONING + ARCHIVE CONTRACT + LINEAGE + PROMOTION POLICY
 
 
 from pathlib import Path
@@ -15,7 +14,8 @@ from app.ml.train.shap_utils import (
     save_shap_artifacts,
 )
 
-from app.ml.model_registry.lineage import enrich_meta_with_lineage  # ✨ NEW
+from app.ml.model_registry.lineage import enrich_meta_with_lineage
+from app.ml.model_registry.promotion_policy import decide_promotion  # ✨ NEW
 
 
 def _get_models_dir() -> Path:
@@ -44,11 +44,11 @@ def _prepare_training_data():
 
 def train_pipeline(
     promote: bool = False,
-    trigger: str = "manual",  # ✨ NEW
+    trigger: str = "manual",
 ) -> dict:
     """
-    promote=False → candidate
-    promote=True  → current + archive previous
+    promote=False → candidate only
+    promote=True  → candidate → metrics-gated promotion → current + archive
     """
 
     MODELS_DIR = _get_models_dir()
@@ -57,7 +57,9 @@ def train_pipeline(
     current_dir = MODELS_DIR / "current"
     archive_dir = MODELS_DIR / "archive"
 
-    # 🟨 ВСЕ инфраструктурные директории создаём всегда
+    # =========================
+    # 0️⃣ INFRASTRUCTURE
+    # =========================
     candidate_dir.mkdir(parents=True, exist_ok=True)
     current_dir.mkdir(parents=True, exist_ok=True)
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -100,10 +102,10 @@ def train_pipeline(
     # =========================
     # 3️⃣ METADATA + LINEAGE
     # =========================
-    model_id = datetime.now(timezone.utc).isoformat()  # ✨ NEW
+    model_id = datetime.now(timezone.utc).isoformat()
 
     meta = {
-        "model_id": model_id,                         # ✨ NEW
+        "model_id": model_id,
         "model_name": "promo_uplift",
         "trained_at": model_id,
         "features": feature_names,
@@ -112,9 +114,12 @@ def train_pipeline(
             "shap_summary": "shap_summary.json",
         },
         "stage": "candidate",
+        "metrics": {
+            "rmse": float(model.best_score_["learn"]["RMSE"]),
+        },
     }
 
-    # ✨ NEW: lineage enrichment
+    # ✨ lineage enrichment (parent_model_id, trigger, etc.)
     meta = enrich_meta_with_lineage(
         meta=meta,
         trigger=trigger,
@@ -124,31 +129,56 @@ def train_pipeline(
         json.dump(meta, f, indent=2)
 
     promoted = False
+    promotion_decision = None
 
     # =========================
-    # 4️⃣ PROMOTION + ARCHIVE
+    # 4️⃣ METRICS-GATED PROMOTION
     # =========================
     if promote:
-        # 🟨 если current уже есть — архивируем
-        if any(current_dir.iterdir()):
-            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            archived_version = archive_dir / ts
-            archived_version.mkdir(parents=True)
+        current_metrics = None
 
-            for file in current_dir.iterdir():
-                (archived_version / file.name).write_bytes(file.read_bytes())
+        if (current_dir / "model.meta.json").exists():
+            with open(current_dir / "model.meta.json") as f:
+                current_meta = json.load(f)
+                current_metrics = current_meta.get("metrics")
 
-        # 🔹 promote candidate → current
-        for file in candidate_dir.iterdir():
-            (current_dir / file.name).write_bytes(file.read_bytes())
+        promotion_decision = decide_promotion(
+            candidate_metrics=meta["metrics"],
+            current_metrics=current_metrics,
+        )
 
-        promoted = True
+        meta["promotion_decision"] = promotion_decision
+
+        # 🔒 promotion ТОЛЬКО если policy разрешила
+        if promotion_decision["promote"]:
+            # 🟨 archive current
+            if any(current_dir.iterdir()):
+                ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                archived_version = archive_dir / ts
+                archived_version.mkdir(parents=True)
+
+                for file in current_dir.iterdir():
+                    (archived_version / file.name).write_bytes(
+                        file.read_bytes()
+                    )
+
+            # 🔹 promote candidate → current
+            for file in candidate_dir.iterdir():
+                (current_dir / file.name).write_bytes(
+                    file.read_bytes()
+                )
+
+            promoted = True
+            meta["stage"] = "current"
+
+        # ✨ фиксируем итоговое meta (audit!)
+        with open(candidate_dir / "model.meta.json", "w") as f:
+            json.dump(meta, f, indent=2)
 
     return {
         "status": "trained",
+        "model_id": model_id,
         "promoted": promoted,
-        "model_id": model_id,          # ✨ NEW
         "stage": "current" if promoted else "candidate",
+        "promotion_decision": promotion_decision,
     }
-
-
