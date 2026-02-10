@@ -533,13 +533,17 @@ HEAD → main     — ты работаешь в локальной main
 git checkout main  
 git pull origin main  # синхронизация с удалённым репозиторием
 git merge bizlogic  # слияние bizlogic в текущую ветку (main)
-git tag stage1     # создание тега stage1 на текущем коммите
+
+
 
 git checkout -b promo-ml/stage2  # создание новой ветки и переход в неё
 
 git push origin main           # обновление удалённой ветки main
 git push origin promo-ml/stage2  # отправка новой ветки
-git push --tags               # отправка тега stage1
+
+
+git tag stage3    # создание тега stage3 на текущем коммите
+git push --tags    # отправка тега stage3
 
 
 
