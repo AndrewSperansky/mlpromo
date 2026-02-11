@@ -44,3 +44,9 @@ def test_rollback_creates_lineage_event(tmp_path, monkeypatch):
     data = json.loads(lineage_file.read_text())
 
     assert any(e["event_type"] == "rollback" for e in data)
+
+    alerts_file = models_dir / "history" / "alerts.json"
+    assert alerts_file.exists()
+
+    alerts = json.loads(alerts_file.read_text())
+    assert any(a["alert_type"] == "model_rollback" for a in alerts)

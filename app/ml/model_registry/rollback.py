@@ -8,6 +8,7 @@ import json
 import os
 
 from app.ml.model_registry.lineage import record_lineage_event
+from app.ml.monitoring.alert_engine import trigger_alert
 
 
 def _safe_timestamp() -> str:
@@ -20,6 +21,7 @@ def _safe_timestamp() -> str:
 
 def rollback_current_to_archive(
     model_id: str | None = None,
+    reason: str = "manual_or_auto",
 ) -> dict:
     """
     Откатывает current-модель к версии из archive.
@@ -110,6 +112,20 @@ def rollback_current_to_archive(
             "restored_from_archive_dir": target_dir_name,
         },
     )
+
+    # ==========================================================
+    # 🔥 Stage 4: Alert event
+    # ==========================================================
+
+    trigger_alert(
+        alert_type="model_rollback",
+        severity="critical",
+        payload={
+            "model_id": restored_model_id or target_dir_name,
+            "reason": reason,
+        },
+    )
+
 
     return {
         "rollback_performed": True,
