@@ -1,17 +1,19 @@
 # app/ml/model_registry/tradeoff_policy.py
-# — LATENCY VS QUALITY TRADEOFF POLICY (Stage 4)
+# — LATENCY vs QUALITY TRADEOFF POLICY
 
-from typing import Dict, Literal
+from typing import TypedDict, Literal
 
 
-DecisionType = Literal["approve", "reject", "manual_review"]
+class TradeoffResult(TypedDict):
+    decision: Literal["approve", "reject", "manual_review"]
+    reason: str
 
 
 def decide_tradeoff(
-    current_metrics: Dict[str, float],
-    candidate_metrics: Dict[str, float],
-    slo_config: Dict[str, float],
-) -> Dict[str, object]:
+    current_metrics: dict,
+    candidate_metrics: dict,
+    slo_config: dict,
+) -> TradeoffResult:
     """
     Решает конфликт latency vs quality.
 
@@ -30,76 +32,63 @@ def decide_tradeoff(
     slo_config:
         {
             "latency_p95_ms": float,
-            "min_quality_gain": float,     # например 0.01 (1%)
-            "max_latency_growth": float    # например 0.20 (20%)
+            "min_quality_gain": float,
+            "max_latency_growth": float
         }
     """
 
-    current_rmse = current_metrics["rmse"]
-    candidate_rmse = candidate_metrics["rmse"]
-
-    current_latency = current_metrics["latency_p95_ms"]
-    candidate_latency = candidate_metrics["latency_p95_ms"]
-
-    latency_slo = slo_config["latency_p95_ms"]
-    min_quality_gain = slo_config.get("min_quality_gain", 0.01)
-    max_latency_growth = slo_config.get("max_latency_growth", 0.20)
-
-    # ==============================================
-    # Compute deltas
-    # ==============================================
-
-    quality_delta = (current_rmse - candidate_rmse) / current_rmse
-    latency_delta = (candidate_latency - current_latency) / current_latency
-
-    reasons = []
-
-    # ==============================================
-    # Rule 1: Hard SLO violation
-    # ==============================================
-
-    if candidate_latency > latency_slo:
-        return {
-            "decision": "reject",
-            "reason": "Candidate violates latency SLO",
-            "quality_delta": quality_delta,
-            "latency_delta": latency_delta,
-        }
-
-    # ==============================================
-    # Rule 2: Quality regression
-    # ==============================================
-
-    if quality_delta <= 0:
-        return {
-            "decision": "reject",
-            "reason": "Candidate quality is worse or equal",
-            "quality_delta": quality_delta,
-            "latency_delta": latency_delta,
-        }
-
-    # ==============================================
-    # Rule 3: Acceptable improvement
-    # ==============================================
-
-    if (
-        quality_delta >= min_quality_gain
-        and latency_delta <= max_latency_growth
-    ):
+    if not current_metrics:
         return {
             "decision": "approve",
-            "reason": "Quality improved within acceptable latency growth",
-            "quality_delta": quality_delta,
-            "latency_delta": latency_delta,
+            "reason": "No current model — auto approve",
         }
 
-    # ==============================================
-    # Rule 4: Borderline case
-    # ==============================================
+    rmse_current = current_metrics.get("rmse")
+    rmse_candidate = candidate_metrics.get("rmse")
+
+    latency_current = current_metrics.get("latency_p95_ms")
+    latency_candidate = candidate_metrics.get("latency_p95_ms")
+
+    if rmse_current is None or rmse_candidate is None:
+        return {
+            "decision": "manual_review",
+            "reason": "Missing RMSE metrics",
+        }
+
+    quality_gain = (rmse_current - rmse_candidate) / rmse_current
+
+    min_quality_gain = slo_config.get("min_quality_gain", 0.01)
+    max_latency_growth = slo_config.get("max_latency_growth", 0.20)
+    latency_slo = slo_config.get("latency_p95_ms")
+
+    latency_growth = 0.0
+    if latency_current and latency_candidate:
+        latency_growth = (
+            latency_candidate - latency_current
+        ) / latency_current
+
+    # 🚫 Hard SLO breach
+    if latency_slo and latency_candidate and latency_candidate > latency_slo:
+        return {
+            "decision": "reject",
+            "reason": "Latency SLO breached",
+        }
+
+    # 🎯 Quality insufficient
+    if quality_gain < min_quality_gain:
+        return {
+            "decision": "manual_review",
+            "reason": "Quality gain below threshold",
+        }
+
+    # ⚖️ Excessive latency growth
+    if latency_growth > max_latency_growth:
+        return {
+            "decision": "manual_review",
+            "reason": "Latency growth too high",
+        }
 
     return {
-        "decision": "manual_review",
-        "reason": "Tradeoff requires human review",
-        "quality_delta": quality_delta,
-        "latency_delta": latency_delta,
+        "decision": "approve",
+        "reason": "Quality improved within latency limits",
     }
