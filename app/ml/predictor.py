@@ -1,12 +1,23 @@
-def predict_from_features(features: dict, model=None):
-    """
-    Deprecated mock — заменить MLPredictionService.predict
-    """
-    return {"forecast_total": 100.0, "baseline": 80.0, "uplift": 20.0}
+# app/ml/predictor.py
 
+import time
 
-def predict_with_shap(payload, model):
-    """
-    Deprecated mock SHAP — заменить MLPredictionService
-    """
-    return {"forecast_total": 100.0, "baseline": 80.0, "uplift": 20.0}
+from app.ml.monitoring.inference_metrics import collect_inference_metrics
+
+def predict(self, X):
+
+    start = time.perf_counter()
+
+    preds = self.model.predict(X)
+
+    latency_ms = (time.perf_counter() - start) * 1000
+
+    collect_inference_metrics(
+        ml_model_id=self.meta["ml_model_id"],
+        inputs=X,
+        outputs=preds,
+        latency_ms=latency_ms,
+    )
+
+    return preds
+
