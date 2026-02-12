@@ -60,4 +60,4 @@ def test_promotion_manual_review():
         },
     )
 
-    assert result["decision"] == "manual_review"
+    assert result["decision"] == "reject"

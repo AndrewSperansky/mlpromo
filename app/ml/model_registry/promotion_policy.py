@@ -119,8 +119,8 @@ def decide_promotion(
     decision = tradeoff_result["decision"]
     reason = tradeoff_result["reason"]
 
-    # если tradeoff уже не approve → выходим
-    if decision != "approve":
+    # если tradeoff reject → сразу reject
+    if decision == "reject":
         return _normalize_result(decision, reason)
 
     # =========================
