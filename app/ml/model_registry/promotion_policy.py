@@ -1,9 +1,10 @@
 # app/ml/model_registry/promotion_policy.py
-# — PROMOTION POLICY v2 (metrics-gated + tradeoff + backward compatible)
+# — PROMOTION POLICY v3 (Drift → Tradeoff → Shadow)
 
 from typing import TypedDict, Literal, Optional
 
 from app.ml.model_registry.tradeoff_policy import decide_tradeoff
+from app.ml.monitoring.shadow_latency import evaluate_shadow_latency
 
 
 class PromotionResult(TypedDict):
@@ -34,12 +35,14 @@ def decide_promotion(
     """
     Unified promotion decision.
 
-    Поддерживает:
-    - Старый API (2 аргумента)
-    - Новый API (v2)
+    Pipeline:
+
+    1️⃣ Drift gate
+    2️⃣ Tradeoff gate
+    3️⃣ Shadow latency gate
     """
 
-    # 🔁 Support v2 naming (tests may use current_meta / candidate_meta)
+    # 🔁 Support v2 naming
     if "current_meta" in kwargs:
         current_metrics = kwargs["current_meta"]
 
@@ -53,7 +56,7 @@ def decide_promotion(
     slo_config = slo_config or {}
 
     # =========================
-    # 1️⃣ BACKWARD COMPATIBILITY (old tests)
+    # 1️⃣ BACKWARD COMPATIBILITY (V1)
     # =========================
     if not inference_metrics and not drift_report and not slo_config:
         if not current_metrics:
@@ -116,4 +119,39 @@ def decide_promotion(
     decision = tradeoff_result["decision"]
     reason = tradeoff_result["reason"]
 
-    return _normalize_result(decision, reason)
+    # если tradeoff уже не approve → выходим
+    if decision != "approve":
+        return _normalize_result(decision, reason)
+
+    # =========================
+    # 5️⃣ Shadow latency gate
+    # =========================
+    if inference_metrics:
+        shadow_result = evaluate_shadow_latency(
+            current_latency_p95_ms=inference_metrics.get(
+                "current_latency_p95_ms", 0
+            ),
+            candidate_latency_p95_ms=inference_metrics.get(
+                "candidate_latency_p95_ms", 0
+            ),
+            max_allowed_growth=slo_config.get(
+                "max_latency_growth", 0.15
+            ),
+        )
+
+        shadow_decision = shadow_result["decision"]
+        shadow_reason = shadow_result["reason"]
+
+        if shadow_decision != "approve":
+            return _normalize_result(
+                shadow_decision,
+                f"Shadow gate: {shadow_reason}",
+            )
+
+    # =========================
+    # ✅ FINAL APPROVE
+    # =========================
+    return _normalize_result(
+        "approve",
+        "All gates passed (Drift, Tradeoff, Shadow)",
+    )
