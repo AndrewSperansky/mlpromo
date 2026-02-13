@@ -1,26 +1,30 @@
 # app/ml/model_registry/promotion_policy.py
 # — PROMOTION POLICY v3 (Drift → Tradeoff → Shadow)
+# app/ml/model_registry/promotion_policy.py
 
-from typing import TypedDict, Literal, Optional
+from typing import Optional, Dict, Any, TypedDict
 
-from app.ml.model_registry.tradeoff_policy import decide_tradeoff
 from app.ml.monitoring.shadow_latency import evaluate_shadow_latency
+from app.ml.model_registry.tradeoff_policy import decide_tradeoff
 
 
 class PromotionResult(TypedDict):
-    decision: Literal["approve", "reject", "manual_review"]
+    decision: str
     reason: str
     promote: bool
 
 
-def _normalize_result(
-    decision: Literal["approve", "reject", "manual_review"],
-    reason: str,
-) -> PromotionResult:
+def _normalize_result(decision: str, reason: str) -> PromotionResult:
+    """
+    Normalizes decision into unified PromotionResult structure.
+    """
+
+    promote = decision == "approve"
+
     return {
         "decision": decision,
         "reason": reason,
-        "promote": decision == "approve",
+        "promote": promote,
     }
 
 
@@ -30,13 +34,15 @@ def decide_promotion(
     inference_metrics: Optional[dict] = None,
     drift_report: Optional[dict] = None,
     slo_config: Optional[dict] = None,
+    alert_state: Optional[dict] = None,
     **kwargs,
 ) -> PromotionResult:
     """
-    Unified promotion decision.
+    Unified promotion decision pipeline.
 
-    Pipeline:
+    Execution order:
 
+    0️⃣ Freeze gate
     1️⃣ Drift gate
     2️⃣ Tradeoff gate
     3️⃣ Shadow latency gate
@@ -54,10 +60,22 @@ def decide_promotion(
     inference_metrics = inference_metrics or {}
     drift_report = drift_report or {}
     slo_config = slo_config or {}
+    alert_state = alert_state or {}
 
-    # =========================
+    # =====================================================
+    # 0️⃣ FREEZE GATE
+    # =====================================================
+    if alert_state.get("active"):
+        alert_type = alert_state.get("type", "unknown")
+
+        return _normalize_result(
+            "frozen",
+            f"promotion frozen due to active alert: {alert_type}",
+        )
+
+    # =====================================================
     # 1️⃣ BACKWARD COMPATIBILITY (V1)
-    # =========================
+    # =====================================================
     if not inference_metrics and not drift_report and not slo_config:
         if not current_metrics:
             return _normalize_result(
@@ -80,12 +98,10 @@ def decide_promotion(
             "RMSE not improved",
         )
 
-    # =========================
-    # 2️⃣ Drift gate
-    # =========================
-    shap_drift = (
-        drift_report.get("summary", {}).get("shap_drift", False)
-    )
+    # =====================================================
+    # 2️⃣ DRIFT GATE
+    # =====================================================
+    shap_drift = drift_report.get("summary", {}).get("shap_drift", False)
 
     if shap_drift:
         return _normalize_result(
@@ -93,9 +109,9 @@ def decide_promotion(
             "SHAP drift detected",
         )
 
-    # =========================
-    # 3️⃣ Merge latency metrics
-    # =========================
+    # =====================================================
+    # 3️⃣ MERGE LATENCY METRICS
+    # =====================================================
     merged_candidate = dict(candidate_metrics)
     merged_current = dict(current_metrics)
 
@@ -107,51 +123,47 @@ def decide_promotion(
             "current_latency_p95_ms"
         )
 
-    # =========================
-    # 4️⃣ Tradeoff policy
-    # =========================
+    # =====================================================
+    # 4️⃣ TRADEOFF POLICY
+    # =====================================================
     tradeoff_result = decide_tradeoff(
         current_metrics=merged_current,
         candidate_metrics=merged_candidate,
         slo_config=slo_config,
     )
 
-    decision = tradeoff_result["decision"]
-    reason = tradeoff_result["reason"]
+    decision = str(tradeoff_result["decision"])
+    reason = str(tradeoff_result["reason"])
 
-    # если tradeoff reject → сразу reject
+    # Если tradeoff уже reject → сразу reject
     if decision == "reject":
         return _normalize_result(decision, reason)
 
-    # =========================
-    # 5️⃣ Shadow latency gate
-    # =========================
+    # =====================================================
+    # 5️⃣ SHADOW LATENCY GATE
+    # =====================================================
     if inference_metrics:
         shadow_result = evaluate_shadow_latency(
-            current_latency_p95_ms=inference_metrics.get(
-                "current_latency_p95_ms", 0
-            ),
-            candidate_latency_p95_ms=inference_metrics.get(
-                "candidate_latency_p95_ms", 0
-            ),
-            max_allowed_growth=slo_config.get(
-                "max_latency_growth", 0.15
-            ),
+            inference_metrics=inference_metrics,
+            slo_config=slo_config,
         )
 
-        shadow_decision = shadow_result["decision"]
-        shadow_reason = shadow_result["reason"]
+        shadow_decision = str(shadow_result["decision"])
+        shadow_reason = str(shadow_result["reason"])
 
-        if shadow_decision != "approve":
-            return _normalize_result(
-                shadow_decision,
-                f"Shadow gate: {shadow_reason}",
-            )
+        # Shadow может эскалировать до reject
+        if shadow_decision == "reject":
+            return _normalize_result(shadow_decision, shadow_reason)
 
-    # =========================
-    # ✅ FINAL APPROVE
-    # =========================
-    return _normalize_result(
-        "approve",
-        "All gates passed (Drift, Tradeoff, Shadow)",
-    )
+        # Если tradeoff manual_review, но shadow approve → оставляем manual_review
+        if decision == "manual_review":
+            return _normalize_result(decision, reason)
+
+        # Если tradeoff approve, но shadow manual_review → эскалация
+        if decision == "approve" and shadow_decision == "manual_review":
+            return _normalize_result(shadow_decision, shadow_reason)
+
+    # =====================================================
+    # FINAL DECISION
+    # =====================================================
+    return _normalize_result(decision, reason)
