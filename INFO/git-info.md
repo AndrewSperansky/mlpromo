@@ -651,4 +651,14 @@ git cherry-pick --abort
 
 ## Отмена последнего коммита (не push):
 
-git reset --soft HEAD~1
+
+## Работа с тэгами
+
+### Создание и отправка на GitHub
+`git tag stage2-demo-ready`  
+`git push origin stage2-demo-ready`
+
+`Тэг привязывается к текущему коммиту!`
+
+### Посмотреть тэги
+`git tag`    
