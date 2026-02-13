@@ -381,3 +381,8 @@ curl http://localhost:8000/routes
 
 
 Фиксируем как Stage 1 API Surface.
+
+
+curl http://localhost:8000/api/v1/system/metrics
+
+curl http://localhost:8000/api/v1/system/status

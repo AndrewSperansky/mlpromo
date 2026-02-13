@@ -7,6 +7,7 @@ import logging
 from app.core.settings import settings
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from app.ml.telemetry import TelemetryExporter
 
 logger = logging.getLogger("promo_ml")
 
@@ -16,8 +17,8 @@ class SystemService:
     Сервис системных операций: health-check, метаинформация и пр.
     """
 
-    @staticmethod
-    def health_check() -> dict:
+
+    def health_check(self) -> dict:
         """
         Возвращает состояние системы.
 
@@ -32,7 +33,7 @@ class SystemService:
             "service": "promo-ml",
         }
 
-    @staticmethod
+
     def health_db(self, db: Session) -> dict:
 
         db.execute(text("SELECT 1"))
@@ -46,3 +47,16 @@ class SystemService:
             "environment": settings.ENV,
             "version": settings.VERSION,
         }
+
+
+    def get_metrics(self):
+        """
+        Stage 5 — Telemetry snapshot provider.
+        """
+
+        exporter = TelemetryExporter()
+
+        return exporter.collect(
+            drift_flag=False,
+            latency_p95=None,
+        )

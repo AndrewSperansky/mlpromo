@@ -13,6 +13,9 @@ from sqlalchemy import text
 from app.db.session import get_db
 from app.services.system_service import SystemService
 
+
+from app.ml.runtime_state import ML_RUNTIME_STATE
+
 from app.core.settings import settings
 
 
@@ -50,4 +53,31 @@ def health_db(db: Session = Depends(get_db)):
     return {"status": "ok"}
 
 #  service это system_service.py
+
+
+@router.get("/status")
+def system_status():
+    """
+    Basic runtime status endpoint.
+    """
+
+    return {
+        "status": ML_RUNTIME_STATE.get("status"),
+        "model_loaded": ML_RUNTIME_STATE.get("model_loaded"),
+        "active_model_version": ML_RUNTIME_STATE.get("version"),
+        "errors": ML_RUNTIME_STATE.get("errors"),
+        "warnings": ML_RUNTIME_STATE.get("warnings"),
+    }
+
+
+@router.get("/metrics")
+def system_metrics():
+    """
+    Stage 5 — Telemetry endpoint.
+
+    Returns runtime ML telemetry snapshot.
+    """
+
+    return service.get_metrics()
+
 
