@@ -1,6 +1,7 @@
 # app/ml/self_healing/retrain_orchestrator.py
 # 5.2.1 Retrain Orchestra Core
 # 5.2.4 Anti-Retrain Storm Guard
+# 5.2.2 Safe Model Swap Protocol
 
 
 from __future__ import annotations
@@ -10,21 +11,28 @@ from typing import Dict, Any
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.ml.monitoring.retrain_trigger import handle_retrain_if_needed
+from app.ml.self_healing.safe_model_swap import SafeModelSwap, SafeModelSwapError
 
 
 class RetrainOrchestrator:
     """
-    Stage 5.2.2 — Self-Healing Retrain Orchestrator
-    + Cooldown protection
+    Stage 5.2 — Self-Healing Retrain Orchestrator
+
+    Includes:
+    - Retrain trigger
+    - Anti-Retrain Storm Guard (cooldown)
+    - Safe Model Swap Protocol
     """
 
-    # 🔹 минимальный интервал между retrain (в секундах)
-    COOLDOWN_SECONDS = 600  # 10 минут
+    COOLDOWN_SECONDS = 600  # 10 minutes
+
+    def __init__(self):
+        self.swap_protocol = SafeModelSwap()
 
     def process(self) -> Dict[str, Any]:
 
         # --------------------------------------------------
-        # CHECK FLAG
+        # CHECK RETRAIN FLAG
         # --------------------------------------------------
 
         if not ML_RUNTIME_STATE.get("retrain_requested"):
@@ -34,7 +42,7 @@ class RetrainOrchestrator:
             }
 
         # --------------------------------------------------
-        # COOLDOWN CHECK
+        # COOLDOWN PROTECTION
         # --------------------------------------------------
 
         last_retrain_ts = ML_RUNTIME_STATE.get("last_retrain_ts")
@@ -52,7 +60,7 @@ class RetrainOrchestrator:
                 }
 
         # --------------------------------------------------
-        # BUILD SYNTHETIC ALERT DECISION
+        # TRIGGER RETRAIN
         # --------------------------------------------------
 
         alert_decision = {
@@ -60,20 +68,39 @@ class RetrainOrchestrator:
             "reason": "runtime_self_healing",
         }
 
-        # --------------------------------------------------
-        # TRIGGER EXISTING RETRAIN LOGIC
-        # --------------------------------------------------
-
         retrain_result = handle_retrain_if_needed(alert_decision)
 
+        if not retrain_result.get("retrain_triggered"):
+            ML_RUNTIME_STATE["retrain_requested"] = False
+            return {
+                "status": "not_triggered",
+                "details": retrain_result,
+            }
+
         # --------------------------------------------------
-        # RESET FLAG
+        # SAFE MODEL SWAP
+        # --------------------------------------------------
+
+        try:
+            swap_result = self.swap_protocol.execute(
+                retrain_result.get("train_result")
+            )
+        except SafeModelSwapError as e:
+            return {
+                "status": "swap_failed",
+                "error": str(e),
+            }
+
+        # --------------------------------------------------
+        # FINALIZE STATE
         # --------------------------------------------------
 
         ML_RUNTIME_STATE["retrain_requested"] = False
-        ML_RUNTIME_STATE["last_retrain_ts"] = datetime.now(timezone.utc).isoformat()
+        ML_RUNTIME_STATE["last_retrain_ts"] = datetime.now(
+            timezone.utc
+        ).isoformat()
 
         return {
-            "status": "triggered",
-            "retrain_result": retrain_result,
+            "status": "success",
+            "swap_result": swap_result,
         }
