@@ -49,14 +49,11 @@ class SystemService:
         }
 
 
-    def get_metrics(self):
+    def get_metrics(self) -> dict:
         """
         Stage 5 — Telemetry snapshot provider.
         """
 
         exporter = TelemetryExporter()
 
-        return exporter.collect(
-            drift_flag=False,
-            latency_p95=None,
-        )
+        return exporter.collect()

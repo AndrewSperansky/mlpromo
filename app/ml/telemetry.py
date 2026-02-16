@@ -20,12 +20,7 @@ class TelemetryExporter:
     - Monitoring
     """
 
-    def collect(
-        self,
-        *,
-        drift_flag: bool = False,
-        latency_p95: float | None = None,
-    ) -> Dict[str, Any]:
+    def collect(self) -> Dict[str, Any]:
 
         # --------------------------------------------------
         # SAFE INFERENCE METRICS ACCESS
@@ -52,12 +47,13 @@ class TelemetryExporter:
             "active_model_version": ML_RUNTIME_STATE.get("version"),
             "model_loaded": ML_RUNTIME_STATE.get("model_loaded", False),
 
-            # Runtime flags
-            "drift_flag": drift_flag,
+            # Runtime flags (updated by DecisionEngine)
+            "drift_flag": ML_RUNTIME_STATE.get("last_drift_flag", False),
             "freeze_flag": ML_RUNTIME_STATE.get("status") == "frozen",
+            "latency_p95_ms": ML_RUNTIME_STATE.get("last_latency_p95"),
 
-            # Latency
-            "latency_p95_ms": latency_p95,
+            "last_decision": ML_RUNTIME_STATE.get("last_decision"),
+            "retrain_requested": ML_RUNTIME_STATE.get("retrain_requested", False),
 
             # Counters
             "predictions_count": predictions_count,
