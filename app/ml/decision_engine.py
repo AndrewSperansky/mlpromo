@@ -1,7 +1,7 @@
 # app/ml/decision_engine.py
 
 from __future__ import annotations
-
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -27,14 +27,14 @@ class DecisionEngine:
     def __init__(
         self,
         trace_output_dir: Path,
-        audit_log_path: Optional[Path] = None,   # ✅ backward compatible
+        audit_log_path: Optional[Path] = None,
     ):
         self.trace_output_dir = trace_output_dir
 
         if audit_log_path is not None:
             self.audit_logger = AuditLogger(audit_log_path)
         else:
-            self.audit_logger = None  # optional
+            self.audit_logger = None
 
     # ==========================================================
     # =================== MAIN ENTRYPOINT ======================
@@ -168,5 +168,18 @@ class DecisionEngine:
             trace=trace,
             output_dir=self.trace_output_dir,
         )
+
+        # ======================================================
+        # =============== RUNTIME STATE UPDATE =================
+        # ======================================================
+
+        ML_RUNTIME_STATE["last_drift_flag"] = severity == "severe"
+        ML_RUNTIME_STATE["last_latency_p95"] = p95
+        ML_RUNTIME_STATE["last_decision"] = final_decision
+        ML_RUNTIME_STATE["last_decision_timestamp"] = datetime.now(timezone.utc).isoformat()
+        ML_RUNTIME_STATE["retrain_requested"] = final_decision == "retrain"
+
+        if breach:
+            ML_RUNTIME_STATE["status"] = "degraded"
 
         return trace

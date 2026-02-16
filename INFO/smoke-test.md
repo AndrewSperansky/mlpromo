@@ -384,5 +384,25 @@ curl http://localhost:8000/routes
 
 
 curl http://localhost:8000/api/v1/system/metrics
+curl -s http://127.0.0.1:8000/api/v1/system/metrics | jq                                                                                                                                                
+вывод:
+{
+  "timestamp": "2026-02-16T07:38:38.184317+00:00",
+  "active_model_version": "stage2",
+  "model_loaded": true,
+  "drift_flag": false,
+  "freeze_flag": false,
+  "latency_p95_ms": null,
+  "predictions_count": 0,
+  "errors_count": 0
+}
 
-curl http://localhost:8000/api/v1/system/status
+curl http://localhost:8000/api/v1/system/status | jq    
+вывод:
+{
+  "status": "ok",
+  "model_loaded": true,
+  "active_model_version": "stage2",
+  "errors": [],
+  "warnings": []
+}
