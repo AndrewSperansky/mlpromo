@@ -1,6 +1,6 @@
 # app/main.py
-from fastapi import FastAPI
-from fastapi import Response
+
+from fastapi import FastAPI, Response
 from contextlib import asynccontextmanager
 from app.ml.model_manager import ModelManager
 import asyncio
@@ -15,16 +15,20 @@ from app.core.logging_config import setup_logging
 
 # ---- Middleware ----
 from app.middleware.logging_middleware import RequestLoggingMiddleware
-# from starlette.middleware.base import BaseHTTPMiddleware
 
 # ---- Routers ----
 from app.api.v1.router import router as v1_router
-from app.core.settings import settings
-from starlette.routing import Route, Mount, Router
+from starlette.routing import Route
 
+# ---- ML Runtime ----
 from app.ml.contract_check import check_ml_contract
 from app.ml.runtime_state import ML_RUNTIME_STATE
+from app.ml.self_healing.self_healing_worker import SelfHealingWorker
 
+
+# ------------------------------------------------------
+# Globals
+# ------------------------------------------------------
 
 logger = logging.getLogger("promo_ml")
 
@@ -32,6 +36,14 @@ model_manager = ModelManager(
     model_path=settings.ML_MODEL_PATH,
     check_interval=5
     )
+
+# --- создаём worker на уровне модуля (ВАЖНО) ---
+self_healing_worker = SelfHealingWorker(interval_seconds=30)
+
+
+# ------------------------------------------------------
+# Lifespan (единственный источник lifecycle)
+# ------------------------------------------------------
 
 
 @asynccontextmanager
@@ -62,9 +74,15 @@ async def lifespan(_app: FastAPI):
     except Exception:
         logger.exception("Unexpected error while loading ML model")
 
-    # --- Start watcher ---
+    # --- Start model watcher ---
     watcher_task = asyncio.create_task(model_manager.watch())
     logger.info("ML watcher task started")
+
+
+    # --- Start Self-Healing Worker ---
+    self_healing_worker.start()
+    logger.info("SelfHealingWorker started")
+    print("🟢 SelfHealingWorker started")
 
     # ---------- APP RUN ----------
     yield
@@ -84,10 +102,14 @@ async def lifespan(_app: FastAPI):
                 extra={"error": str(exc)},
             )
 
+    # --- Stop Self-Healing Worker ---
+    self_healing_worker.stop()
+    logger.info("SelfHealingWorker stopped")
+    print("🔴 SelfHealingWorker stopped")
 
 
 # ------------------------------------------------------
-# Создание FastAPI приложения
+# Создание FastAPI Application
 # ------------------------------------------------------
 app = FastAPI(
     title="Promo ML API",
@@ -95,17 +117,12 @@ app = FastAPI(
     debug=True
 )
 
-
-
-
 # ------------------------------------------------------
-# Подключение middleware
+# Подключение Middleware
 # ------------------------------------------------------
 
 # noinspection PyTypeChecker
 app.add_middleware(RequestLoggingMiddleware)
-
-
 
 
 # ------------------------------------------------------
@@ -125,8 +142,9 @@ async def root():
 def health():
     return {"status": "ok"}
 
+
 # ------------------------------------------------------
-# Эндпоинт для просмотра всех маршрутов
+# Routes debug endpoint
 # ------------------------------------------------------
 
 

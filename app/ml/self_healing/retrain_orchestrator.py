@@ -2,7 +2,7 @@
 # 5.2.1 Retrain Orchestra Core
 # 5.2.4 Anti-Retrain Storm Guard
 # 5.2.2 Safe Model Swap Protocol
-
+# 5.2.3 LINEAGE INTEGRATION
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Dict, Any
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.ml.monitoring.retrain_trigger import handle_retrain_if_needed
 from app.ml.self_healing.safe_model_swap import SafeModelSwap, SafeModelSwapError
+from app.ml.model_registry.lineage import record_lineage_event
 
 
 class RetrainOrchestrator:
@@ -20,8 +21,9 @@ class RetrainOrchestrator:
 
     Includes:
     - Retrain trigger
-    - Anti-Retrain Storm Guard (cooldown)
+    - Anti-Retrain Storm Guard
     - Safe Model Swap Protocol
+    - Lineage Integration (5.2.3)
     """
 
     COOLDOWN_SECONDS = 600  # 10 minutes
@@ -42,7 +44,7 @@ class RetrainOrchestrator:
             }
 
         # --------------------------------------------------
-        # COOLDOWN PROTECTION
+        # COOLDOWN
         # --------------------------------------------------
 
         last_retrain_ts = ML_RUNTIME_STATE.get("last_retrain_ts")
@@ -77,18 +79,41 @@ class RetrainOrchestrator:
                 "details": retrain_result,
             }
 
+        train_result = retrain_result.get("train_result")
+
         # --------------------------------------------------
-        # SAFE MODEL SWAP
+        # SAFE SWAP
         # --------------------------------------------------
 
         try:
-            swap_result = self.swap_protocol.execute(
-                retrain_result.get("train_result")
-            )
+            swap_result = self.swap_protocol.execute(train_result)
         except SafeModelSwapError as e:
             return {
                 "status": "swap_failed",
                 "error": str(e),
+            }
+
+        # --------------------------------------------------
+        # LINEAGE INTEGRATION (5.2.3)
+        # --------------------------------------------------
+
+        try:
+            record_lineage_event(
+                event_type="retrain",
+                model_id=swap_result.get("new_version"),
+                reason=retrain_result.get("reason"),
+                metadata={
+                    "parent_version": swap_result.get("previous_version"),
+                    "trigger": "self_healing",
+                },
+            )
+
+        except Exception as e:
+            # lineage failure не должна ломать runtime
+            return {
+                "status": "swap_success_lineage_failed",
+                "swap_result": swap_result,
+                "lineage_error": str(e),
             }
 
         # --------------------------------------------------
