@@ -656,7 +656,7 @@ git cherry-pick --abort
 
 ### Создание и отправка на GitHub
 `git tag stage5-get-started`  
-`git push origin git tag stage5-get-started`
+`git push origin stage5-get-started`
 
 ### Удаление локального тэга
 `git tag -d stage5-begin ` 
