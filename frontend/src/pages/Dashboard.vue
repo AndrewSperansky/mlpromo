@@ -4,40 +4,44 @@
 
     <div class="row g-3">
 
-      <div class="col-md-3">
-        <div class="card p-3">
-          <h6>Status</h6>
-          <p class="mb-0">
-            <span
-              class="badge"
-              :class="health.status === 'ok' ? 'bg-success' : 'bg-danger'"
-            >
-              {{ health.status || 'loading...' }}
-            </span>
-          </p>
-        </div>
-      </div>
+      <StatusCard
+        title="Active Model Version"
+        :value="status.active_model_version"
+      />
 
-      <div class="col-md-3">
-        <div class="card p-3">
-          <h6>Environment</h6>
-          <p class="mb-0">{{ health.environment }}</p>
-        </div>
-      </div>
+      <StatusCard
+        title="Model Loaded"
+        :value="status.model_loaded ? 'Yes' : 'No'"
+        :badge="status.model_loaded ? 'success' : 'danger'"
+      />
 
-      <div class="col-md-3">
-        <div class="card p-3">
-          <h6>Version</h6>
-          <p class="mb-0">{{ health.version }}</p>
-        </div>
-      </div>
+      <StatusCard
+        title="Drift Flag"
+        :value="metrics.drift_flag ? 'Detected' : 'No Drift'"
+        :badge="metrics.drift_flag ? 'danger' : 'success'"
+      />
 
-      <div class="col-md-3">
-        <div class="card p-3">
-          <h6>Service</h6>
-          <p class="mb-0">{{ health.service }}</p>
-        </div>
-      </div>
+      <StatusCard
+        title="Freeze Flag"
+        :value="metrics.freeze_flag ? 'Frozen' : 'Active'"
+        :badge="metrics.freeze_flag ? 'warning' : 'success'"
+      />
+
+      <StatusCard
+        title="Latency p95 (ms)"
+        :value="metrics.latency_p95_ms ?? '—'"
+      />
+
+      <StatusCard
+        title="Predictions Count"
+        :value="metrics.predictions_count"
+      />
+
+      <StatusCard
+        title="Errors Count"
+        :value="metrics.errors_count"
+        :badge="metrics.errors_count > 0 ? 'danger' : 'success'"
+      />
 
     </div>
   </div>
@@ -45,23 +49,53 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { getStatus, getMetrics } from '../services/api'
+import StatusCard from '../components/StatusCard.vue'
 
-interface HealthResponse {
+interface SystemStatus {
   status: string
-  service: string
-  environment: string
-  version: string
+  model_loaded: boolean
+  active_model_version: string
+  errors: string[]
+  warnings: string[]
 }
 
-const health = ref<Partial<HealthResponse>>({})
+interface SystemMetrics {
+  drift_flag: boolean
+  freeze_flag: boolean
+  latency_p95_ms: number | null
+  predictions_count: number
+  errors_count: number
+}
 
-onMounted(async () => {
+const status = ref<Partial<SystemStatus>>({})
+
+const metrics = ref<SystemMetrics>({
+  drift_flag: false,
+  freeze_flag: false,
+  latency_p95_ms: null,
+  predictions_count: 0,
+  errors_count: 0
+})
+
+async function loadDashboard() {
   try {
-    const response = await axios.get('/api/v1/system/health')
-    health.value = response.data
+    const [statusResp, metricsResp] = await Promise.all([
+      getStatus(),
+      getMetrics()
+    ])
+
+    status.value = statusResp.data
+    metrics.value = metricsResp.data
   } catch (error) {
-    health.value = { status: 'error' }
+    console.error('Dashboard load failed', error)
   }
+}
+
+onMounted(() => {
+  loadDashboard()
+
+  // автообновление каждые 10 секунд
+  setInterval(loadDashboard, 10000)
 })
 </script>
