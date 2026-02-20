@@ -59,11 +59,11 @@ docker compose ps -a
 |      | docker-compose up -d                                          | Не пересобирает образ, запускает то что есть                                               |
 |      | docker-compose up -d --build backend                          | Если не меняешь requirements.txt и Dockerfile Сборка идёт быстро — внутри кеш остаётся     |
 |      | docker-compose up -d --no-deps backend                        | Если меняются только файлы конфигурайии (nginx.conf, promtail-config.yml, loki-config.yml) |
-|      | docker-compose build backend                  |  самый длинный и болезненный случай — пересобираются оба слоя (builder + runtime)  |
+|      | docker-compose build backend                                  | самый длинный и болезненный случай — пересобираются оба слоя (builder + runtime)           |
 |      | `docker-compose up -d --build`                                |                                                                                            |
-|   | `docker build -t promo-ml-backend .`                          | from repo root                                                                             |
-|    | `docker-compose build --parallel`                             |                                                                                            |
-|   | `docker build -t promo-ml-mlworker -f docker/Dockerfile.ml .` |                                                                                            |
+|      | `docker build -t promo-ml-backend .`                          | from repo root                                                                             |
+|      | `docker-compose build --parallel`                             |                                                                                            |
+|      | `docker build -t promo-ml-mlworker -f docker/Dockerfile.ml .` |                                                                                            |
 
 Аналогично docker-compose up -d --no-deps backend     
 Если меняются только файлы конфигурайии (nginx.conf, promtail-config.yml, loki-config.yml)
@@ -76,16 +76,16 @@ docker compose ps -a
 
 ## 🚀 Запуск
 
-| Цель | Команда | Комментарий                        |
-|------|----------|------------------------------------|
-|      |docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"| Вывод как Docker Desktop      |
-|      |docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | Проверь все контейнеры          |
-|      |         |                                    |
-| Запустить окружение | `docker compose up -d` | Запускает все контейнеры (в фоне)  |
-| Пересобрать и запустить | `docker compose up --build -d` | Собирает заново образы и запускает |
-| Остановить контейнеры | `docker compose down` | Останавливает и удаляет контейнеры |
-| Перезапустить всё | `docker compose down && docker compose up -d` | Полный рестарт окружения           |
-| Просмотреть статус | `docker ps --format "table {{.Names}}\t{{.Status}}"   | Проверяет, какие контейнеры запущены |
+| Цель                    | Команда                                                        | Комментарий                          |
+|-------------------------|----------------------------------------------------------------|--------------------------------------|
+|                         | docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | Вывод как Docker Desktop             |
+|                         | docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | Проверь все контейнеры               |
+|                         |                                                                |                                      |
+| Запустить окружение     | `docker compose up -d`                                         | Запускает все контейнеры (в фоне)    |
+| Пересобрать и запустить | `docker compose up --build -d`                                 | Собирает заново образы и запускает   |
+| Остановить контейнеры   | `docker compose down`                                          | Останавливает и удаляет контейнеры   |
+| Перезапустить всё       | `docker compose down && docker compose up -d`                  | Полный рестарт окружения             |
+| Просмотреть статус      | `docker ps --format "table {{.Names}}\t{{.Status}}"            | Проверяет, какие контейнеры запущены |
 
 >`docker ps --format "table {{.Names}}\t{{.Status}}" | grep 3dsonet` 
 > 
@@ -95,37 +95,39 @@ docker compose ps -a
 
 ## 🧠 Проверка
 
-| Цель | Команда | Комментарий |
-|------|----------|--------------|
-| Проверить всё окружение | `./check.sh` | Скрипт автоматической проверки всех сервисов |
-| Проверить Neo4j | `docker exec -it 3dsonet-neo4j cypher-shell -u neo4j -p neo4jpassword "RETURN 1;"` | Тест подключения к БД Neo4j |
-| Проверить PostgreSQL | `docker exec -it 3dsonet-db psql -U postgres -c "SELECT 1;"` | Проверка доступности базы |
-| Проверить Redis | `docker exec -it 3dsonet-redis redis-cli ping` | Ответ должен быть `PONG` |
-| Проверить backend | `docker logs 3dsonet-app | grep "listening"` | Убедиться, что сервер запущен |
+| Цель                    | Команда                                                                            | Комментарий                                  |
+|-------------------------|------------------------------------------------------------------------------------|----------------------------------------------|
+| Проверить всё окружение | `./check.sh`                                                                       | Скрипт автоматической проверки всех сервисов |
+| Проверить Neo4j         | `docker exec -it 3dsonet-neo4j cypher-shell -u neo4j -p neo4jpassword "RETURN 1;"` | Тест подключения к БД Neo4j                  |
+| Проверить PostgreSQL    | `docker exec -it 3dsonet-db psql -U postgres -c "SELECT 1;"`                       | Проверка доступности базы                    |
+| Проверить Redis         | `docker exec -it 3dsonet-redis redis-cli ping`                                     | Ответ должен быть `PONG`                     |
+| Проверить backend       | `docker logs 3dsonet-app                                                           | grep "listening"`                            |
+
+Убедиться, что сервер запущен |
 
 ---
 
 ## 🔍 Мониторинг / Логи
 
-| Цель | Команда | Комментарий |
-|------|----------|--------------|
-| Просмотр логов приложения | `docker logs -f promo_loki` | Поток логов backend-приложения |
-| Просмотр логов Neo4j | `docker logs -f 3dsonet-neo4j` | Контроль запуска и ошибок Neo4j |
-| Проверить логи всех контейнеров | `docker compose logs -f` | Поток всех логов окружения |
-| Проверить объем данных | `docker system df` | Использование пространства Docker |
+| Цель                            | Команда                        | Комментарий                       |
+|---------------------------------|--------------------------------|-----------------------------------|
+| Просмотр логов приложения       | `docker logs -f promo_loki`    | Поток логов backend-приложения    |
+| Просмотр логов Neo4j            | `docker logs -f 3dsonet-neo4j` | Контроль запуска и ошибок Neo4j   |
+| Проверить логи всех контейнеров | `docker compose logs -f`       | Поток всех логов окружения        |
+| Проверить объем данных          | `docker system df`             | Использование пространства Docker |
 
 ---
 
 ## 🧰 Отладка / Вход в контейнер
 
-| Цель | Команда | Комментарий |
-|------|----------|--------------|
-| Войти в backend контейнер | `docker exec -it promo_ml_backend /bin/sh` | Терминал внутри контейнера приложения |
-| Войти в PostgreSQL | `docker exec -it 3dsonet-db psql -U postgres` | Консоль PostgreSQL |
-| Войти в Redis | `docker exec -it 3dsonet-redis redis-cli` | Консоль Redis |
-| Войти в Neo4j | `docker exec -it 3dsonet-neo4j cypher-shell -u neo4j -p neo4jpassword` | Консоль Neo4j |
-| Очистить кеш npm | `docker exec -it 3dsonet-app npm cache clean --force` | Безопасная очистка кеша npm |
-| Пересобрать только backend | `docker compose build app` | Быстрая пересборка без остальных контейнеров |
+| Цель                       | Команда                                                                | Комментарий                                  |
+|----------------------------|------------------------------------------------------------------------|----------------------------------------------|
+| Войти в backend контейнер  | `docker exec -it promo_ml_backend /bin/sh`                             | Терминал внутри контейнера приложения        |
+| Войти в PostgreSQL         | `docker exec -it 3dsonet-db psql -U postgres`                          | Консоль PostgreSQL                           |
+| Войти в Redis              | `docker exec -it 3dsonet-redis redis-cli`                              | Консоль Redis                                |
+| Войти в Neo4j              | `docker exec -it 3dsonet-neo4j cypher-shell -u neo4j -p neo4jpassword` | Консоль Neo4j                                |
+| Очистить кеш npm           | `docker exec -it 3dsonet-app npm cache clean --force`                  | Безопасная очистка кеша npm                  |
+| Пересобрать только backend | `docker compose build app`                                             | Быстрая пересборка без остальных контейнеров |
 
 ---
 
@@ -289,12 +291,16 @@ docker inspect promo_ml_backend --format '{{json .Mounts}}' .
 docker inspect promo_nginx --format '{{json .Mounts}}' .
 
 
->docker rm — удаление контейнера.  
+docker rm — удаление контейнера.    
 -f — принудительное удаление (даже запущенного контейнера).  
+
 Пример: docker rm -f my_container.   
+
 docker exec — выполнение команд в запущенном контейнере.  
 -it — интерактивный режим.
-Пример: docker exec -it my_container /bin/bash — вход в контейнер через терминал.   
+
+Пример: docker exec -it my_container /bin/bash — вход в контейнер через терминал.  
+
 docker logs — просмотр логов контейнера.  
 -f — слежение за логами в реальном времени.  
 --tail <N> — показ последних N строк.  

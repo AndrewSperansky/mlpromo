@@ -1,12 +1,15 @@
 # app/api/v1/ml/router.py
 
+import os
 from uuid import UUID
+import shutil
 import json
-from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
+from pathlib import Path
+from datetime import datetime
 
 
 from app.db.session import get_db
@@ -25,6 +28,10 @@ from app.api.v1.ml.schemas import (
 
 
 router = APIRouter(tags=["ml-1c"])
+
+MODELS_DIR = Path("models/current")
+ARCHIVE_DIR = Path("models/archive")
+
 
 # ========== DEPENDENCIES ==========
 
@@ -196,3 +203,72 @@ def predict_from_1c(
         ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
         version=ML_RUNTIME_STATE["version"],
     )
+
+
+# =========================
+# MODEL REGISTRY
+# =========================
+
+
+@router.get("/models")
+def list_models():
+    models = []
+
+    active_ml_model_id = ML_RUNTIME_STATE.get("ml_model_id")
+
+    # Active model(s)
+    if MODELS_DIR.exists():
+        for file in MODELS_DIR.glob("*.cbm"):
+            models.append({
+                "ml_model_id": file.stem,
+                "version": ML_RUNTIME_STATE.get("version"),
+                "active": file.stem == active_ml_model_id,
+                "created_at": datetime.fromtimestamp(
+                    file.stat().st_mtime
+                ).isoformat()
+            })
+
+    # Archived models
+    if ARCHIVE_DIR.exists():
+        for file in ARCHIVE_DIR.glob("*.cbm"):
+            models.append({
+                "ml_model_id": file.stem,
+                "version": "archived",
+                "active": file.stem == active_ml_model_id,
+                "created_at": datetime.fromtimestamp(
+                    file.stat().st_mtime
+                ).isoformat()
+            })
+
+    return models
+
+
+@router.post("/models/{ml_model_id}/activate")
+def activate_model(ml_model_id: str):
+    archive_model = ARCHIVE_DIR / f"{ml_model_id}.cbm"
+
+    if not archive_model.exists():
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    # Ensure current dir exists
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Remove current model(s)
+    for file in MODELS_DIR.glob("*.cbm"):
+        file.unlink()
+
+    # Copy archive model to current
+    shutil.copy(
+        archive_model,
+        MODELS_DIR / archive_model.name
+    )
+
+    # 🔥 Обновляем runtime state
+    ML_RUNTIME_STATE["ml_model_id"] = ml_model_id
+    ML_RUNTIME_STATE["version"] = "manual-activation"
+    ML_RUNTIME_STATE["model_loaded"] = False  # форс reload при следующем predict
+
+    return {
+        "status": "activated",
+        "ml_model_id": ml_model_id
+    }
