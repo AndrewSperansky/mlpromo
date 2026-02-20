@@ -4,6 +4,7 @@ import Dashboard from '../pages/Dashboard.vue'
 import Models from '../pages/Models.vue'
 import Audit from '../pages/Audit.vue'
 import Predict from '../pages/Predict.vue'
+import RuntimeAdmin from "../pages/RuntimeAdmin.vue"
 
 const routes = [
     {
@@ -25,6 +26,10 @@ const routes = [
         path: '/predict',
         name: 'Predict',
         component: Predict
+    },
+    {
+        path: "/runtime",
+        component: RuntimeAdmin,
     }
 ]
 

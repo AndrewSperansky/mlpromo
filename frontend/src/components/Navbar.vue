@@ -28,6 +28,12 @@
               Models
             </router-link>
           </li>
+          
+          <li class="nav-item">
+            <router-link class="nav-link" to="/runtime">
+              Runtime
+            </router-link>
+          </li>
 
           <li class="nav-item">
             <router-link class="nav-link" to="/predict">

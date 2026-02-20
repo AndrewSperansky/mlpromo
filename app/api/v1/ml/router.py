@@ -27,7 +27,7 @@ from app.api.v1.ml.schemas import (
 
 
 
-router = APIRouter(tags=["ml-1c"])
+router = APIRouter(tags=["ml"])
 
 MODELS_DIR = Path("models/current")
 ARCHIVE_DIR = Path("models/archive")

@@ -81,3 +81,39 @@ def system_metrics():
     return service.get_metrics()
 
 
+# =============================
+# Runtime Admin
+# =============================
+
+@router.post("/freeze")
+def freeze():
+    return service.freeze()
+
+
+@router.post("/unfreeze")
+def unfreeze():
+    return service.unfreeze()
+
+
+@router.post("/clear-drift")
+def clear_drift():
+    return service.clear_drift()
+
+
+@router.post("/force-retrain")
+def force_retrain():
+    return service.force_retrain()
+
+
+@router.get("/runtime-state")
+def runtime_state():
+    return service.get_runtime_state()
+
+
+# =============================
+# Aggregated Overview
+# =============================
+
+@router.get("/overview")
+def overview():
+    return service.get_overview()
