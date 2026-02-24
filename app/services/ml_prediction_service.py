@@ -1,14 +1,14 @@
-# app/services/ml_prediction_service.py
+#  app/services/ml_prediction_service.py
+
 
 import logging
-import time
 from typing import Dict, List, Any
 from datetime import datetime, timezone
-from app.api.v1.ml.schemas import PredictionRequest  # Импорт Pydantic-модели
-from app.core.settings import settings
+from app.api.v1.ml.schemas import PredictionRequest
 
-import numpy as np
+import pandas as pd
 import shap
+from catboost import Pool
 
 from app.ml.model_loader import ModelLoader
 from app.ml.runtime_state import ML_RUNTIME_STATE
@@ -32,6 +32,12 @@ class MLPredictionService:
 
         self.feature_order: List[str] = self.meta.get("feature_order", [])
 
+        # Определяем индексы категориальных признаков
+        self.cat_features_indices = []
+        for i, feat in enumerate(self.feature_order):
+            if feat in ['promo_code', 'sku']:
+                self.cat_features_indices.append(i)
+
         self.ml_model_id: str = self.meta.get("ml_model_id", "unknown")
         self.version: str = self.meta.get("version", "dev")
         self.trained_at: datetime = self.meta.get(
@@ -42,21 +48,30 @@ class MLPredictionService:
 
         if self.model is None:
             logger.error("ML model is None")
+            return
 
-        elif isinstance(self.model, str):
+        if isinstance(self.model, str):
             logger.error(
                 "ML model is string, not loaded model object",
                 extra={"model_value": self.model},
             )
+            return
 
-        else:
-            try:
-                self.explainer = shap.TreeExplainer(self.model)  # 📌 Решение для Stage 3
-            except Exception as exc:
-                logger.warning(
-                    "SHAP explainer initialization failed",
-                    extra={"error": str(exc)},
-                )
+        # Пытаемся инициализировать SHAP
+        try:
+            logger.info("Initializing SHAP TreeExplainer...")
+            self.explainer = shap.TreeExplainer(self.model)
+            logger.info("SHAP TreeExplainer initialized successfully")
+        except Exception as exc:
+            logger.error(
+                "SHAP explainer initialization FAILED",
+                extra={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "model_type": type(self.model).__name__,
+                },
+                exc_info=True,
+            )
 
         logger.info(
             "ML model loaded",
@@ -64,12 +79,15 @@ class MLPredictionService:
                 "ml_model_id": self.ml_model_id,
                 "version": self.version,
                 "features": self.feature_order,
+                "cat_features_indices": self.cat_features_indices,
+                "shap_available": self.explainer is not None,
             },
         )
 
     def _validate_features(self, features: Dict[str, Any]) -> None:
+        """Проверяет наличие всех фич"""
         if not self.feature_order:
-            return           # нет контракта — нечего валидировать
+            return
 
         missing = set(self.feature_order) - set(features.keys())
         if missing:
@@ -80,61 +98,95 @@ class MLPredictionService:
             if value is None:
                 raise ValueError(f"Feature '{name}' is None")
 
-            if not isinstance(value, (int, float)):
-                raise TypeError(
-                    f"Feature '{name}' must be numeric, got {type(value).__name__}"
-                )
+            # Для числовых признаков проверяем тип
+            if name not in ['promo_code', 'sku']:
+                if not isinstance(value, (int, float)):
+                    raise TypeError(
+                        f"Feature '{name}' must be numeric, got {type(value).__name__}"
+                    )
 
-
-    def _build_feature_vector(self, features: Dict[str, float]) -> np.ndarray:
+    def _build_feature_vector(self, features: Dict[str, Any]) -> Pool:
         """
-        Приводит входные features к порядку feature_order.
+        Создает Pool для CatBoost с правильными типами признаков.
         """
-        if self.feature_order:
-            try:
-                values = [features[f] for f in self.feature_order]
-            except KeyError as exc:
-                raise ValueError(
-                    f"Missing feature for model: {exc}"
-                ) from exc
+        if not self.feature_order:
+            raise ValueError("feature_order is empty")
 
-            return np.array([values], dtype=float)
+        # Собираем значения в правильном порядке
+        values = []
+        for f in self.feature_order:
+            val = features[f]
+            # Конвертируем числа в float, строки оставляем как есть
+            if isinstance(val, (int, float)) and f not in ['promo_code', 'sku']:
+                values.append(float(val))
+            else:
+                values.append(str(val) if val is not None else "")
 
-        return np.array([list(features.values())], dtype=float)
+        # Создаем DataFrame для Pool
+        df = pd.DataFrame([values], columns=self.feature_order)
 
+        # Создаем Pool с указанием категориальных признаков
+        return Pool(
+            data=df,
+            cat_features=self.cat_features_indices,
+            feature_names=self.feature_order
+        )
 
-    # -------- ЯДРО ML  ------------------------------
-
-    def predict_from_features(self, features: Dict[str, float]) -> Dict[str, Any]:
+    def predict_from_features(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
         Базовое ML-предсказание по словарю фич.
-        Используется 1С, batch, internal calls.
         """
-
-        # ---------- 1. Validation ----------
         self._validate_features(features)
+        pool = self._build_feature_vector(features)
 
-        # ---------- 2. Vector ----------
-        X = self._build_feature_vector(features)
+        # Предсказание
+        y_pred = float(self.model.predict(pool)[0])
 
-        # ---------- 3. Predict ----------
-        y_pred = float(self.model.predict(X)[0])
-
-        # ---------- 4. SHAP ----------
+        # SHAP - создаем отдельный числовой DataFrame
         shap_output: List[Dict[str, Any]] = []
 
         if self.explainer:
             try:
-                shap_values = self.explainer.shap_values(X)
-                values = shap_values[0] if isinstance(shap_values, list) else shap_values[0]
-                feature_names = self.feature_order or list(features.keys())
+                # Создаем числовой DataFrame для SHAP
+                shap_values_list = []
+                for f in self.feature_order:
+                    val = features[f]
+                    if f in ['promo_code', 'sku'] and isinstance(val, str):
+                        # Конвертируем строку в число для SHAP
+                        shap_values_list.append(float(hash(val) % 10000))
+                    else:
+                        shap_values_list.append(float(val))
 
+                df_shap = pd.DataFrame([shap_values_list], columns=self.feature_order)
+
+                # Вычисляем SHAP values
+                shap_values = self.explainer.shap_values(df_shap)
+
+                # Обрабатываем результат
+                if isinstance(shap_values, list):
+                    # Для мульти-класса
+                    values = shap_values[0][0]
+                else:
+                    # Для регрессии
+                    values = shap_values[0]
+
+                feature_names = self.feature_order or list(features.keys())
                 shap_output = [
-                    {"feature": f, "effect": float(v)}
-                    for f, v in zip(feature_names, values)
+                    {"feature": f, "effect": float(values[i])}
+                    for i, f in enumerate(feature_names)
                 ]
+
+                logger.debug("SHAP calculated successfully", extra={"shap_length": len(shap_output)})
+
             except Exception as exc:
-                logger.warning("SHAP calculation failed", extra={"error": str(exc)})
+                logger.warning(
+                    "SHAP calculation failed",
+                    extra={
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    },
+                    exc_info=True,
+                )
 
         return {
             "prediction": y_pred,
@@ -145,163 +197,135 @@ class MLPredictionService:
             "trained_at": self.trained_at,
         }
 
-
-    # ---------- ИНТЕГРАЦИИ  (1C / Batch) ----------------------
-
     def predict_raw(self, features: dict) -> tuple[float, dict]:
         """
-        Низкоуровневое предсказание для 1С:
-        возвращает (prediction, shap_values)
-        без DTO и FastAPI схем
+        Низкоуровневое предсказание для 1С.
         """
         result = self.predict_from_features(features)
-
-        return (
-            result["prediction"],
-            result.get("shap_values", {}),
-        )
-
-
-    # ------------  API / Swagger  ---------------------------
+        return result["prediction"], result.get("shap_values", {})
 
     def predict(self, payload: PredictionRequest) -> Dict[str, Any]:
         """
         Выполняет предсказание ML-модели + SHAP объяснение.
         """
-
-        # ======== ML CONTRACT DEGRADED GUARD ========
         contract = ML_RUNTIME_STATE.get("contract", {})
 
         logger.info(
             "ML API called",
             extra={
-                "contract": settings.API_CONTRACT_VERSION,
                 "promo_code": payload.promo_code,
                 "sku": payload.sku,
             },
         )
 
         if contract.get("status") != "ok":
-            logger.warning(
-                "ML contract degraded — fallback used",
-                extra={"contract": contract},
-            )
+            return self._fallback_response(payload, "ml_contract_degraded")
 
-            return {
-                "promo_code": payload.promo_code,
-                "sku": payload.sku,
-                "date": payload.prediction_date,
-                "prediction": None,
-                "baseline": None,
-                "uplift": None,
-                "shap": [],
-                "features": None,
-                "ml_model_id": self.ml_model_id,
-                "version": self.version,
-                "trained_at": self.trained_at,
-                "fallback_used": True,
-                "reason": "ml_contract_degraded",
-            }
-        # ======== END CONTRACT DEGRADED GUARD ========
-
+        # Формируем features со всеми полями
         features = {
             "price": payload.price,
             "discount": payload.discount,
             "avg_sales_7d": payload.avg_sales_7d,
+            "avg_discount_7d": payload.avg_discount_7d,
             "promo_days_left": payload.promo_days_left,
+            "promo_code": payload.promo_code,
+            "sku": payload.sku,
         }
 
         logger.info("ML prediction started", extra=features)
 
-        # ======== FALLBACK ========
-
         if self.model is None:
-            logger.error("Model is not loaded, fallback used")
+            return self._fallback_response(payload, "model_not_loaded", features)
 
-            return {
-                "promo_code": payload.promo_code,
-                "sku": payload.sku,
-                "date": payload.prediction_date,
-                "prediction": None,
-                "ml_model_id": self.ml_model_id,
-                "version": self.version,
-                "trained_at": self.trained_at,
-                "features": features,
-                "fallback_used": True,
-                "reason": "model_not_loaded",
-            }
-
-        # ---------- 1. Feature validation ----------
         try:
             self._validate_features(features)
         except Exception as exc:
             logger.error(
                 "Feature validation failed",
-                extra={
-                    "error": str(exc),
-                    "features": features,
-                },
+                extra={"error": str(exc), "features": features},
             )
+            return self._fallback_response(payload, "feature_validation_failed", features)
 
-            return {
-                "promo_code": payload.promo_code,
-                "sku": payload.sku,
-                "date": payload.prediction_date,
-                "prediction": None,
-                "baseline": None,
-                "uplift": None,
-                "ml_model_id": self.ml_model_id,
-                "version": self.version,
-                "trained_at": self.trained_at,
-                "features": features,
-                "fallback_used": True,
-                "reason": "feature_validation_failed",
-            }
+        # СОЗДАЕМ ДАННЫЕ ДЛЯ МОДЕЛИ (СО СТРОКАМИ)
+        values = []
+        for f in self.feature_order:
+            val = features[f]
+            if isinstance(val, (int, float)) and f not in ['promo_code', 'sku']:
+                values.append(float(val))
+            else:
+                values.append(str(val) if val is not None else "")
 
-        # ---------- 2. Build feature vector ----------
-        X = self._build_feature_vector(features)
+        df = pd.DataFrame([values], columns=self.feature_order)
 
-        # ---------- 3. Predict ----------
-        start = time.time()
-        y_pred = float(self.model.predict(X)[0])
-        duration = round(time.time() - start, 5)
-
-        logger.info(
-            "ML inference completed",
-            extra={
-                "prediction": y_pred,
-                "duration": duration,
-            },
+        # СОЗДАЕМ POOL ДЛЯ PREDICT
+        pool = Pool(
+            data=df,
+            cat_features=self.cat_features_indices,
+            feature_names=self.feature_order
         )
 
-        # ---------- 4. SHAP ----------
-        shap_output: List[Dict[str, Any]] = []
+        # ПРЕДСКАЗАНИЕ
+        y_pred = float(self.model.predict(pool)[0])
 
+        # СОЗДАЕМ ЧИСЛОВЫЕ ДАННЫЕ ДЛЯ SHAP (НЕ ИСПОЛЬЗУЕМ POOL!)
+        shap_output = []
         if self.explainer:
             try:
-                shap_values = self.explainer.shap_values(X)
+                logger.debug("Starting SHAP calculation")
 
-                # CatBoost / sklearn compatibility
-                values = (
-                    shap_values[0]
-                    if isinstance(shap_values, list)
-                    else shap_values[0]
-                )
+                # Создаем отдельный числовой DataFrame для SHAP
+                shap_values_list = []
+                for f in self.feature_order:
+                    val = features[f]
+                    if f in ['promo_code', 'sku']:
+                        # Конвертируем строку в число для SHAP
+                        if isinstance(val, str):
+                            # Используем стабильное хеширование
+                            shap_values_list.append(float(hash(val) % 10000))
+                        else:
+                            shap_values_list.append(float(val))
+                    else:
+                        shap_values_list.append(float(val))
+
+                # Создаем DataFrame из одной строки
+                df_shap = pd.DataFrame([shap_values_list], columns=self.feature_order)
+
+                logger.debug(f"SHAP input shape: {df_shap.shape}")
+
+                # Вычисляем SHAP values
+                shap_values = self.explainer.shap_values(df_shap)
+
+                # Обрабатываем результат
+                if isinstance(shap_values, list):
+                    # Для мульти-класса
+                    values = shap_values[0][0]
+                else:
+                    # Для регрессии
+                    values = shap_values[0]
 
                 feature_names = self.feature_order or list(features.keys())
-
                 shap_output = [
-                    {"feature": f, "effect": float(v)}
-                    for f, v in zip(feature_names, values)
+                    {"feature": f, "effect": float(values[i])}
+                    for i, f in enumerate(feature_names)
                 ]
 
-            except Exception as exc:
-                logger.warning(
-                    "SHAP calculation failed",
-                    extra={"error": str(exc)},
+                logger.info(
+                    "SHAP calculated successfully",
+                    extra={"shap_length": len(shap_output)}
                 )
 
-        # ---------- 5. Response ----------
+            except Exception as exc:
+                logger.error(
+                    "SHAP calculation failed",
+                    extra={
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    },
+                    exc_info=True,
+                )
+        else:
+            logger.warning("SHAP explainer not available")
+
         return {
             "promo_code": payload.promo_code,
             "sku": payload.sku,
@@ -313,4 +337,20 @@ class MLPredictionService:
             "features": features,
             "fallback_used": False,
             "shap": shap_output,
+        }
+
+    def _fallback_response(self, payload: PredictionRequest, reason: str, features: dict = None) -> Dict[str, Any]:
+        """Унифицированный ответ при fallback"""
+        return {
+            "promo_code": payload.promo_code,
+            "sku": payload.sku,
+            "date": payload.prediction_date,
+            "prediction": None,
+            "ml_model_id": self.ml_model_id,
+            "version": self.version,
+            "trained_at": self.trained_at,
+            "features": features or {},
+            "shap": [],
+            "fallback_used": True,
+            "reason": reason,
         }

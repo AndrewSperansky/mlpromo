@@ -18,6 +18,7 @@ ML_RUNTIME_STATE: Dict[str, Any] = {
     "last_decision": None,
     "last_decision_timestamp": None,
     "retrain_requested": False,
+    "ml_model_id": "cb_promo_v1",
    }
 
 

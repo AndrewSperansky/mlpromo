@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from app.core.settings import settings
-from app.ml.model_loader import ModelLoader
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
 
 def check_ml_contract() -> dict:
@@ -15,7 +15,8 @@ def check_ml_contract() -> dict:
     errors = []
     warnings = []
 
-    model_path = Path(settings.ML_MODEL_PATH)
+    model_id = ML_RUNTIME_STATE.get("ml_model_id")
+    model_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
 
     if not model_path.exists():
         errors.append(f"Model file not found: {model_path}")

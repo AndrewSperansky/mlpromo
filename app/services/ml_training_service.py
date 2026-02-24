@@ -9,6 +9,7 @@ from catboost import CatBoostRegressor
 import logging
 from app.core.settings import settings
 from pathlib import Path
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
 logger = logging.getLogger("promo_ml")
 
@@ -36,7 +37,8 @@ class MLTrainingService:
         model = CatBoostRegressor(**config)
         model.fit(dataset["X_train"], dataset["y_train"])
 
-        model_path = Path(settings.ML_MODEL_PATH)
+        model_id = ML_RUNTIME_STATE.get("ml_model_id", "cb_promo_v1")
+        model_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
         model_path.parent.mkdir(parents=True, exist_ok=True)
 
         # ВАЖНО: CatBoost сохраняем ТОЛЬКО в cbm

@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-import joblib
+from app.ml.runtime_state import ML_RUNTIME_STATE
 import json
 from app.core.settings import settings
 from catboost import CatBoostRegressor
@@ -17,11 +17,23 @@ class ModelLoader:
     Кэширует модель и метаданные после первого чтения.
     """
 
-    MODEL_PATH = Path(settings.ML_MODEL_PATH)
-    META_PATH = Path(settings.ML_META_PATH)
-
     _model = None
     _meta = None
+    _loaded_model_id = None
+
+    @classmethod
+    def _resolve_model_path(cls) -> Path:
+        """
+        Динамически формирует путь к модели
+        на основе текущего ML_RUNTIME_STATE.
+        """
+        model_id = ML_RUNTIME_STATE.get("ml_model_id")
+        model_filename = f"{model_id}.cbm"
+        model_path = Path(settings.ML_MODEL_DIR) / model_filename
+
+        ML_RUNTIME_STATE["contract"]["model_path"] = str(model_path)
+
+        return model_path
 
     @classmethod
     def load(cls):
@@ -29,30 +41,45 @@ class ModelLoader:
         Загружает ML-модель и метаданные.
         Возвращает dict: {"model": ..., "meta": {...}}
         """
-        if cls._model is not None and cls._meta is not None:
+
+        current_model_id = ML_RUNTIME_STATE.get("ml_model_id")
+
+        # Если модель уже загружена и id совпадает — возвращаем кэш
+        if (
+            cls._model is not None
+            and cls._meta is not None
+            and cls._loaded_model_id == current_model_id
+        ):
             return {"model": cls._model, "meta": cls._meta}
 
-        if not cls.MODEL_PATH.exists():
-            logger.warning("ML model NOT FOUND at %s", cls.MODEL_PATH)
+        model_path = cls._resolve_model_path()
+
+        if not model_path.exists():
+            logger.warning("ML model NOT FOUND at %s", model_path)
             cls._model = None
             cls._meta = {"feature_order": []}
+            cls._loaded_model_id = None
             return {"model": cls._model, "meta": cls._meta}
 
         # ===============  Load model safely  ===========================
         try:
-            logger.info("Loading CatBoost model from %s", cls.MODEL_PATH)
+            logger.info("Loading CatBoost model from %s", model_path)
             model = CatBoostRegressor()
-            model.load_model(str(cls.MODEL_PATH), format="cbm")
+            model.load_model(str(model_path), format="cbm")
             cls._model = model
+            cls._loaded_model_id = current_model_id
         except Exception as e:
             logger.error("Failed to load CatBoost model: %s", e)
             cls._model = None
+            cls._loaded_model_id = None
 
         # ===============  Load meta safely  =============================
-        if cls.META_PATH.exists():
+        meta_path = Path(settings.ML_META_PATH)
+
+        if meta_path.exists():
             try:
                 cls._meta = json.loads(
-                    cls.META_PATH.read_text(encoding="utf-8")
+                    meta_path.read_text(encoding="utf-8")
                 )
             except Exception as e:
                 logger.warning("Meta file corrupted: %s", e)
@@ -66,6 +93,5 @@ class ModelLoader:
     def reload(cls):
         cls._model = None
         cls._meta = None
+        cls._loaded_model_id = None
         return cls.load()
-
-

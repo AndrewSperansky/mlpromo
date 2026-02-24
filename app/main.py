@@ -33,9 +33,8 @@ from app.ml.self_healing.self_healing_worker import SelfHealingWorker
 logger = logging.getLogger("promo_ml")
 
 model_manager = ModelManager(
-    model_path=settings.ML_MODEL_PATH,
-    check_interval=5
-    )
+    check_interval=60
+)
 
 # --- создаём worker на уровне модуля (ВАЖНО) ---
 self_healing_worker = SelfHealingWorker(interval_seconds=30)

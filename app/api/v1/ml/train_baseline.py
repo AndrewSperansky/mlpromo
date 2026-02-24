@@ -1,7 +1,9 @@
 # app/api/v1/ml/train_baseline.py   (c логикой time-based split)
+# файл нигде не используется VOID
+
 import pandas as pd
 from pathlib import Path
-import joblib
+
 
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
@@ -13,8 +15,9 @@ from app.db.session import SessionLocal
 from models.ml_model import MLModel
 from app.core.settings import settings
 
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
-MODEL_PATH = Path(settings.ML_MODEL_PATH)   # так в контейнере
+
 
 FEATURES = [
     "price",
@@ -72,17 +75,21 @@ def train() -> dict:
     print(f"📊 Validation RMSE: {rmse:.2f}")
     print(f"📊 Validation MAE: {mae:.2f}")
 
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    model_id = ML_RUNTIME_STATE.get("ml_model_id", "baseline_catboost")
+    model_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
+
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+
 
     # 🔒 ML FILE CONTRACT
-    model.save_model(str(MODEL_PATH), format="cbm")  # ВАЖНО: format="cbm"
+    model.save_model(str(model_path), format="cbm")  # ВАЖНО: format="cbm"
 
-    print(f"✅ Model saved to {MODEL_PATH}")
+    print(f"✅ Model saved to {model_path}")
 
     return {
         "rmse": rmse,
         "mae": mae,
-        "model_path": str(MODEL_PATH),
+        "model_path": str(model_path),
     }
 
 
@@ -137,7 +144,7 @@ if __name__ == "__main__":
             version="v1",
             model_type="regression",
             target="sales_qty",
-            model_path=str(MODEL_PATH),
+            model_path=training_metrics["model_path"],
             features=FEATURES,
             metrics=training_metrics,
         )

@@ -324,32 +324,78 @@ curl http://localhost:8000/api/v1/ml/dataset | jq '.count'
 
 ✔ число > 0
 
-✅ 3. Predict (КЛЮЧЕВОЕ)
-curl -X POST http://localhost:8000/api/v1/ml/predict \
-  -H "Content-Type: application/json" \
-  -d '{
+===================================================================
+✅ 3. Predict + SHAP
+===================================================================
+ curl -X POST http://localhost:8000/api/v1/ml/predict   -H "Content-Type: application/json"   -d '{
     "prediction_date": "2025-01-15",
     "price": 100,
     "discount": 10,
     "avg_sales_7d": 120,
+    "avg_discount_7d": 8,
     "promo_days_left": 5,
     "promo_code": "PROMO_TEST",
     "sku": "SKU_TEST"
-  }'
+  }' | jq 
 
-✔ ОЖИДАЕМ:
+Результат:
+
 {
   "promo_code": "PROMO_TEST",
   "sku": "SKU_TEST",
   "date": "2025-01-15",
-  "prediction": 120.0,
-  "model_id": "dummy-model",
-  "version": "dev",
-  "trained_at": "...",
-  "features": {...},
-  "fallback_used": true
+  "prediction": 144.55821009751773,
+  "baseline": null,
+  "uplift": null,
+  "ml_model_id": "cb_promo_v1",
+  "version": "stage5",
+  "trained_at": "2026-01-26T08:10:00Z",
+  "features": {
+    "price": 100.0,
+    "discount": 10.0,
+    "avg_sales_7d": 120.0,
+    "avg_discount_7d": 8.0,
+    "promo_days_left": 5,
+    "promo_code": "PROMO_TEST",
+    "sku": "SKU_TEST"
+  },
+  "shap": [
+    {
+      "feature": "price",
+      "effect": 0.5926733401310543
+    },
+    {
+      "feature": "discount",
+      "effect": -2.8142934410963494
+    },
+    {
+      "feature": "avg_sales_7d",
+      "effect": -1.393764347203805
+    },
+    {
+      "feature": "avg_discount_7d",
+      "effect": -6.82642976819754
+    },
+    {
+      "feature": "promo_days_left",
+      "effect": 0.0
+    },
+    {
+      "feature": "promo_code",
+      "effect": 0.0
+    },
+    {
+      "feature": "sku",
+      "effect": 0.0
+    }
+  ],
+  "fallback_used": false,
+  "reason": null
 }
 
+
+=========================================================================
+✅ 1c/predict Version2
 =========================================================================
   curl -X POST http://localhost:8000/api/v1/ml/1c/predict   -H "Content-Type: application/json"   -d '{
     "request_id": "33333333-3333-3333-3333-333333333341",
@@ -367,8 +413,76 @@ curl -X POST http://localhost:8000/api/v1/ml/predict \
     "ml_model_id":"cb_promo_v1",
     "version":"stage2"
 }
+===========================================================================
+✅ 1c/predict Version5
+===========================================================================
+
+ curl -X POST http://localhost:8000/api/v1/ml/1c/predict   -H "Content-Type: application/json"   -d '{
+    "request_id": "33333333-3333-3333-3333-333333333557",
+    "data": {
+      "price": 120,
+      "discount": 15,
+      "avg_sales_7d": 95,
+      "avg_discount_7d": 12.5,
+      "promo_days_left": 7,
+      "promo_code": 25,      
+      "sku": 12345              
+    }
+  }'
 
 
+Ответ:
+
+
+{
+  "request_id": "33333333-3333-3333-3333-333333333558",
+  "prediction": 166.80743649272588,
+  "ml_model_id": "cb_promo_v1",
+  "version": "stage5"
+}
+
+=============================================================================
+✅ Runtime State
+=============================================================================
+
+
+ curl http://localhost:8000/api/v1/system/runtime-state | jq
+
+Результат: 
+
+{
+  "status": "ok",
+  "model_loaded": true,
+  "version": "stage5",
+  "errors": [],
+  "warnings": [],
+  "last_drift_flag": false,
+  "last_latency_p95": null,
+  "last_decision": null,
+  "last_decision_timestamp": null,
+  "retrain_requested": false,
+  "ml_model_id": "cb_promo_v1",
+  "checked": true,
+  "contract": {
+    "checked": true,
+    "status": "ok",
+    "model_loaded": true,
+    "errors": [],
+    "warnings": [],
+    "model_path": "/app/models/cb_promo_v1.cbm"
+  },
+  "feature_order": [
+    "price",
+    "discount",
+    "avg_sales_7d",
+    "avg_discount_7d",
+    "promo_days_left",
+    "promo_code",
+    "sku"
+  ]
+}
+
+==============================================================================
 
 ✅ 4. SHAP
 curl http://localhost:8000/api/v1/ml/shap/sample

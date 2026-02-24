@@ -4,7 +4,7 @@ Application settings — централизованные конфигураци
 """
 
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 from pydantic import Field
 
 
@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ===== ML FILE CONTRACT =====
-    ML_MODEL_PATH: str = "/app/models/model.cbm"
-    ML_META_PATH: str = "/app/models/baseline_catboost.meta.json"
+    ML_MODEL_DIR: str = "/app/models"
+    ML_META_PATH: str = "//app/models/cb_promo_v1.meta.json"
     # ============================
 
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/promo"

@@ -10,7 +10,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      ML_MODEL_PATH: /app/models/model.cbm
+      ML_MODEL_DIR: /app/models
       ENV: prod
       LOG_LEVEL: INFO
     volumes:
