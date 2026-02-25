@@ -1,3 +1,6 @@
+ <!-- frontend\src\pages\Dashboard.vue -->
+
+
 <template>
   <div>
     <h2 class="mb-4">System Dashboard</h2>

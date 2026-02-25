@@ -1,7 +1,6 @@
 # app/api/v1/ml/router.py
 
-import os
-from uuid import UUID
+
 import shutil
 import json
 from sqlalchemy.orm import Session
@@ -16,6 +15,7 @@ from app.db.session import get_db
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
+from app.ml.model_registry.lineage import record_lineage_event
 
 from app.api.v1.ml.schemas import (
     PredictionRequest,
@@ -272,3 +272,89 @@ def activate_model(ml_model_id: str):
         "status": "activated",
         "ml_model_id": ml_model_id
     }
+
+
+# =========================
+# MODEL UPLOAD (LITE VERSION)
+# =========================
+
+from fastapi import UploadFile, File
+import zipfile
+import tempfile
+
+@router.post("/models/upload")
+def upload_model_bundle(file: UploadFile = File(...)):
+    """
+    Upload model bundle (zip).
+    Required inside zip:
+        - model.cbm
+        - model.meta.json
+        - metrics.json
+
+    Lite version:
+        сохраняем файлы в archive без изменения структуры.
+    """
+
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files allowed")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+
+        tmp_zip_path = Path(tmp_dir) / file.filename
+
+        # Save uploaded file
+        with open(tmp_zip_path, "wb") as f:
+            f.write(file.file.read())
+
+        # Extract
+        with zipfile.ZipFile(tmp_zip_path, "r") as zip_ref:
+            zip_ref.extractall(tmp_dir)
+
+        model_file = Path(tmp_dir) / "model.cbm"
+        meta_file = Path(tmp_dir) / "model.meta.json"
+        metrics_file = Path(tmp_dir) / "metrics.json"
+
+        if not model_file.exists():
+            raise HTTPException(status_code=400, detail="model.cbm missing")
+
+        if not meta_file.exists():
+            raise HTTPException(status_code=400, detail="model.meta.json missing")
+
+        if not metrics_file.exists():
+            raise HTTPException(status_code=400, detail="metrics.json missing")
+
+        # Load meta
+        with open(meta_file) as f:
+            meta = json.load(f)
+
+        model_id = meta.get("model_id")
+
+        if not model_id:
+            raise HTTPException(status_code=400, detail="model_id missing in meta")
+
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
+        # Target paths (Lite format)
+        target_model = ARCHIVE_DIR / f"{model_id}.cbm"
+        target_meta = ARCHIVE_DIR / f"{model_id}.meta.json"
+        target_metrics = ARCHIVE_DIR / f"{model_id}.metrics.json"
+
+        if target_model.exists():
+            raise HTTPException(status_code=400, detail="Model already exists in archive")
+
+        # Move files
+        shutil.move(str(model_file), target_model)
+        shutil.move(str(meta_file), target_meta)
+        shutil.move(str(metrics_file), target_metrics)
+
+        # Record lineage event
+        record_lineage_event(
+            event_type="upload",
+            model_id=model_id,
+            metadata={"storage": "archive_flat"},
+        )
+
+        return {
+            "status": "uploaded",
+            "model_id": model_id,
+        }

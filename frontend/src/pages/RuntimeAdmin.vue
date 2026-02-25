@@ -1,3 +1,5 @@
+ <!-- \frontend\src\pages\RuntimeAdmin.vue -->
+
 <template>
   <div>
     <h2 class="mb-4">Runtime Administration</h2>

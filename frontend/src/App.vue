@@ -1,3 +1,5 @@
+ <!-- frontend\src\App.vue -->
+
 <template>
   <div>
     <Navbar />

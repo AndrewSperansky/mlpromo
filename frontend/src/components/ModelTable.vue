@@ -1,3 +1,6 @@
+ <!-- frontend\src\components\ModelTable.vue -->
+
+
 <template>
   <div class="card p-3 shadow-sm">
     <table class="table table-striped">
