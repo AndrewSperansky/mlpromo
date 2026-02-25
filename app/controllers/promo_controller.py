@@ -1,3 +1,7 @@
+# app/controllers/promo_controller.py
+# VOID
+
+
 from sqlalchemy.orm import Session
 from app.services.promo_service import PromoService
 from app.schemas.promo_schema import PromoCreate, PromoRead

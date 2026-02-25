@@ -1,4 +1,5 @@
 # api/v1/calculator/router.py
+# VOID
 """
 Calculator API — расширенные финансовые и маркетинговые расчёты.
 """

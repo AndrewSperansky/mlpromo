@@ -12,20 +12,24 @@ from sqlalchemy import text
 
 from app.db.session import get_db
 from app.services.system_service import SystemService
-
-
-from app.ml.runtime_state import ML_RUNTIME_STATE
-
 from app.core.settings import settings
 
 
 service = SystemService()
 
-router = APIRouter(tags=["system"])
+router = APIRouter(prefix="/api/v1/system", tags=["system"])
 
-# ✅ КАНОНИЧЕСКИЙ HEALTH (для docker / k8s / nginx)
+
+# ==========================================================
+# HEALTH
+# ==========================================================
+
 @router.get("/health", summary="Основной healthcheck сервиса")
 def health():
+    """
+    Канонический healthcheck для docker / k8s / nginx.
+    НЕ зависит от ML runtime.
+    """
     return {
         "status": "ok",
         "service": "promo-ml",
@@ -34,56 +38,49 @@ def health():
     }
 
 
-# 🔍 Проверка сервера (legacy / optional)
 @router.get("/health/server", summary="Проверка состояния сервера")
 def health_server():
     """
     Возвращает технический статус сервиса.
-
-    Returns:
-        dict: Статус, время и параметры живости.
     """
     return service.health_check()
 
 
-# 🔍 Проверка БД (НЕ для docker healthcheck)
 @router.get("/health/db", summary="Проверка состояния postgres")
 def health_db(db: Session = Depends(get_db)):
+    """
+    Проверка соединения с БД.
+    НЕ использовать как docker healthcheck.
+    """
     db.execute(text("SELECT 1"))
     return {"status": "ok"}
 
-#  service это system_service.py
 
+# ==========================================================
+# SYSTEM STATUS
+# ==========================================================
 
 @router.get("/status")
 def system_status():
     """
     Basic runtime status endpoint.
+    Делегирует в SystemService.
     """
-
-    return {
-        "status": ML_RUNTIME_STATE.get("status"),
-        "model_loaded": ML_RUNTIME_STATE.get("model_loaded"),
-        "active_model_version": ML_RUNTIME_STATE.get("version"),
-        "errors": ML_RUNTIME_STATE.get("errors"),
-        "warnings": ML_RUNTIME_STATE.get("warnings"),
-    }
+    return service.get_status()
 
 
 @router.get("/metrics")
 def system_metrics():
     """
     Stage 5 — Telemetry endpoint.
-
     Returns runtime ML telemetry snapshot.
     """
-
     return service.get_metrics()
 
 
-# =============================
-# Runtime Admin
-# =============================
+# ==========================================================
+# RUNTIME ADMIN
+# ==========================================================
 
 @router.post("/freeze")
 def freeze():
@@ -110,10 +107,18 @@ def runtime_state():
     return service.get_runtime_state()
 
 
-# =============================
-# Aggregated Overview
-# =============================
+# ==========================================================
+# AGGREGATED OVERVIEW
+# ==========================================================
 
 @router.get("/overview")
 def overview():
+    """
+    Stage 5.4 — Aggregated System Overview.
+    Объединяет:
+        - status
+        - metrics
+        - runtime state
+        - registry state (если реализовано в service)
+    """
     return service.get_overview()
