@@ -6,41 +6,41 @@
 
       <StatusCard
         title="Active Model Version"
-        :value="status.active_model_version"
+        :value="overview.runtime.version ?? '—'"
       />
 
       <StatusCard
         title="Model Loaded"
-        :value="status.model_loaded ? 'Yes' : 'No'"
-        :badge="status.model_loaded ? 'success' : 'danger'"
+        :value="overview.runtime.model_loaded ? 'Yes' : 'No'"
+        :badge="overview.runtime.model_loaded ? 'success' : 'danger'"
       />
 
       <StatusCard
         title="Drift Flag"
-        :value="metrics.drift_flag ? 'Detected' : 'No Drift'"
-        :badge="metrics.drift_flag ? 'danger' : 'success'"
+        :value="overview.runtime.drift_flag ? 'Detected' : 'No Drift'"
+        :badge="overview.runtime.drift_flag ? 'danger' : 'success'"
       />
 
       <StatusCard
         title="Freeze Flag"
-        :value="metrics.freeze_flag ? 'Frozen' : 'Active'"
-        :badge="metrics.freeze_flag ? 'warning' : 'success'"
+        :value="overview.runtime.freeze_flag ? 'Frozen' : 'Active'"
+        :badge="overview.runtime.freeze_flag ? 'warning' : 'success'"
       />
 
       <StatusCard
         title="Latency p95 (ms)"
-        :value="metrics.latency_p95_ms ?? '—'"
+        :value="overview.telemetry.latency_p95_ms ?? '—'"
       />
 
       <StatusCard
         title="Predictions Count"
-        :value="metrics.predictions_count"
+        :value="overview.telemetry.predictions_count"
       />
 
       <StatusCard
         title="Errors Count"
-        :value="metrics.errors_count"
-        :badge="metrics.errors_count > 0 ? 'danger' : 'success'"
+        :value="overview.telemetry.errors_count"
+        :badge="overview.telemetry.errors_count > 0 ? 'danger' : 'success'"
       />
 
     </div>
@@ -49,44 +49,51 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getStatus, getMetrics } from '../services/api'
+import axios from 'axios'
 import StatusCard from '../components/StatusCard.vue'
 
-interface SystemStatus {
-  status: string
-  model_loaded: boolean
-  active_model_version: string
+interface OverviewResponse {
+  timestamp: string
+  runtime: {
+    ml_model_id: string | null
+    version: string | null
+    model_loaded: boolean
+    freeze_flag: boolean
+    drift_flag: boolean
+    retrain_requested?: boolean
+  }
+  telemetry: {
+    latency_p95_ms: number | null
+    predictions_count: number
+    errors_count: number
+  }
   errors: string[]
   warnings: string[]
 }
 
-interface SystemMetrics {
-  drift_flag: boolean
-  freeze_flag: boolean
-  latency_p95_ms: number | null
-  predictions_count: number
-  errors_count: number
-}
-
-const status = ref<Partial<SystemStatus>>({})
-
-const metrics = ref<SystemMetrics>({
-  drift_flag: false,
-  freeze_flag: false,
-  latency_p95_ms: null,
-  predictions_count: 0,
-  errors_count: 0
+const overview = ref<OverviewResponse>({
+  timestamp: '',
+  runtime: {
+    ml_model_id: null,
+    version: null,
+    model_loaded: false,
+    freeze_flag: false,
+    drift_flag: false,
+    retrain_requested: false,
+  },
+  telemetry: {
+    latency_p95_ms: null,
+    predictions_count: 0,
+    errors_count: 0
+  },
+  errors: [],
+  warnings: []
 })
 
 async function loadDashboard() {
   try {
-    const [statusResp, metricsResp] = await Promise.all([
-      getStatus(),
-      getMetrics()
-    ])
-
-    status.value = statusResp.data
-    metrics.value = metricsResp.data
+    const response = await axios.get('/api/v1/system/overview')
+    overview.value = response.data
   } catch (error) {
     console.error('Dashboard load failed', error)
   }
@@ -94,8 +101,6 @@ async function loadDashboard() {
 
 onMounted(() => {
   loadDashboard()
-
-  // автообновление каждые 10 секунд
   setInterval(loadDashboard, 10000)
 })
 </script>

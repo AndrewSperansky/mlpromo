@@ -7,36 +7,36 @@
 
       <StatusCard
         title="Model ID"
-        :value="overview?.runtime?.ml_model_id"
+        :value="overview.runtime.ml_model_id ?? '—'"
       />
 
       <StatusCard
         title="Version"
-        :value="overview?.runtime?.version"
+        :value="overview.runtime.version ?? '—'"
       />
 
       <StatusCard
         title="Model Loaded"
-        :value="overview?.runtime?.model_loaded ? 'Yes' : 'No'"
-        :badge="overview?.runtime?.model_loaded ? 'success' : 'danger'"
+        :value="overview.runtime.model_loaded ? 'Yes' : 'No'"
+        :badge="overview.runtime.model_loaded ? 'success' : 'danger'"
       />
 
       <StatusCard
         title="Freeze Flag"
-        :value="overview?.runtime?.freeze_flag ? 'Frozen' : 'Active'"
-        :badge="overview?.runtime?.freeze_flag ? 'warning' : 'success'"
+        :value="overview.runtime.freeze_flag ? 'Frozen' : 'Active'"
+        :badge="overview.runtime.freeze_flag ? 'warning' : 'success'"
       />
 
       <StatusCard
         title="Drift Flag"
-        :value="overview?.runtime?.drift_flag ? 'Drift Detected' : 'No Drift'"
-        :badge="overview?.runtime?.drift_flag ? 'danger' : 'success'"
+        :value="overview.runtime.drift_flag ? 'Drift Detected' : 'No Drift'"
+        :badge="overview.runtime.drift_flag ? 'danger' : 'success'"
       />
 
       <StatusCard
         title="Retrain Requested"
-        :value="runtimeState?.retrain_requested ? 'Yes' : 'No'"
-        :badge="runtimeState?.retrain_requested ? 'primary' : 'secondary'"
+        :value="overview.runtime.retrain_requested ? 'Yes' : 'No'"
+        :badge="overview.runtime.retrain_requested ? 'primary' : 'secondary'"
       />
 
     </div>
@@ -81,7 +81,7 @@
 
       <div v-if="showDebug" class="card-body">
         <pre class="bg-light p-3 small">
-{{ runtimeState }}
+{{ overview }}
         </pre>
       </div>
     </div>
@@ -94,8 +94,44 @@ import { ref, onMounted } from "vue"
 import api from "../services/api"
 import StatusCard from "../components/StatusCard.vue"
 
-const overview = ref<any>(null)
-const runtimeState = ref<any>(null)
+interface OverviewResponse {
+  timestamp: string
+  runtime: {
+    ml_model_id: string | null
+    version: string | null
+    model_loaded: boolean
+    freeze_flag: boolean
+    drift_flag: boolean
+    retrain_requested?: boolean
+  }
+  telemetry: {
+    latency_p95_ms: number | null
+    predictions_count: number
+    errors_count: number
+  }
+  errors: string[]
+  warnings: string[]
+}
+
+const overview = ref<OverviewResponse>({
+  timestamp: "",
+  runtime: {
+    ml_model_id: null,
+    version: null,
+    model_loaded: false,
+    freeze_flag: false,
+    drift_flag: false,
+    retrain_requested: false,
+  },
+  telemetry: {
+    latency_p95_ms: null,
+    predictions_count: 0,
+    errors_count: 0,
+  },
+  errors: [],
+  warnings: [],
+})
+
 const showDebug = ref(false)
 
 async function loadOverview() {
@@ -103,39 +139,29 @@ async function loadOverview() {
   overview.value = res.data
 }
 
-async function loadRuntime() {
-  const res = await api.get("/system/runtime-state")
-  runtimeState.value = res.data
-}
-
 async function freeze() {
   await api.post("/system/freeze")
-  await refresh()
+  await loadOverview()
 }
 
 async function unfreeze() {
   await api.post("/system/unfreeze")
-  await refresh()
+  await loadOverview()
 }
 
 async function clearDrift() {
   await api.post("/system/clear-drift")
-  await refresh()
+  await loadOverview()
 }
 
 async function forceRetrain() {
   await api.post("/system/force-retrain")
-  await refresh()
+  await loadOverview()
 }
 
 function toggleDebug() {
   showDebug.value = !showDebug.value
 }
 
-async function refresh() {
-  await loadOverview()
-  await loadRuntime()
-}
-
-onMounted(refresh)
+onMounted(loadOverview)
 </script>

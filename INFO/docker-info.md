@@ -500,5 +500,8 @@ docker inspect asperansky/promo-ml:prod2 --format='{{.Id}}'
 
 stage2
 
+## ПЕРЕЗАГРУЗКА КОНТЕЙНЕРОВ
 
+`docker compose restart backend`
+`docker restart promo_ml_backend`
 
