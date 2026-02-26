@@ -15,7 +15,7 @@ from app.ml.train.shap_utils import (
 )
 
 from app.ml.model_registry.lineage import enrich_meta_with_lineage
-from app.ml.model_registry.promotion_policy import decide_promotion  # ✨ NEW
+from app.ml.model_registry.promotion_policy import decide_promotion
 
 
 def _get_models_dir() -> Path:
@@ -81,7 +81,7 @@ def train_pipeline(
 
     model.fit(X_train, y_train)
 
-    model_path = candidate_dir / "model.cbm"
+    model_path = candidate_dir / "cb_promo_v1.cbm"
     model.save_model(str(model_path))
 
     # =========================
@@ -104,13 +104,15 @@ def train_pipeline(
     # =========================
     model_id = datetime.now(timezone.utc).isoformat()
 
+    rmse_value = float(model.best_score_["learn"]["RMSE"])  # 🟢 extracted
+
     meta = {
         "model_id": model_id,
         "model_name": "promo_uplift",
         "trained_at": model_id,
         "features": feature_names,
         "artifacts": {
-            "model": "model.cbm",
+            "model": "cb_promo_v1.cbm",
             "shap_summary": "shap_summary.json",
         },
         "stage": "candidate",
@@ -125,7 +127,7 @@ def train_pipeline(
         trigger=trigger,
     )
 
-    with open(candidate_dir / "model.meta.json", "w") as f:
+    with open(candidate_dir / "cb_promo_v1.meta.json", "w") as f:
         json.dump(meta, f, indent=2)
 
     promoted = False
@@ -137,8 +139,8 @@ def train_pipeline(
     if promote:
         current_metrics = None
 
-        if (current_dir / "model.meta.json").exists():
-            with open(current_dir / "model.meta.json") as f:
+        if (current_dir / "cb_promo_v1.meta.json").exists():
+            with open(current_dir / "cb_promo_v1.meta.json") as f:
                 current_meta = json.load(f)
                 current_metrics = current_meta.get("metrics")
 
@@ -172,12 +174,18 @@ def train_pipeline(
             meta["stage"] = "current"
 
         # ✨ фиксируем итоговое meta (audit!)
-        with open(candidate_dir / "model.meta.json", "w") as f:
+        with open(candidate_dir / "cb_promo_v1.meta.json", "w") as f:
             json.dump(meta, f, indent=2)
+
+
+    # =========================
+    # 5️⃣ RETURN EXTENDED RESPONSE  🟢 NEW
+    # =========================
 
     return {
         "status": "trained",
         "model_id": model_id,
+        "metrics": meta["metrics"],  # 🟢 NEW
         "promoted": promoted,
         "stage": "current" if promoted else "candidate",
         "promotion_decision": promotion_decision,

@@ -25,8 +25,8 @@
 
 ## 3. Текущая структура артефактов
 models/
-model.cbm
-model.meta.json
+cb_promo_v1.cbm
+cb_promo_v1.meta.json
 shap_summary.json
 shap_values.npy
 shap_expected_value.json

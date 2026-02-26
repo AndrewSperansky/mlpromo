@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timezone
 
 from app.ml.model_registry.promotion_policy import decide_promotion
+from app.ml.train.train_pipeline import train_pipeline
 
 router = APIRouter()
 
@@ -71,15 +72,15 @@ def upload_model_bundle(file: UploadFile = File(...)):
         with zipfile.ZipFile(tmp_zip_path, "r") as zip_ref:
             zip_ref.extractall(tmp_dir)
 
-        model_file = Path(tmp_dir) / "model.cbm"
-        meta_file = Path(tmp_dir) / "model.meta.json"
+        model_file = Path(tmp_dir) / "cb_promo_v1.cbm"
+        meta_file = Path(tmp_dir) / "cb_promo_v1.meta.json"
         metrics_file = Path(tmp_dir) / "metrics.json"
 
         if not model_file.exists():
-            raise HTTPException(status_code=400, detail="model.cbm missing")
+            raise HTTPException(status_code=400, detail="cb_promo_v1.cbm missing")
 
         if not meta_file.exists():
-            raise HTTPException(status_code=400, detail="model.meta.json missing")
+            raise HTTPException(status_code=400, detail="cb_promo_v1.meta.json missing")
 
         if not metrics_file.exists():
             raise HTTPException(status_code=400, detail="metrics.json missing")
@@ -121,6 +122,19 @@ def upload_model_bundle(file: UploadFile = File(...)):
             "model_id": model_id,
             "promotion_decision": decision
         }
+
+
+
+# ========================================
+# TRAIN TRIGGER
+# ========================================
+
+@router.post("/train")
+def trigger_training(promote: bool = True):
+    return train_pipeline(
+        promote=promote,
+        trigger="admin_ui",
+    )
 
 
 # =========================================

@@ -38,6 +38,9 @@ export const getAuditPage = (page: number, modelId: string) =>
         params: { page, model_id: modelId }
     })
 
+export const trainModel = () =>
+    api.post('/api/v1/ml/train')
+
 
 export default api
 

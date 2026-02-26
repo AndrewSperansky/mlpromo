@@ -28,7 +28,7 @@ def test_rollback_creates_lineage_event(tmp_path, monkeypatch):
         "model_id": "test_model_1"
     }
 
-    with open(archived_model_dir / "model.meta.json", "w") as f:
+    with open(archived_model_dir / "cb_promo_v1.meta.json", "w") as f:
         json.dump(meta, f)
 
     # Выполняем rollback

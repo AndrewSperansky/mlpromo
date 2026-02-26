@@ -85,7 +85,7 @@ def rollback_current_to_archive(
     # Update meta with rollback info
     # ==========================================================
 
-    meta_path = current_dir / "model.meta.json"
+    meta_path = current_dir / "cb_promo_v1.meta.json"
     restored_model_id = None
 
     if meta_path.exists():
@@ -148,5 +148,5 @@ models/archive/*
 Безопасно:
 текущую модель сохраняет в archive/rollback_*
 Восстанавливает выбранную версию в current
-Обновляет model.meta.json
+Обновляет cb_promo_v1.meta.json
 """

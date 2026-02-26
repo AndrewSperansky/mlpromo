@@ -1,3 +1,6 @@
+# app/services/promo_calculator_service.py
+# файл нигде не используется VOID
+
 """
 Promo Calculator Service — расчёт эффективности промо.
 """

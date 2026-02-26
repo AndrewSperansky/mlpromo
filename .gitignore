@@ -19,7 +19,7 @@ INFO/
 lib/
 lib64/
 logs/
-models/model.cbm
+models/cb_promo_v1.cbm
 parts/
 sdist/
 var/

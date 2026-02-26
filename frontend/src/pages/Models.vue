@@ -1,5 +1,3 @@
-<!-- frontend\src\pages\Models.vue -->
-
 <!-- frontend/src/pages/Models.vue -->
 
 <template>
@@ -9,23 +7,41 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h2>Model Registry</h2>
 
-      <div>
+      <div class="d-flex gap-2">
+
+        <!-- Train Button -->
+        <button class="btn btn-primary" :disabled="training" @click="handleTrain">
+          {{ training ? 'Training...' : 'Train Model' }}
+        </button>
+
+        <!-- Upload -->
         <input type="file" ref="fileInput" accept=".zip" class="d-none" @change="handleFileSelect" />
 
         <button class="btn btn-success" :disabled="uploading" @click="triggerFileInput">
           {{ uploading ? 'Uploading...' : 'Upload Model' }}
         </button>
+
       </div>
     </div>
 
-    <!-- ===== Upload / Evaluate Result Card ===== -->
+    <!-- ===== Result Card (Upload / Evaluate / Train) ===== -->
     <div v-if="uploadResult" class="alert alert-info">
-      <strong>Status:</strong> {{ uploadResult.status || 'evaluated' }} <br />
+
       <strong>Model ID:</strong> {{ uploadResult.model_id }}
 
+      <!-- Metrics -->
+      <div v-if="uploadResult.metrics" class="mt-2">
+        <strong>Metrics:</strong>
+        <ul class="mb-1">
+          <li v-for="(value, key) in uploadResult.metrics" :key="key">
+            {{ key }}: {{ Number(value).toFixed(4) }}
+          </li>
+        </ul>
+      </div>
+
+      <!-- Promotion Decision -->
       <div v-if="uploadResult.promotion_decision" class="mt-2">
         <strong>Decision:</strong>
-
         <span class="badge ms-2" :class="decisionClass(uploadResult.promotion_decision.decision)">
           {{ uploadResult.promotion_decision.decision }}
         </span>
@@ -34,6 +50,7 @@
           {{ uploadResult.promotion_decision.reason }}
         </div>
       </div>
+
     </div>
 
     <!-- ===== TABLE ===== -->
@@ -70,7 +87,8 @@ import {
   activateModel,
   uploadModel,
   evaluateModel,
-  rollbackModel
+  rollbackModel,
+  trainModel
 } from '../services/api'
 import ModelTable from '../components/ModelTable.vue'
 
@@ -83,7 +101,10 @@ interface ModelItem {
 
 const models = ref<ModelItem[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+
 const uploading = ref(false)
+const training = ref(false)
+
 const uploadResult = ref<any>(null)
 
 const toast = ref({
@@ -102,6 +123,26 @@ function decisionClass(decision: string) {
 async function loadModels() {
   const response = await getModels()
   models.value = response.data
+}
+
+async function handleTrain() {
+  try {
+    training.value = true
+
+    const response = await trainModel()
+
+    uploadResult.value = response.data
+
+    toast.value.success = 'Training completed successfully'
+
+    await loadModels()
+
+  } catch (error: any) {
+    toast.value.error =
+      error?.response?.data?.detail || 'Training failed'
+  } finally {
+    training.value = false
+  }
 }
 
 async function handleActivate(modelId: string) {
@@ -140,7 +181,6 @@ function triggerFileInput() {
 
 async function handleFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
-
   if (!target.files || target.files.length === 0) return
 
   const file = target.files.item(0)
@@ -153,7 +193,6 @@ async function handleFileSelect(event: Event) {
     uploading.value = true
 
     const response = await uploadModel(formData)
-
     uploadResult.value = response.data
 
     toast.value.success = 'Model uploaded successfully'

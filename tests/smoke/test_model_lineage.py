@@ -15,7 +15,7 @@ def test_model_lineage_smoke(tmp_path, monkeypatch):
     # retrain → candidate
     second = train_pipeline(promote=False, trigger="retrain")
 
-    candidate_meta = tmp_path / "_candidate" / "model.meta.json"
+    candidate_meta = tmp_path / "_candidate" / "cb_promo_v1.meta.json"
     assert candidate_meta.exists()
 
     with open(candidate_meta) as f:

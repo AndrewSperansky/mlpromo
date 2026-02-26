@@ -20,6 +20,6 @@ def test_train_pipeline_smoke():
 
     assert result is not None
 
-    assert (MODELS_DIR / "model.cbm").exists(), "model.cbm not created"
-    assert (MODELS_DIR / "model.meta.json").exists(), "model.meta.json not created"
+    assert (MODELS_DIR / "cb_promo_v1.cbm").exists(), "cb_promo_v1.cbm not created"
+    assert (MODELS_DIR / "cb_promo_v1.meta.json").exists(), "cb_promo_v1.meta.json not created"
     assert (MODELS_DIR / "shap_summary.json").exists(), "shap_summary.json not created"

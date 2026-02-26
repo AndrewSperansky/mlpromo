@@ -7,8 +7,8 @@ import os
 
 
 ARTIFACT_FILES = [
-    "model.cbm",
-    "model.meta.json",
+    "cb_promo_v1.cbm",
+    "cb_promo_v1.meta.json",
     "shap_summary.json",
 ]
 
@@ -35,7 +35,7 @@ def archive_current_model():
     current = base / "current"
     archive = base / "archive"
 
-    if not (current / "model.cbm").exists():
+    if not (current / "cb_promo_v1.cbm").exists():
         return None
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")

@@ -14,8 +14,8 @@ def test_model_versioning_smoke(tmp_path, monkeypatch):
     archive = tmp_path / "archive"
 
     assert result["promoted"] is True
-    assert (current / "model.cbm").exists()
-    assert (current / "model.meta.json").exists()
+    assert (current / "cb_promo_v1.cbm").exists()
+    assert (current / "cb_promo_v1.meta.json").exists()
     assert (current / "shap_summary.json").exists()
 
     # при первом запуске archive может быть пуст

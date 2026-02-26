@@ -23,10 +23,10 @@ def test_latency_breach_triggers_rollback(monkeypatch, tmp_path):
     archive_dir.mkdir(parents=True)
 
     # current (bad)
-    (current_dir / "model.cbm").write_text("bad_model")
+    (current_dir / "cb_promo_v1.cbm").write_text("bad_model")
 
     # archive (good)
-    (archive_dir / "model.cbm").write_text("good_model")
+    (archive_dir / "cb_promo_v1.cbm").write_text("good_model")
 
     # latency metrics
     metrics_dir = tmp_path / "metrics"
@@ -47,7 +47,7 @@ def test_latency_breach_triggers_rollback(monkeypatch, tmp_path):
     )
 
     assert result["status"] == "rollback_triggered"
-    assert (current_dir / "model.cbm").read_text() == "good_model"
+    assert (current_dir / "cb_promo_v1.cbm").read_text() == "good_model"
 
 
 """

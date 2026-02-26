@@ -17,7 +17,7 @@ def get_current_model_id() -> Optional[str]:
     Возвращает model_id текущей active модели (current).
     """
     models_dir = Path(os.getenv("MODELS_DIR", "models"))
-    meta_path = models_dir / "current" / "model.meta.json"
+    meta_path = models_dir / "current" / "cb_promo_v1.meta.json"
 
     if not meta_path.exists():
         return None

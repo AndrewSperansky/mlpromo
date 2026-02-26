@@ -33,7 +33,7 @@ Workflow:
 Stage 2:
 - Model: CatBoost (.cbm)
 - Delivery: Docker volume
-- Path: /app/models/model.cbm
+- Path: /app/models/cb_promo_v1.cbm
 - Reload: container restart
 
 Итог: идемпотентность — это «безопасность повтора»

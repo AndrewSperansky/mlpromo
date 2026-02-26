@@ -1,7 +1,7 @@
 {
-  "model_id": "2026-02-26T07:08:51.575450+00:00",
+  "model_id": "2026-02-26T11:19:50.486020+00:00",
   "model_name": "promo_uplift",
-  "trained_at": "2026-02-26T07:08:51.575450+00:00",
+  "trained_at": "2026-02-26T11:19:50.486020+00:00",
   "features": [
     "price",
     "discount",
@@ -9,7 +9,7 @@
     "promo_days_left"
   ],
   "artifacts": {
-    "model": "model.cbm",
+    "model": "cb_promo_v1.cbm",
     "shap_summary": "shap_summary.json"
   },
   "stage": "candidate",

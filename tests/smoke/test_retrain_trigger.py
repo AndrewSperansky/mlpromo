@@ -14,5 +14,5 @@ def test_retrain_trigger_smoke(monkeypatch, tmp_path):
     result = handle_retrain_if_needed(alert_decision)
 
     assert result["retrain_triggered"] is True
-    assert (tmp_path / "_candidate" / "model.cbm").exists()
+    assert (tmp_path / "_candidate" / "cb_promo_v1.cbm").exists()
     assert (tmp_path / "current").exists()

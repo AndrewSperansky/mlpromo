@@ -17,7 +17,7 @@ def test_model_rollback_smoke(tmp_path, monkeypatch):
     archived_model = archive / "model_v1"
     archived_model.mkdir(parents=True)
 
-    (archived_model / "model.cbm").write_text("dummy model")
+    (archived_model / "cb_promo_v1.cbm").write_text("dummy model")
     (archived_model / "shap_summary.json").write_text("{}")
 
     meta = {
@@ -25,21 +25,21 @@ def test_model_rollback_smoke(tmp_path, monkeypatch):
         "stage": "archived",
     }
 
-    with open(archived_model / "model.meta.json", "w") as f:
+    with open(archived_model / "cb_promo_v1.meta.json", "w") as f:
         json.dump(meta, f)
 
     # ✨ NEW: подготавливаем current
     current.mkdir()
-    (current / "model.cbm").write_text("bad model")
+    (current / "cb_promo_v1.cbm").write_text("bad model")
 
     # 🔁 rollback
     result = rollback_current_to_archive()
 
     assert result["rollback_performed"] is True
-    assert (current / "model.cbm").exists()
-    assert (current / "model.meta.json").exists()
+    assert (current / "cb_promo_v1.cbm").exists()
+    assert (current / "cb_promo_v1.meta.json").exists()
 
-    with open(current / "model.meta.json") as f:
+    with open(current / "cb_promo_v1.meta.json") as f:
         restored_meta = json.load(f)
 
     assert restored_meta["rolled_back_from"] == "model_v1"

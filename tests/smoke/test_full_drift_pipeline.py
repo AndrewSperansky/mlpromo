@@ -48,4 +48,4 @@ def test_full_drift_pipeline_smoke(monkeypatch, tmp_path):
     assert result["alert"]["action"] == "retrain_recommended"
     assert result["retrain"]["retrain_triggered"] is True
 
-    assert (tmp_path / "_candidate" / "model.cbm").exists()
+    assert (tmp_path / "_candidate" / "cb_promo_v1.cbm").exists()

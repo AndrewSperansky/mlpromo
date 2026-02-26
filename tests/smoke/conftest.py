@@ -29,7 +29,7 @@ def ensure_smoke_model_and_shap_exist():
 
     train_pipeline()
 
-    assert (SMOKE_MODELS_DIR / "model.cbm").exists()
+    assert (SMOKE_MODELS_DIR / "cb_promo_v1.cbm").exists()
     assert (SMOKE_MODELS_DIR / "shap_summary.json").exists()
 
     yield
