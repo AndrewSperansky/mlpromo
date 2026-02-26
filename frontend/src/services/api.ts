@@ -30,5 +30,14 @@ export const rollbackModel = (id: string) =>
 export const getLineage = () =>
     api.get('/api/v1/ml/models/lineage')
 
+export const predictBatch = (rows: any[]) =>
+    api.post('/api/v1/ml/predict', { data: rows })
+
+export const getAuditPage = (page: number, modelId: string) =>
+    api.get('/api/v1/ml/audit', {
+        params: { page, model_id: modelId }
+    })
+
+
 export default api
 

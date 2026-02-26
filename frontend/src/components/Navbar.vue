@@ -1,4 +1,4 @@
- <!-- frontend\src\components\Navbar.vue -->
+<!-- frontend\src\components\Navbar.vue -->
 
 <template>
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -7,12 +7,7 @@
         Promo ML Admin
       </span>
 
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarNav"
-      >
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
 
@@ -30,7 +25,7 @@
               Models
             </router-link>
           </li>
-          
+
           <li class="nav-item">
             <router-link class="nav-link" to="/runtime">
               Runtime
@@ -47,6 +42,12 @@
             <router-link class="nav-link" to="/audit">
               Audit
             </router-link>
+          </li>
+
+          <li class="nav-item">
+            <a href="http://localhost:3000" target="_blank" class="nav-link">
+              Grafana
+            </a>
           </li>
 
         </ul>
