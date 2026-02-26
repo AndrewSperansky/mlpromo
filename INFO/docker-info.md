@@ -200,7 +200,7 @@ docker-compose down -v      `Останавливает контейнеры и 
 ##  ЛОГИРОВАНИЕ
 `docker-compose logs -f backend`
 `docker logs promo_nginx`
-`docker logs promo_ml_backend --tail 200`
+`docker logs promo_ml_backend --tail 50`
 
 
 ## ПРОВЕРКИ ПОСЛЕ СТАРТА
