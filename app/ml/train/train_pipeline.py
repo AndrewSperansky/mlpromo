@@ -1,13 +1,12 @@
 # app/ml/train/train_pipeline.py
 # — TRAIN PIPELINE WITH VERSIONING + ARCHIVE CONTRACT + LINEAGE + PROMOTION POLICY
 
-
 from pathlib import Path
 from datetime import datetime, timezone
 import json
-import os
 import pandas as pd
 from catboost import CatBoostRegressor
+from sklearn.metrics import mean_squared_error
 
 from app.ml.train.shap_utils import (
     compute_shap_catboost,
@@ -16,31 +15,92 @@ from app.ml.train.shap_utils import (
 
 from app.ml.model_registry.lineage import enrich_meta_with_lineage
 from app.ml.model_registry.promotion_policy import decide_promotion
+from app.core.settings import settings
+from app.api.v1.ml.dataset import load_dataset
 
+
+# ==========================================================
+# CONFIG
+# ==========================================================
+
+FEATURES = [
+    "price",
+    "discount",
+    "avg_sales_7d",
+    "promo_days_left",
+]
+
+TARGET = "target_sales_qty"
+
+
+# ==========================================================
+# MODELS DIR
+# ==========================================================
 
 def _get_models_dir() -> Path:
     """
     MODELS_DIR читается в момент вызова
-    (test / CI / runtime safe)
     """
-    return Path(os.getenv("MODELS_DIR", "models"))
+    return Path(settings.ML_MODEL_DIR)
 
 
-def _prepare_training_data():
+# ==========================================================
+# DATA PREPARATION
+# ==========================================================
+
+def _prepare_training_data_synthetic():
+    """
+    Используется ТОЛЬКО в test окружении
+    """
     data = pd.DataFrame(
         {
             "price": [100, 120, 90, 110],
             "discount": [10, 20, 0, 15],
             "avg_sales_7d": [30, 25, 40, 28],
             "promo_days_left": [5, 3, 10, 2],
-            "target": [140, 160, 135, 150],
+            "target_sales_qty": [140, 160, 135, 150],
         }
     )
 
-    X = data.drop(columns=["target"])
-    y = data["target"]
-    return X, y
+    X = data[FEATURES]
+    y = data[TARGET]
 
+    # train == val (для smoke)
+    return X, y, X, y
+
+
+def _prepare_training_data_time_split(val_days: int = 4):
+    """
+    Production training.
+    Time-based split для предотвращения data leakage.
+    """
+    df = load_dataset(limit=50_000)
+
+    if df.empty:
+        raise RuntimeError("Dataset is empty. Training aborted.")
+
+    df["date"] = pd.to_datetime(df["date"])
+    max_date = df["date"].max()
+    split_date = max_date - pd.Timedelta(days=val_days)
+
+    train_df = df[df["date"] <= split_date]
+    val_df = df[df["date"] > split_date]
+
+    if train_df.empty or val_df.empty:
+        raise RuntimeError("Train/validation split failed. Not enough data.")
+
+    X_train = train_df[FEATURES]
+    y_train = train_df[TARGET]
+
+    X_val = val_df[FEATURES]
+    y_val = val_df[TARGET]
+
+    return X_train, y_train, X_val, y_val
+
+
+# ==========================================================
+# TRAIN PIPELINE
+# ==========================================================
 
 def train_pipeline(
     promote: bool = False,
@@ -65,13 +125,22 @@ def train_pipeline(
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     # =========================
-    # 1️⃣ TRAIN MODEL
+    # 1️⃣ DATA SELECTION
     # =========================
-    X_train, y_train = _prepare_training_data()
-    feature_names = X_train.columns.tolist()
+
+    if settings.ENVIRONMENT == "test":
+        X_train, y_train, X_val, y_val = _prepare_training_data_synthetic()
+    else:
+        X_train, y_train, X_val, y_val = _prepare_training_data_time_split()
+
+    feature_names = FEATURES
+
+    # =========================
+    # 2️⃣ TRAIN MODEL
+    # =========================
 
     model = CatBoostRegressor(
-        iterations=200,
+        iterations=300,
         depth=6,
         learning_rate=0.05,
         loss_function="RMSE",
@@ -79,14 +148,23 @@ def train_pipeline(
         verbose=False,
     )
 
-    model.fit(X_train, y_train)
+    model.fit(
+        X_train,
+        y_train,
+        eval_set=(X_val, y_val),
+        use_best_model=True,
+    )
+
+    preds = model.predict(X_val)
+    rmse_value = float(mean_squared_error(y_val, preds, squared=False))
 
     model_path = candidate_dir / "cb_promo_v1.cbm"
-    model.save_model(str(model_path))
+    model.save_model(str(model_path), format="cbm")
 
     # =========================
-    # 2️⃣ SHAP ARTIFACTS
+    # 3️⃣ SHAP ARTIFACTS
     # =========================
+
     shap_values, expected_value = compute_shap_catboost(
         model=model,
         X=X_train,
@@ -100,11 +178,10 @@ def train_pipeline(
     )
 
     # =========================
-    # 3️⃣ METADATA + LINEAGE
+    # 4️⃣ METADATA + LINEAGE
     # =========================
-    model_id = datetime.now(timezone.utc).isoformat()
 
-    rmse_value = float(model.best_score_["learn"]["RMSE"])  # 🟢 extracted
+    model_id = datetime.now(timezone.utc).isoformat()
 
     meta = {
         "model_id": model_id,
@@ -117,30 +194,34 @@ def train_pipeline(
         },
         "stage": "candidate",
         "metrics": {
-            "rmse": float(model.best_score_["learn"]["RMSE"]),
+            "rmse": rmse_value,
         },
     }
 
-    # ✨ lineage enrichment (parent_model_id, trigger, etc.)
     meta = enrich_meta_with_lineage(
         meta=meta,
         trigger=trigger,
     )
 
-    with open(candidate_dir / "cb_promo_v1.meta.json", "w") as f:
+    meta_path = candidate_dir / "cb_promo_v1.meta.json"
+
+    with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
     promoted = False
     promotion_decision = None
 
     # =========================
-    # 4️⃣ METRICS-GATED PROMOTION
+    # 5️⃣ METRICS-GATED PROMOTION
     # =========================
+
     if promote:
         current_metrics = None
 
-        if (current_dir / "cb_promo_v1.meta.json").exists():
-            with open(current_dir / "cb_promo_v1.meta.json") as f:
+        current_meta_path = current_dir / "cb_promo_v1.meta.json"
+
+        if current_meta_path.exists():
+            with open(current_meta_path) as f:
                 current_meta = json.load(f)
                 current_metrics = current_meta.get("metrics")
 
@@ -151,7 +232,6 @@ def train_pipeline(
 
         meta["promotion_decision"] = promotion_decision
 
-        # 🔒 promotion ТОЛЬКО если policy разрешила
         if promotion_decision["promote"]:
             # 🟨 archive current
             if any(current_dir.iterdir()):
@@ -173,20 +253,19 @@ def train_pipeline(
             promoted = True
             meta["stage"] = "current"
 
-        # ✨ фиксируем итоговое meta (audit!)
-        with open(candidate_dir / "cb_promo_v1.meta.json", "w") as f:
+        # audit update
+        with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
 
-
     # =========================
-    # 5️⃣ RETURN EXTENDED RESPONSE  🟢 NEW
+    # 6️⃣ RESPONSE
     # =========================
 
     return {
         "status": "trained",
         "model_id": model_id,
-        "metrics": meta["metrics"],  # 🟢 NEW
+        "metrics": meta["metrics"],
         "promoted": promoted,
-        "stage": "current" if promoted else "candidate",
+        "stage": meta["stage"],
         "promotion_decision": promotion_decision,
     }
