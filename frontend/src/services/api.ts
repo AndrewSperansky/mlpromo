@@ -21,5 +21,14 @@ export const uploadModel = (formData: FormData) =>
         headers: { 'Content-Type': 'multipart/form-data' }
     })
 
+export const evaluateModel = (id: string) =>
+    api.post(`/api/v1/ml/models/evaluate/${id}`)
+
+export const rollbackModel = (id: string) =>
+    api.post(`/api/v1/ml/models/rollback/${id}`)
+
+export const getLineage = () =>
+    api.get('/api/v1/ml/models/lineage')
+
 export default api
 

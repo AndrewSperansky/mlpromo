@@ -1,4 +1,6 @@
- <!-- frontend\src\pages\Models.vue -->
+<!-- frontend\src\pages\Models.vue -->
+
+<!-- frontend/src/pages/Models.vue -->
 
 <template>
   <div>
@@ -8,68 +10,52 @@
       <h2>Model Registry</h2>
 
       <div>
-        <input
-          type="file"
-          ref="fileInput"
-          accept=".zip"
-          class="d-none"
-          @change="handleFileSelect"
-        />
+        <input type="file" ref="fileInput" accept=".zip" class="d-none" @change="handleFileSelect" />
 
-        <button
-          class="btn btn-success"
-          :disabled="uploading"
-          @click="triggerFileInput"
-        >
+        <button class="btn btn-success" :disabled="uploading" @click="triggerFileInput">
           {{ uploading ? 'Uploading...' : 'Upload Model' }}
         </button>
       </div>
     </div>
 
-    <!-- ===== Upload Result Card ===== -->
-    <div
-      v-if="uploadResult"
-      class="alert alert-info"
-    >
-      <strong>Upload Status:</strong> {{ uploadResult.status }} <br />
+    <!-- ===== Upload / Evaluate Result Card ===== -->
+    <div v-if="uploadResult" class="alert alert-info">
+      <strong>Status:</strong> {{ uploadResult.status || 'evaluated' }} <br />
       <strong>Model ID:</strong> {{ uploadResult.model_id }}
+
+      <div v-if="uploadResult.promotion_decision" class="mt-2">
+        <strong>Decision:</strong>
+
+        <span class="badge ms-2" :class="decisionClass(uploadResult.promotion_decision.decision)">
+          {{ uploadResult.promotion_decision.decision }}
+        </span>
+
+        <div class="small text-muted mt-1">
+          {{ uploadResult.promotion_decision.reason }}
+        </div>
+      </div>
     </div>
 
     <!-- ===== TABLE ===== -->
-    <ModelTable
-      :models="models"
-      @activate="handleActivate"
-      @rollback="handleRollback"
-    />
+    <ModelTable :models="models" @activate="handleActivate" @rollback="handleRollback" @evaluate="handleEvaluate" />
 
     <!-- ===== TOASTS ===== -->
-    <div
-      class="toast-container position-fixed bottom-0 end-0 p-3"
-      style="z-index: 1055"
-    >
-      <div
-        class="toast show align-items-center text-bg-success border-0"
-        v-if="toast.success"
-      >
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1055">
+      <div class="toast show align-items-center text-bg-success border-0" v-if="toast.success">
         <div class="d-flex">
           <div class="toast-body">
             {{ toast.success }}
           </div>
-          <button class="btn-close btn-close-white me-2 m-auto"
-            @click="toast.success = ''"></button>
+          <button class="btn-close btn-close-white me-2 m-auto" @click="toast.success = ''"></button>
         </div>
       </div>
 
-      <div
-        class="toast show align-items-center text-bg-danger border-0"
-        v-if="toast.error"
-      >
+      <div class="toast show align-items-center text-bg-danger border-0" v-if="toast.error">
         <div class="d-flex">
           <div class="toast-body">
             {{ toast.error }}
           </div>
-          <button class="btn-close btn-close-white me-2 m-auto"
-            @click="toast.error = ''"></button>
+          <button class="btn-close btn-close-white me-2 m-auto" @click="toast.error = ''"></button>
         </div>
       </div>
     </div>
@@ -82,7 +68,9 @@ import { ref, onMounted } from 'vue'
 import {
   getModels,
   activateModel,
-  uploadModel
+  uploadModel,
+  evaluateModel,
+  rollbackModel
 } from '../services/api'
 import ModelTable from '../components/ModelTable.vue'
 
@@ -103,6 +91,14 @@ const toast = ref({
   error: ''
 })
 
+function decisionClass(decision: string) {
+  if (decision === 'approve') return 'bg-success'
+  if (decision === 'reject') return 'bg-danger'
+  if (decision === 'manual_review') return 'bg-warning text-dark'
+  if (decision === 'frozen') return 'bg-secondary'
+  return 'bg-light text-dark'
+}
+
 async function loadModels() {
   const response = await getModels()
   models.value = response.data
@@ -118,8 +114,24 @@ async function handleActivate(modelId: string) {
   }
 }
 
-async function handleRollback() {
-  toast.value.error = 'Rollback endpoint not implemented yet'
+async function handleEvaluate(modelId: string) {
+  try {
+    const response = await evaluateModel(modelId)
+    uploadResult.value = response.data
+    toast.value.success = 'Model evaluated successfully'
+  } catch {
+    toast.value.error = 'Evaluation failed'
+  }
+}
+
+async function handleRollback(modelId: string) {
+  try {
+    await rollbackModel(modelId)
+    toast.value.success = `Rolled back to ${modelId}`
+    await loadModels()
+  } catch {
+    toast.value.error = 'Rollback failed'
+  }
 }
 
 function triggerFileInput() {
