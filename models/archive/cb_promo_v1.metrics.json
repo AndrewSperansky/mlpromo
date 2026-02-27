@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-02-27T08:52:50.436407+00:00",
+  "active_model_version": "stage5",
+  "model_loaded": true,
+  "drift_flag": false,
+  "freeze_flag": false,
+  "latency_p95_ms": null,
+  "last_decision": null,
+  "retrain_requested": false,
+  "predictions_count": 0,
+  "errors_count": 0
+}

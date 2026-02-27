@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-02-27T12:05:49.091826+00:00",
+    "event_type": "upload",
+    "model_id": "cb_promo_v1",
+    "metadata": {
+      "decision": {
+        "decision": "approve",
+        "reason": "No current model \u2014 auto approve",
+        "promote": true
+      }
+    }
+  }
+]

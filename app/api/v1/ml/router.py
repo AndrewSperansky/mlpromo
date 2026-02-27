@@ -8,6 +8,7 @@ import zipfile
 import json
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.db.session import get_db
 from models.ml_model import MLModel
@@ -16,15 +17,45 @@ from app.core.settings import settings
 
 from app.ml.model_registry.promotion_policy import decide_promotion
 from app.ml.train.train_pipeline import train_pipeline
+from app.services.ml_training_service import MLTrainingService
+from app.services.ml_prediction_service import MLPredictionService
+from app.ml.registry.service import ModelRegistryService
+from app.api.v1.ml.schemas import PredictionResponse, PredictionRequest, ShapValue
+
+
+from app.api.v1.ml.schemas import (
+    PredictionRequest,
+    PredictionResponse,
+    OneCPredictRequest,
+    OneCPredictResponse,
+)
+
 
 router = APIRouter(tags=["ml"])
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
-# BASE_DIR = Path("app/models")
 BASE_DIR = Path(settings.ML_MODEL_DIR)
+
+MODELS_DIR = BASE_DIR / "current"
 ARCHIVE_DIR = BASE_DIR / "archive"
 LINEAGE_FILE = BASE_DIR / "lineage_events.json"
 
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# ========== DEPENDENCIES ==========
+
+
+def get_prediction_service() -> MLPredictionService:
+    """
+    Возвращает сервис предсказаний.
+    Модель загружается ВНУТРИ сервиса.
+    """
+    return MLPredictionService()
+
+
+def get_training_service() -> MLTrainingService:
+    return MLTrainingService()
 
 
 # =========================================
@@ -58,6 +89,8 @@ def get_current_metrics():
             return json.load(f)
     return {}
 
+
+# ============================ ENDPOINTS ===============================
 
 # =========================================
 # Upload + Decision
@@ -225,6 +258,9 @@ def get_lineage():
 
 @router.get("/models")
 def list_models(db: Session = Depends(get_db)):
+    """
+    Возвращает список моделей из БД.
+    """
     models = (
         db.query(MLModel)
         .filter(MLModel.is_deleted == False)
@@ -232,8 +268,11 @@ def list_models(db: Session = Depends(get_db)):
         .all()
     )
 
+    active_model_id = ML_RUNTIME_STATE.get("ml_model_id")
+
     return [
         {
+            "ml_model_id": m.id,
             "name": m.name,
             "algorithm": m.algorithm,
             "version": m.version,
@@ -241,6 +280,7 @@ def list_models(db: Session = Depends(get_db)):
             "trained_at": m.trained_at,
             "features": m.features,
             "metrics": m.metrics,
+            "active_in_runtime": m.id == active_model_id
         }
         for m in models
     ]
@@ -255,4 +295,185 @@ def get_dataset(limit: int = 10000):
     return {
         "count": len(df),
         "items": df.to_dict(orient="records")
+    }
+
+# =========================================
+# Promote via Registry (DB-driven)
+# =========================================
+
+
+
+
+@router.post("/models/{model_id}/promote")
+def promote_model(model_id: int, db: Session = Depends(get_db)):
+    registry = ModelRegistryService(db)
+
+    model = registry.promote_model(model_id)
+
+    return {
+        "status": "promoted",
+        "name": model.name,
+        "version": model.version,
+    }
+
+
+
+
+# =========================================
+# PREDICT
+# =========================================
+
+
+# =========================
+# PREDICT ENDPOINT (FastAPI)
+# =========================
+
+@router.post(
+    "/predict",
+    summary="ML предсказание + SHAP",
+    response_model=PredictionResponse,
+)
+def predict(
+    payload: PredictionRequest,
+    svc: MLPredictionService = Depends(get_prediction_service),
+):
+    """
+    Выполняет ML-предсказание.
+    """
+
+    # Pydantic v2: преобразуем payload в dict
+    input_data = payload.model_dump()
+
+    # Получаем прогноз и shap от сервиса
+    prediction_result, shap_list = svc.predict_raw(input_data)
+
+    # Если ML сервис вернул float, оборачиваем в dict
+    if isinstance(prediction_result, float):
+        prediction_result = {
+            "prediction": prediction_result,
+            "baseline": None,
+            "uplift": None,
+            "fallback_used": False,
+            "reason": None,
+        }
+
+    # Преобразуем shap в Pydantic объекты
+    shap_objs = [ShapValue(feature=s["feature"], effect=s["effect"]) for s in shap_list]
+
+    # Формируем response
+    response = PredictionResponse(
+        promo_code=payload.promo_code,
+        sku=payload.sku,
+        date=payload.prediction_date,
+        prediction=prediction_result["prediction"],
+        baseline=prediction_result["baseline"],
+        uplift=prediction_result["uplift"],
+        shap_values=shap_objs,  # список ShapValue
+        ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
+        version=ML_RUNTIME_STATE["version"],
+        trained_at=ML_RUNTIME_STATE.get("trained_at"),
+        features=input_data,
+        fallback_used=prediction_result["fallback_used"],
+        reason=prediction_result["reason"],
+    )
+
+    return response
+
+# =========================================
+# 1C PREDICT
+# =========================================
+
+
+@router.post("/1c/predict", response_model=OneCPredictResponse)
+def predict_from_1c(
+    payload: OneCPredictRequest,
+    db: Session = Depends(get_db),
+    svc: MLPredictionService = Depends(),
+):
+    if not ML_RUNTIME_STATE.get("model_loaded"):
+        raise HTTPException(status_code=503, detail="ML model not ready")
+
+    # idempotency
+    exists = db.execute(
+        text("SELECT 1 FROM ml_prediction_request WHERE id = :id"),
+        {"id": payload.request_id},
+    ).first()
+
+    if exists:
+        raise HTTPException(status_code=409, detail="Request already processed")
+
+    # store request
+    db.execute(
+        text("""
+        INSERT INTO ml_prediction_request (id, source, payload)
+        VALUES (:id, '1C', CAST(:payload AS JSONB))
+        """),
+        {
+            "id": str(payload.request_id),    # ← убедитесь, что UUID → str
+            "payload": json.dumps(payload.data)  # ← dict → JSON-строка
+        },
+    )
+
+    # predict
+    prediction, shap = svc.predict_raw(payload.data)
+
+    # store result
+    db.execute(
+        text("""
+        INSERT INTO ml_prediction_result
+        (request_id, model_id, model_version, prediction_value, shap_values)
+        VALUES (:rid, :mid, :ver, :pred, CAST(:shap AS JSONB))
+        """),
+        {
+            "rid": str(payload.request_id),
+            "mid": ML_RUNTIME_STATE["ml_model_id"],
+            "ver": ML_RUNTIME_STATE["version"],
+            "pred": prediction,
+            "shap": json.dumps(shap),
+        },
+
+    )
+
+    db.commit()
+
+    return OneCPredictResponse(
+        request_id=payload.request_id,
+        prediction=prediction,
+        ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
+        version=ML_RUNTIME_STATE["version"],
+    )
+
+
+# =========================================
+# MODEL ACTIVATE
+# =========================================
+
+@router.post("/models/{ml_model_id}/activate")
+def activate_model(ml_model_id: str):
+    archive_model = ARCHIVE_DIR / f"{ml_model_id}.cbm"
+
+    if not archive_model.exists():
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    # Ensure current dir exists
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Remove current model(s)
+    for file in MODELS_DIR.glob("*.cbm"):
+        file.unlink()
+
+    # Copy archive model to current
+    shutil.copy(
+        archive_model,
+        MODELS_DIR / archive_model.name
+    )
+
+    # 🔥 Обновляем runtime state
+    ML_RUNTIME_STATE["ml_model_id"] = ml_model_id
+    ML_RUNTIME_STATE["version"] = "manual-activation"
+    ML_RUNTIME_STATE["model_loaded"] = False  # форс reload при следующем predict
+
+    return {
+        "status": "activated",
+        "ml_model_id": ml_model_id
     }

@@ -31,13 +31,14 @@ class PredictionResponse(BaseModel):
     baseline: Optional[float] = None
     uplift: Optional[float] = None
 
+    # ✅ исправлено: feature как str, effect как float
+    shap_values: List[ShapValue] = Field(default_factory=list)
+
     ml_model_id: str
     version: str
     trained_at: Optional[datetime] = None
 
     features: Optional[Dict[str, Any]] = None
-    shap: List[ShapValue] = Field(default_factory=list)
-
     fallback_used: bool
     reason: Optional[str] = None
 

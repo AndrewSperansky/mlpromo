@@ -1,0 +1,17 @@
+{
+  "model_id": "2026-02-27T14:31:48.524274+00:00",
+  "model_name": "promo_uplift",
+  "trained_at": "2026-02-27T14:31:48.524274+00:00",
+  "features": [
+    "price",
+    "discount",
+    "avg_sales_7d",
+    "promo_days_left"
+  ],
+  "stage": "candidate",
+  "metrics": {
+    "rmse": 0.26386019037884045
+  },
+  "parent_model_id": "2026-02-26T17:23:55.035639+00:00",
+  "trigger": "admin_ui"
+}
