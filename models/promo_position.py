@@ -1,3 +1,5 @@
+# models/promo_position.py
+
 from typing import TYPE_CHECKING
 from datetime import date
 from sqlalchemy import ForeignKey, Date, Float, Integer
@@ -49,5 +51,6 @@ class PromoPosition(IDMixin, AuditMixin, SoftDeleteMixin, Base):
     )
 
     product: Mapped["Product"] = relationship(
+        "Product",  # <-- Явно указываем имя класса
         back_populates="promo_positions"
     )

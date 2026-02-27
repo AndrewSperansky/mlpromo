@@ -35,6 +35,7 @@ class Promo(IDMixin, AuditMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     positions: Mapped[list["PromoPosition"]] = relationship(
+        "PromoPosition",  # <-- Явно указываем имя класса
         back_populates="promo",
         cascade="all, delete-orphan",
     )

@@ -12,13 +12,15 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from models.ml_model import MLModel
 from app.api.v1.ml.dataset import load_dataset
+from app.core.settings import settings
 
 from app.ml.model_registry.promotion_policy import decide_promotion
 from app.ml.train.train_pipeline import train_pipeline
 
 router = APIRouter(tags=["ml"])
 
-BASE_DIR = Path("app/models")
+# BASE_DIR = Path("app/models")
+BASE_DIR = Path(settings.ML_MODEL_DIR)
 ARCHIVE_DIR = BASE_DIR / "archive"
 LINEAGE_FILE = BASE_DIR / "lineage_events.json"
 

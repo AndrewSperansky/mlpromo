@@ -1,7 +1,7 @@
 {
-  "model_id": "2026-02-26T17:24:12.501437+00:00",
+  "model_id": "2026-02-27T11:30:30.417138+00:00",
   "model_name": "promo_uplift",
-  "trained_at": "2026-02-26T17:24:12.501437+00:00",
+  "trained_at": "2026-02-27T11:30:30.417138+00:00",
   "features": [
     "price",
     "discount",
@@ -17,10 +17,5 @@
     "rmse": 9.392486968072078
   },
   "parent_model_id": "2026-02-26T17:23:55.035639+00:00",
-  "trigger": "admin_ui",
-  "promotion_decision": {
-    "decision": "reject",
-    "reason": "RMSE not improved",
-    "promote": false
-  }
+  "trigger": "manual"
 }
