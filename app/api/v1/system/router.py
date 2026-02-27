@@ -17,7 +17,7 @@ from app.core.settings import settings
 
 service = SystemService()
 
-router = APIRouter(prefix="/api/v1/system", tags=["system"])
+router = APIRouter(tags=["system"])
 
 
 # ==========================================================

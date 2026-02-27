@@ -128,7 +128,7 @@ def train_pipeline(
     # 1️⃣ DATA SELECTION
     # =========================
 
-    if settings.ENVIRONMENT == "test":
+    if settings.ENV == "test":
         X_train, y_train, X_val, y_val = _prepare_training_data_synthetic()
     else:
         X_train, y_train, X_val, y_val = _prepare_training_data_time_split()

@@ -1,15 +1,26 @@
 {
+  "model_id": "2026-02-26T17:24:12.501437+00:00",
   "model_name": "promo_uplift",
-  "trained_at": "2026-02-09T08:00:57.144974+00:00",
+  "trained_at": "2026-02-26T17:24:12.501437+00:00",
   "features": [
     "price",
     "discount",
     "avg_sales_7d",
     "promo_days_left"
   ],
-  "status": "candidate",
   "artifacts": {
     "model": "cb_promo_v1.cbm",
     "shap_summary": "shap_summary.json"
+  },
+  "stage": "candidate",
+  "metrics": {
+    "rmse": 9.392486968072078
+  },
+  "parent_model_id": "2026-02-26T17:23:55.035639+00:00",
+  "trigger": "admin_ui",
+  "promotion_decision": {
+    "decision": "reject",
+    "reason": "RMSE not improved",
+    "promote": false
   }
 }

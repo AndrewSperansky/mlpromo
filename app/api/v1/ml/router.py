@@ -1,17 +1,22 @@
 # app/api/v1/ml/router.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from pathlib import Path
 import shutil
 import tempfile
 import zipfile
 import json
 from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from models.ml_model import MLModel
+from app.api.v1.ml.dataset import load_dataset
 
 from app.ml.model_registry.promotion_policy import decide_promotion
 from app.ml.train.train_pipeline import train_pipeline
 
-router = APIRouter()
+router = APIRouter(tags=["ml"])
 
 BASE_DIR = Path("app/models")
 ARCHIVE_DIR = BASE_DIR / "archive"
@@ -211,3 +216,41 @@ def get_lineage():
 
     with open(LINEAGE_FILE) as f:
         return json.load(f)
+
+# =========================================
+# Models
+# =========================================
+
+@router.get("/models")
+def list_models(db: Session = Depends(get_db)):
+    models = (
+        db.query(MLModel)
+        .filter(MLModel.is_deleted == False)
+        .order_by(MLModel.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "name": m.name,
+            "algorithm": m.algorithm,
+            "version": m.version,
+            "is_active": m.is_active,
+            "trained_at": m.trained_at,
+            "features": m.features,
+            "metrics": m.metrics,
+        }
+        for m in models
+    ]
+
+# =========================================
+# Dataset
+# =========================================
+
+@router.get("/dataset")
+def get_dataset(limit: int = 10000):
+    df = load_dataset(limit=limit)
+    return {
+        "count": len(df),
+        "items": df.to_dict(orient="records")
+    }

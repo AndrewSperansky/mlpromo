@@ -505,3 +505,7 @@ stage2
 `docker compose restart backend`
 `docker restart promo_ml_backend`
 
+ 
+`docker logs promo_ml_backend --tail 50 `
+
+`docker compose stop backend`
