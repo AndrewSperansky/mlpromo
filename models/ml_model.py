@@ -4,6 +4,7 @@
 from sqlalchemy import String, Boolean, JSON, Text, DateTime, func, Integer
 from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
 from models.mixins.id import IDMixin
@@ -19,8 +20,9 @@ class MLModel(IDMixin, AuditMixin, Base):
 
     id = mapped_column(Integer, primary_key=True)
 
-    name: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
     algorithm: Mapped[str] = mapped_column(String(50))  # catboost, xgboost, etc
+    dataset_version_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=False,)
 
     version: Mapped[str] = mapped_column(String(20))
 
@@ -35,11 +37,9 @@ class MLModel(IDMixin, AuditMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    trained_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
+    trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    trained_rows_count: Mapped[int] = mapped_column(nullable=False, default=0)
 
 
 class MLModelManager:

@@ -1,26 +1,35 @@
 # app/api/v1/ml/router.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from pathlib import Path
 import shutil
 import tempfile
 import zipfile
 import json
+import uuid
+from uuid import UUID
+import pandas as pd
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.db.session import get_db
 from models.ml_model import MLModel
-from app.api.v1.ml.dataset import load_dataset
+
 from app.core.settings import settings
 
 from app.ml.model_registry.promotion_policy import decide_promotion
-from app.ml.train.train_pipeline import train_pipeline
+
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
 from app.ml.registry.service import ModelRegistryService
-from app.api.v1.ml.schemas import PredictionResponse, PredictionRequest, ShapValue
+
+
+from models.dataset_version import DatasetVersion
+from models.industrial_dataset import IndustrialDatasetRaw
+from app.ml.contract_check import validate_industrial_contract
+
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
 
 from app.api.v1.ml.schemas import (
@@ -28,11 +37,12 @@ from app.api.v1.ml.schemas import (
     PredictionResponse,
     OneCPredictRequest,
     OneCPredictResponse,
+    ShapValue,
 )
 
 
 router = APIRouter(tags=["ml"])
-from app.ml.runtime_state import ML_RUNTIME_STATE
+
 
 BASE_DIR = Path(settings.ML_MODEL_DIR)
 
@@ -169,12 +179,22 @@ def upload_model_bundle(file: UploadFile = File(...)):
 # TRAIN TRIGGER
 # ========================================
 
+training_service = MLTrainingService()
+
+
 @router.post("/train")
-def trigger_training(promote: bool = True):
-    return train_pipeline(
+def train_model(
+    dataset_version_id: UUID,
+    promote: bool = Query(False),
+):
+
+    result = training_service.train(
+        dataset_version_id=dataset_version_id,
         promote=promote,
-        trigger="admin_ui",
+        trigger="api",
     )
+
+    return result
 
 
 # =========================================
@@ -289,13 +309,13 @@ def list_models(db: Session = Depends(get_db)):
 # Dataset
 # =========================================
 
-@router.get("/dataset")
-def get_dataset(limit: int = 10000):
-    df = load_dataset(limit=limit)
-    return {
-        "count": len(df),
-        "items": df.to_dict(orient="records")
-    }
+# @router.get("/dataset")
+# def get_dataset(limit: int = 10000):
+#     df = load_dataset(limit=limit)
+#     return {
+#         "count": len(df),
+#         "items": df.to_dict(orient="records")
+#     }
 
 # =========================================
 # Promote via Registry (DB-driven)
@@ -324,9 +344,9 @@ def promote_model(model_id: int, db: Session = Depends(get_db)):
 # =========================================
 
 
-# =========================
+# ========================================
 # PREDICT ENDPOINT (FastAPI)
-# =========================
+# =======================================
 
 @router.post(
     "/predict",
@@ -476,4 +496,42 @@ def activate_model(ml_model_id: str):
     return {
         "status": "activated",
         "ml_model_id": ml_model_id
+    }
+
+
+# =========================================
+# DATASET UPLOAD
+# =========================================
+
+
+@router.post("/dataset/upload")
+def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
+
+    df = pd.read_csv(file.file)
+
+    validate_industrial_contract(df)
+
+    dataset_version = DatasetVersion(
+        id=uuid.uuid4(),
+        row_count=len(df),
+        status="READY"
+    )
+
+    db.add(dataset_version)
+    db.flush()
+
+    records = df.to_dict(orient="records")
+
+    for row in records:
+        db_row = IndustrialDatasetRaw(
+            dataset_version_id=dataset_version.id,
+            **row
+        )
+        db.add(db_row)
+
+    db.commit()
+
+    return {
+        "dataset_version": str(dataset_version.id),
+        "rows_loaded": len(df)
     }

@@ -486,3 +486,17 @@ ALTER TABLE public.ml_prediction_result
 ADD CONSTRAINT ml_prediction_result_model_id_fkey
 FOREIGN KEY (model_id) REFERENCES ml_model(id);
 
+
+## ПОДКЛЮЧЕНИЕ К Postgres контейнеру
+`docker exec -it promo_postgres psql -U promo -d promo`
+`docker exec -it promo_postgres psql -h localhost -U postgres -p 5432`
+
+
+## Создание Backup.dump
+`docker exec -t promo_postgres pg_dump -U postgres -Fc promo > backup/promo_backup_$(date +%Y%m%d_%H%M).dump`
+
+## Восстановление < Backup.dump
+docker exec -i promo_postgres pg_restore -U postgres -d promo < dump/promo_backup.dump
+
+## Создание Backup.sql
+`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_$(date +%Y%m%d_%H%M).sql`

@@ -283,3 +283,102 @@ WHERE
     pp.is_deleted = false
     AND p.is_deleted  = false
     AND pr.is_deleted = false;
+
+
+-- =========================================
+-- DATASET VERSIONS
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS dataset_versions (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    row_count INTEGER NOT NULL,
+    target_column TEXT NOT NULL DEFAULT 'SalesQty_Promo',
+    status TEXT NOT NULL DEFAULT 'READY', -- READY | TRAINED | FAILED
+    comment TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_dataset_versions_created_at
+ON dataset_versions(created_at);
+
+
+-- =========================================
+-- INDUSTRIAL DATASET RAW
+-- =========================================
+
+CREATE TABLE IF NOT EXISTS industrial_dataset_raw (
+
+    id BIGSERIAL PRIMARY KEY,
+
+    dataset_version_id UUID NOT NULL REFERENCES dataset_versions(id) ON DELETE CASCADE,
+
+    -- CORE DIMENSIONS
+    "PromoID" TEXT,
+    "SKU" TEXT,
+    "SKU_Level2" TEXT,
+    "SKU_Level3" TEXT,
+    "SKU_Level4" TEXT,
+    "SKU_Level5" TEXT,
+    "Category" TEXT,
+    "Supplier" TEXT,
+    "Region" TEXT,
+    "StoreID" TEXT,
+    "Store_Location_Type" TEXT,
+    "Store_ABC" TEXT,
+
+    -- TIME
+    "Date" DATE,
+    "WeekNumber" INTEGER,
+    "DayOfWeek" INTEGER,
+
+    -- PRICES
+    "RegularPrice" NUMERIC,
+    "PromoPrice" NUMERIC,
+    "PurchasePriceBefore" NUMERIC,
+    "PurchasePricePromo" NUMERIC,
+
+    -- PROMO
+    "PromoMechanics" TEXT,
+    "PercentPriceDrop" NUMERIC,
+
+    -- SALES
+    "VolumeRegular" NUMERIC,
+    "HistoricalSalesPromo" NUMERIC,
+    "SalesQty_Fact" NUMERIC,
+    "SalesQty_PrevModel" NUMERIC,
+    "SalesQty_Promo" NUMERIC,
+
+    -- FINANCE
+    "FM_Regular" NUMERIC,
+    "FM_Promo" NUMERIC,
+    "TurnoverBefore" NUMERIC,
+    "TurnoverPromo" NUMERIC,
+
+    -- SEASONALITY
+    "SeasonCoef_Week" NUMERIC,
+    "SeasonCoef_Day" NUMERIC,
+
+    -- FLAGS
+    "ManualCoefficientFlag" BOOLEAN,
+    "IsNewSKU" BOOLEAN,
+    "IsAnalogSKU" BOOLEAN,
+
+    -- LINKS
+    "PreviousPromoID" TEXT,
+    "PromoStatus" TEXT,
+    "MarketingCarrier" TEXT,
+    "MarketingMaterial" TEXT,
+    "FormatAssortment" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_industrial_dataset_version
+ON industrial_dataset_raw(dataset_version_id);
+
+CREATE INDEX IF NOT EXISTS idx_industrial_sku
+ON industrial_dataset_raw("SKU");
+
+CREATE INDEX IF NOT EXISTS idx_industrial_store
+ON industrial_dataset_raw("StoreID");
+
+CREATE INDEX IF NOT EXISTS idx_industrial_date
+ON industrial_dataset_raw("Date");

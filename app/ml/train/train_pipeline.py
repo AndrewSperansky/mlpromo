@@ -1,12 +1,16 @@
 # app/ml/train/train_pipeline.py
 
+import json
+import pandas as pd
+from uuid import UUID
 from pathlib import Path
 from datetime import datetime, timezone
-import json
 
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_squared_error
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+
 
 from app.ml.train.shap_utils import (
     compute_shap_catboost,
@@ -17,25 +21,39 @@ from app.ml.model_registry.lineage import enrich_meta_with_lineage
 from app.ml.model_registry.promotion_policy import decide_promotion
 from app.ml.registry.service import ModelRegistryService
 from app.core.settings import settings
-from app.api.v1.ml.dataset import load_dataset
 from app.db.session import SessionLocal
 
 
-FEATURES = [
-    "price",
-    "discount",
-    "avg_sales_7d",
-    "promo_days_left",
-]
-
-TARGET = "target_sales_qty"
+TARGET = "SalesQty_Promo"
 
 
 def _get_models_dir() -> Path:
     return Path(settings.ML_MODEL_DIR)
 
 
+def load_dataset_by_version(
+        db: Session,
+        dataset_version_id: UUID
+) -> pd.DataFrame:
+
+
+    # 🔧 ИСПРАВЛЕНО: используем text() для безопасного запроса
+    query = text("""
+        SELECT * FROM industrial_dataset_raw 
+        WHERE dataset_version_id = :version_id
+    """)
+
+    df = pd.read_sql(
+        query,
+        db.bind,
+        params={"version_id": dataset_version_id}
+    )
+
+    return df
+
+
 def train_pipeline(
+    dataset_version_id: UUID,
     promote: bool = False,
     trigger: str = "manual",
 ) -> dict:
@@ -51,13 +69,32 @@ def train_pipeline(
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     # =========================
-    # DATA
+    # LOAD DATASET
     # =========================
 
-    df = load_dataset(limit=50_000)
+    db: Session = SessionLocal()
+    try:
+        df = load_dataset_by_version(db, dataset_version_id)
+    finally:
+        db.close()
 
     if df.empty:
         raise RuntimeError("Dataset is empty.")
+
+    rows_used = len(df)
+
+    # 🔧 ИСПРАВЛЕНО: самый простой способ - напрямую использовать columns
+    exclude_cols = {"id", "dataset_version_id", TARGET}
+
+    # Получаем все числовые колонки
+    numeric_columns = []
+    for col in df.columns:
+        if col in exclude_cols:
+            continue
+        if pd.api.types.is_numeric_dtype(df[col]):
+            numeric_columns.append(col)
+
+    FEATURES = numeric_columns
 
     X = df[FEATURES]
     y = df[TARGET]
@@ -85,9 +122,8 @@ def train_pipeline(
     model_path = candidate_dir / f"{model_id}.cbm"
     model.save_model(str(model_path))
 
-
     # =========================
-    # SHAP ARTIFACTS
+    # SHAP
     # =========================
 
     shap_values, expected_value = compute_shap_catboost(
@@ -109,6 +145,7 @@ def train_pipeline(
     meta = {
         "model_id": model_id,
         "model_name": "promo_uplift",
+        "dataset_version_id": str(dataset_version_id),
         "trained_at": model_id,
         "features": FEATURES,
         "stage": "candidate",
@@ -128,70 +165,45 @@ def train_pipeline(
     promotion_decision = None
 
     # =========================
-    # METRICS-GATED PROMOTION
+    # REGISTRATION-METRICS-GATED PROMOTION
     # =========================
 
-    if promote:
+    db = SessionLocal()
+    try:
+        registry = ModelRegistryService(db)
 
-        current_active_model = None
+        db_model = registry.register_model(
+            name="promo_uplift",
+            version=model_id,
+            algorithm="catboost",
+            model_type="regression",
+            target=TARGET,
+            features=FEATURES,
+            metrics=meta["metrics"],
+            model_path=model_path,
+            dataset_version_id=dataset_version_id,
+            trained_rows_count=rows_used,
+        )
 
-        db: Session = SessionLocal()
-        try:
-            registry = ModelRegistryService(db)
+        if promote:
             current_active_model = registry.get_active_model("promo_uplift")
-        finally:
-            db.close()
 
-        current_metrics = (
-            current_active_model.metrics if current_active_model else None
-        )
+            current_metrics = (
+                current_active_model.metrics if current_active_model else None
+            )
 
-        promotion_decision = decide_promotion(
-            candidate_metrics=meta["metrics"],
-            current_metrics=current_metrics,
-        )
+            promotion_decision = decide_promotion(
+                candidate_metrics=meta["metrics"],
+                current_metrics=current_metrics,
+            )
 
-        if promotion_decision["promote"]:
-            db = SessionLocal()
-            try:
-                registry = ModelRegistryService(db)
-
-                db_model = registry.register_model(
-                    name="promo_uplift",
-                    version=model_id,
-                    algorithm="catboost",
-                    model_type="regression",
-                    target=TARGET,
-                    features=FEATURES,
-                    metrics=meta["metrics"],
-                    model_path=model_path,
-                )
-
+            if promotion_decision["promote"]:
                 registry.promote_model(db_model.id)
-
                 promoted = True
                 meta["stage"] = "current"
 
-            finally:
-                db.close()
-
-    else:
-        # register candidate only
-        db = SessionLocal()
-        try:
-            registry = ModelRegistryService(db)
-            registry.register_model(
-                name="promo_uplift",
-                version=model_id,
-                algorithm="catboost",
-                model_type="regression",
-                target=TARGET,
-                features=FEATURES,
-                metrics=meta["metrics"],
-                model_path=model_path,
-            )
-        finally:
-            db.close()
+    finally:
+        db.close()
 
     return {
         "status": "trained",
@@ -201,3 +213,4 @@ def train_pipeline(
         "stage": meta["stage"],
         "promotion_decision": promotion_decision,
     }
+

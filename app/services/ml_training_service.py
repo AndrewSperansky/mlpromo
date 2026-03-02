@@ -1,15 +1,15 @@
 # app/services/ml_training_service.py
 
 """
-ML Training Service — обучение модели CatBoost.
+ML Training Service — orchestration layer над train_pipeline.
+Industrial version (dataset-version based).
 """
 
 from typing import Dict, Any
-from catboost import CatBoostRegressor
+from uuid import UUID
 import logging
-from app.core.settings import settings
-from pathlib import Path
-from app.ml.runtime_state import ML_RUNTIME_STATE
+
+from app.ml.train.train_pipeline import train_pipeline
 
 logger = logging.getLogger("promo_ml")
 
@@ -17,37 +17,51 @@ logger = logging.getLogger("promo_ml")
 class MLTrainingService:
     """
     Сервис обучения ML модели.
-    Заготовка для тренировки CatBoost модели.
-    Релиз в этапах 7–10 ToDo.
+
+    Теперь НЕ обучает модель напрямую.
+    Делегирует train_pipeline().
     """
 
-    def train(self, dataset: Any, config: Dict) -> str:
+    def train(
+        self,
+        dataset_version_id: UUID,
+        promote: bool = False,
+        trigger: str = "manual",
+    ) -> Dict[str, Any]:
         """
-        Выполняет обучение модели CatBoost.
+        Запускает industrial pipeline обучения.
 
         Args:
-            dataset: Объект с данными для обучения.
-            config (dict): Параметры модели.
+            dataset_version_id (UUID): Версия датасета.
+            promote (bool): Выполнять ли metrics-gated promotion.
+            trigger (str): Источник запуска (api/manual/auto).
 
         Returns:
-            str: Путь к сохранённой модели.
+            dict: Результат обучения.
         """
-        logger.info("ML training started")
 
-        model = CatBoostRegressor(**config)
-        model.fit(dataset["X_train"], dataset["y_train"])
-
-        model_id = ML_RUNTIME_STATE.get("ml_model_id", "cb_promo_v1")
-        model_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
-        model_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # ВАЖНО: CatBoost сохраняем ТОЛЬКО в cbm
-        model.save_model(
-            str(model_path),
-            format="cbm"
+        logger.info(
+            "ML training started",
+            extra={
+                "dataset_version_id": str(dataset_version_id),
+                "promote": promote,
+                "trigger": trigger,
+            },
         )
 
-        logger.info("ML training completed")
-        logger.info("Model saved to %s", model_path)
+        result = train_pipeline(
+            dataset_version_id=dataset_version_id,
+            promote=promote,
+            trigger=trigger,
+        )
 
-        return str(model_path)
+        logger.info(
+            "ML training completed",
+            extra={
+                "model_id": result.get("model_id"),
+                "promoted": result.get("promoted"),
+                "stage": result.get("stage"),
+            },
+        )
+
+        return result

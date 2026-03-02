@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update, and_
+from uuid import UUID
 
 from models.ml_model import MLModel
 
@@ -27,6 +28,8 @@ class ModelRegistryService:
         features: list[str],
         metrics: dict | None,
         model_path: Path,
+        dataset_version_id: UUID,
+        trained_rows_count: int,
     ) -> MLModel:
 
         stmt = select(MLModel).where(
@@ -53,6 +56,8 @@ class ModelRegistryService:
             model_path=str(model_path),
             is_active=False,
             trained_at=datetime.now(timezone.utc),
+            dataset_version_id=dataset_version_id,
+            trained_rows_count=trained_rows_count,
         )
 
         self.db.add(model)
