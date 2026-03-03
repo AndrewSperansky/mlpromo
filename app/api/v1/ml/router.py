@@ -426,20 +426,23 @@ def predict_from_1c(
     if exists:
         raise HTTPException(status_code=409, detail="Request already processed")
 
-    # store request
+    # ✅ НОРМАЛИЗАЦИЯ ДО PREDICT
+    normalized_features = svc.normalize_external_features(payload.data)
+
+    # store request (сохраняем уже нормализованные данные!)
     db.execute(
         text("""
         INSERT INTO ml_prediction_request (id, source, payload)
         VALUES (:id, '1C', CAST(:payload AS JSONB))
         """),
         {
-            "id": str(payload.request_id),    # ← убедитесь, что UUID → str
-            "payload": json.dumps(payload.data)  # ← dict → JSON-строка
+            "id": str(payload.request_id),
+            "payload": json.dumps(normalized_features)
         },
     )
 
-    # predict
-    prediction, shap = svc.predict_raw(payload.data)
+    # predict (strict validation теперь не упадёт)
+    prediction, shap = svc.predict_raw(normalized_features)
 
     # store result
     db.execute(
@@ -455,7 +458,6 @@ def predict_from_1c(
             "pred": prediction,
             "shap": json.dumps(shap),
         },
-
     )
 
     db.commit()
@@ -466,7 +468,6 @@ def predict_from_1c(
         ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
         version=ML_RUNTIME_STATE["version"],
     )
-
 
 # =========================================
 # MODEL ACTIVATE

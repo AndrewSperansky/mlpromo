@@ -397,22 +397,21 @@ curl http://localhost:8000/api/v1/ml/dataset | jq '.count'
 =========================================================================
 ✅ 1c/predict Version2
 =========================================================================
-  curl -X POST http://localhost:8000/api/v1/ml/1c/predict   -H "Content-Type: application/json"   -d '{
-    "request_id": "33333333-3333-3333-3333-333333333341",
+  curl -X POST http://localhost:8000/api/v1/ml/1c/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "request_id": "33333333-3333-3333-3333-333333336666",
     "data": {
       "price": 120,
       "discount": 15,
       "avg_sales_7d": 95,
-      "promo_days_left": 7
+      "avg_discount_7d": 10,
+      "promo_days_left": 7,
+      "promo_code": "PROMO123",
+      "sku": "SKU001"
     }
   }'
-
-{
-    "request_id":"33333333-3333-3333-3333-333333333333",
-    "prediction":151.81549452722453,
-    "ml_model_id":"cb_promo_v1",
-    "version":"stage2"
-}
+{"request_id":"33333333-3333-3333-3333-333333336666","prediction":151.81549452722453,"ml_model_id":"cb_promo_v1","version":"stage5"}(base)
 ===========================================================================
 ✅ 1c/predict Version5
 ===========================================================================

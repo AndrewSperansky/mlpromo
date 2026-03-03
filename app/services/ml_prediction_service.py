@@ -13,7 +13,7 @@ from catboost import Pool
 from app.ml.model_loader import ModelLoader
 from app.ml.runtime_state import ML_RUNTIME_STATE
 
-logger = logging.getLogger("promo_ml")
+logger = logging.getLogger(__name__)
 
 
 class MLPredictionService:
@@ -104,6 +104,35 @@ class MLPredictionService:
                     raise TypeError(
                         f"Feature '{name}' must be numeric, got {type(value).__name__}"
                     )
+
+    def normalize_external_features(self, features: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Дополняет отсутствующие свойства значениями по умолчанию.
+        Используется ТОЛЬКО для внешних интеграций (1C).
+        """
+
+        if not self.feature_order:
+            return features
+
+        normalized = features.copy()
+
+        missing = set(self.feature_order) - set(normalized.keys())
+
+        if missing:
+            logger.warning(
+                "1C payload missing features. Auto-filling: %s",
+                sorted(missing)
+            )
+
+        for name in self.feature_order:
+            if name not in normalized:
+                if name in ["promo_code", "sku"]:
+                    normalized[name] = "unknown"
+                else:
+                    normalized[name] = 0.0
+
+        return normalized
+
 
     def _build_feature_vector(self, features: Dict[str, Any]) -> Pool:
         """
