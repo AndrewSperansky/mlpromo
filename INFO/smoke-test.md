@@ -400,7 +400,7 @@ curl http://localhost:8000/api/v1/ml/dataset | jq '.count'
   curl -X POST http://localhost:8000/api/v1/ml/1c/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "request_id": "33333333-3333-3333-3333-333333336666",
+    "request_id": "33333333-3333-3333-3333-333333336667",
     "data": {
       "price": 120,
       "discount": 15,
