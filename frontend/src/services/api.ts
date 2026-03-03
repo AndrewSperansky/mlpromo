@@ -89,8 +89,8 @@ export const getAuditPage = (page: number, modelId: string) =>
 // MODEL TRAIN
 // ============================    
 
-export const trainModel = () =>
-    api.post('/api/v1/ml/train')
+export const trainModel = (data: { dataset_version_id: string }) =>
+    api.post('/api/v1/ml/train', data)
 
 // ============================
 // DATASETS

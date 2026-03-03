@@ -7,10 +7,21 @@
       <h2>Model Registry</h2>
 
       <div class="d-flex gap-2">
-        <button class="btn btn-primary" :disabled="training" @click="handleTrain">
+
+        <!-- TRAIN -->
+        <button class="btn btn-primary" :disabled="training || !selectedDataset" @click="openTrainModal">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
+        <!-- DATASET SELECT -->
+        <select v-model="selectedDataset" class="form-select">
+          <option disabled value="">Select Dataset</option>
+          <option v-for="d in datasets" :key="d.dataset_version_id" :value="d.dataset_version_id">
+            {{ d.dataset_version_id }}
+          </option>
+        </select>
+
+        <!-- UPLOAD MODEL -->
         <input type="file" ref="fileInput" accept=".zip" class="d-none" @change="handleFileSelect" />
 
         <button class="btn btn-success" :disabled="uploading" @click="triggerFileInput">
@@ -21,12 +32,51 @@
 
     <!-- ===== RESULT CARD ===== -->
     <div v-if="uploadResult" class="alert alert-info">
-      <strong>Model ID:</strong> {{ uploadResult.model_id }}
+      <strong>Result:</strong>
+      <pre class="mb-0">{{ uploadResult }}</pre>
     </div>
 
     <!-- ===== TABLE ===== -->
-    <ModelTable :models="models" @activate="handleActivate" @rollback="handleRollback" @evaluate="handleEvaluate"
+    <ModelTable :models="models" @activate="openActivateModal" @rollback="handleRollback" @evaluate="handleEvaluate"
       @row-click="goToModel" />
+
+    <!-- ===== TRAIN MODAL ===== -->
+    <div v-if="showTrainModal" class="modal-backdrop">
+      <div class="modal-box">
+        <h5>Confirm Training</h5>
+        <p>Train model using dataset:</p>
+        <strong>{{ selectedDataset }}</strong>
+
+        <div class="mt-3 d-flex justify-content-end gap-2">
+          <button class="btn btn-secondary" @click="showTrainModal = false">
+            Cancel
+          </button>
+
+          <button class="btn btn-primary" :disabled="training" @click="handleTrain">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== ACTIVATE MODAL ===== -->
+    <div v-if="showActivateModal" class="modal-backdrop">
+      <div class="modal-box">
+        <h5>Activate Model</h5>
+        <p>Activate model:</p>
+        <strong>{{ selectedModelForActivation }}</strong>
+
+        <div class="mt-3 d-flex justify-content-end gap-2">
+          <button class="btn btn-secondary" @click="showActivateModal = false">
+            Cancel
+          </button>
+
+          <button class="btn btn-success" @click="confirmActivate">
+            Activate
+          </button>
+        </div>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -40,7 +90,8 @@ import {
   uploadModel,
   evaluateModel,
   rollbackModel,
-  trainModel
+  trainModel,
+  fetchDatasets
 } from '../services/api'
 import ModelTable from '../components/ModelTable.vue'
 
@@ -57,7 +108,14 @@ interface ModelItem {
   created_at: string
 }
 
+interface DatasetItem {
+  dataset_version_id: string
+}
+
 const models = ref<ModelItem[]>([])
+const datasets = ref<DatasetItem[]>([])
+const selectedDataset = ref<string>('')
+
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const uploading = ref(false)
@@ -65,24 +123,51 @@ const training = ref(false)
 
 const uploadResult = ref<any>(null)
 
+const showTrainModal = ref(false)
+const showActivateModal = ref(false)
+const selectedModelForActivation = ref<string>('')
+
 async function loadModels() {
   const response = await getModels()
   models.value = response.data
 }
 
+async function loadDatasets() {
+  const response = await fetchDatasets()
+  datasets.value = response.data
+}
+
+function openTrainModal() {
+  if (!selectedDataset.value) return
+  showTrainModal.value = true
+}
+
 async function handleTrain() {
   try {
     training.value = true
-    const response = await trainModel()
+
+    const response = await trainModel({
+      dataset_version_id: selectedDataset.value
+    })
+
     uploadResult.value = response.data
+
     await loadModels()
+
   } finally {
     training.value = false
+    showTrainModal.value = false
   }
 }
 
-async function handleActivate(modelId: string) {
-  await activateModel(modelId)
+function openActivateModal(modelId: string) {
+  selectedModelForActivation.value = modelId
+  showActivateModal.value = true
+}
+
+async function confirmActivate() {
+  await activateModel(selectedModelForActivation.value)
+  showActivateModal.value = false
   await loadModels()
 }
 
@@ -102,12 +187,11 @@ function triggerFileInput() {
 
 async function handleFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
-  const file = target.files?.[0]  // используем optional chaining
-
-  if (!file) return  // проверка на существование
+  const file = target.files?.[0]
+  if (!file) return
 
   const formData = new FormData()
-  formData.append('file', file)  // TypeScript теперь знает, что file - это File
+  formData.append('file', file)
 
   try {
     uploading.value = true
@@ -120,5 +204,26 @@ async function handleFileSelect(event: Event) {
   }
 }
 
-onMounted(loadModels)
+onMounted(() => {
+  loadModels()
+  loadDatasets()
+})
 </script>
+
+<style scoped>
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-box {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  width: 400px;
+}
+</style>
