@@ -509,3 +509,4 @@ stage2
 `docker logs promo_ml_backend --tail 50 `
 
 `docker compose stop backend`
+`docker compose up -d --build backend`

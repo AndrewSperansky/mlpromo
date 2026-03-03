@@ -27,6 +27,12 @@
           </li>
 
           <li class="nav-item">
+            <router-link class="nav-link" to="/datasets">
+              Datasets
+            </router-link>
+          </li>
+
+          <li class="nav-item">
             <router-link class="nav-link" to="/runtime">
               Runtime
             </router-link>

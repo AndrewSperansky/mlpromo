@@ -30,7 +30,23 @@ const routes = [
     {
         path: "/runtime",
         component: RuntimeAdmin,
-    }
+    },
+    {
+        path: "/datasets",
+        name: "Datasets",
+        component: () => import("../pages/Datasets.vue"),
+    },
+    {
+        path: "/datasets/:id",
+        name: "DatasetDetails",
+        component: () => import("../pages/DatasetDetails.vue"),
+    },
+    {
+        path: "/models/:id",
+        name: "ModelDetails",
+        component: () => import("../pages/ModelDetails.vue"),
+    },
+
 ]
 
 const router = createRouter({

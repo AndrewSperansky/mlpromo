@@ -13,7 +13,8 @@
     </thead>
 
     <tbody>
-      <tr v-for="model in models" :key="model.ml_model_id">
+      <tr v-for="model in models" :key="model.ml_model_id" @click="$emit('row-click', model.ml_model_id)"
+        style="cursor: pointer;">
         <td>{{ model.ml_model_id }}</td>
         <td>{{ model.version }}</td>
         <td>
@@ -24,19 +25,18 @@
         <td>{{ model.created_at }}</td>
 
         <td>
-
-          <button class="btn btn-sm btn-outline-primary me-2" @click="$emit('activate', model.ml_model_id)">
+          <!-- ВАЖНО: stop propagation -->
+          <button class="btn btn-sm btn-outline-primary me-2" @click.stop="$emit('activate', model.ml_model_id)">
             Activate
           </button>
 
-          <button class="btn btn-sm btn-outline-info me-2" @click="$emit('evaluate', model.ml_model_id)">
+          <button class="btn btn-sm btn-outline-info me-2" @click.stop="$emit('evaluate', model.ml_model_id)">
             Evaluate
           </button>
 
-          <button class="btn btn-sm btn-outline-warning" @click="$emit('rollback', model.ml_model_id)">
+          <button class="btn btn-sm btn-outline-warning" @click.stop="$emit('rollback', model.ml_model_id)">
             Rollback
           </button>
-
         </td>
       </tr>
     </tbody>
@@ -55,5 +55,10 @@ defineProps<{
   models: ModelItem[]
 }>()
 
-defineEmits(['activate', 'rollback', 'evaluate'])
+defineEmits<{
+  (e: 'activate', id: string): void
+  (e: 'rollback', id: string): void
+  (e: 'evaluate', id: string): void
+  (e: 'row-click', id: string): void
+}>()
 </script>
