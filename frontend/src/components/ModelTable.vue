@@ -6,7 +6,7 @@
       <tr>
         <th>Model ID</th>
         <th>Version</th>
-        <th>Active</th>
+        <th>Status</th>
         <th>Created At</th>
         <th>Actions</th>
       </tr>
@@ -18,8 +18,8 @@
         <td>{{ model.ml_model_id }}</td>
         <td>{{ model.version }}</td>
         <td>
-          <span v-if="model.active" class="badge bg-success">
-            Active
+          <span class="badge" :class="model.active ? 'bg-success' : 'bg-secondary'">
+            {{ model.active ? 'Active' : 'Inactive' }}
           </span>
         </td>
         <td>{{ model.created_at }}</td>

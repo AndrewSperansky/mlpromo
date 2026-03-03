@@ -8,6 +8,24 @@ const api = axios.create({
 })
 
 // ============================
+// TYPES
+// ============================
+
+export interface Dataset {
+    dataset_version_id: string
+    created_at: string
+    rows_count: number
+}
+
+export interface ModelItem {
+    ml_model_id: string
+    version: string
+    active: boolean
+    created_at: string
+}
+
+
+// ============================
 // SYSTEM HEALTH
 // ============================ 
 
@@ -29,7 +47,10 @@ export const getMetrics = () => api.get('/system/metrics')
 // MODELS LIST
 // ============================ 
 
-export const getModels = () => api.get('/ml/models')
+// export const getModels = () => api.get('/ml/models')      //  native fetch 
+
+export const getModels = () =>
+    api.get<ModelItem[]>('/ml/models')
 
 // ============================
 // MODEL ACTIVATE
@@ -52,28 +73,28 @@ export const uploadModel = (formData: FormData) =>
 // ============================ 
 
 export const evaluateModel = (id: string) =>
-    api.post(`/api/v1/ml/models/evaluate/${id}`)
+    api.post(`/ml/models/evaluate/${id}`)
 
 // ============================
 // MODEL ROLLBACK
 // ============================ 
 
 export const rollbackModel = (id: string) =>
-    api.post(`/api/v1/ml/models/rollback/${id}`)
+    api.post(`/ml/models/rollback/${id}`)
 
 // ============================
 // LEANAGE
 // ============================ 
 
 export const getLineage = () =>
-    api.get('/api/v1/ml/models/lineage')
+    api.get('/ml/models/lineage')
 
 // ============================
 // PREDICT BATCH
 // ============================ 
 
 export const predictBatch = (rows: any[]) =>
-    api.post('/api/v1/ml/predict', { data: rows })
+    api.post('/ml/predict', { data: rows })
 
 
 // ============================
@@ -81,7 +102,7 @@ export const predictBatch = (rows: any[]) =>
 // ============================ 
 
 export const getAuditPage = (page: number, modelId: string) =>
-    api.get('/api/v1/ml/audit', {
+    api.get('/ml/audit', {
         params: { page, model_id: modelId }
     })
 
@@ -90,19 +111,22 @@ export const getAuditPage = (page: number, modelId: string) =>
 // ============================    
 
 export const trainModel = (data: { dataset_version_id: string }) =>
-    api.post('/api/v1/ml/train', data)
+    api.post('/ml/train', data)
+
 
 // ============================
 // DATASETS
 // ============================
 
-export async function fetchDatasets() {
-    return fetch("/api/v1/datasets").then(r => r.json());
-}
+export const fetchDatasets = () =>
+    api.get<Dataset[]>('/ml/datasets')
+
 
 export async function fetchDatasetModels(datasetId: string) {
-    return fetch(`/api/v1/datasets/${datasetId}/models`).then(r => r.json());
+    return fetch(`api/v1/ml/datasets/${datasetId}/models`).then(r => r.json());
 }
+
+
 
 // ============================
 // MODEL DETAILS
