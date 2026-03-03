@@ -11,7 +11,7 @@ from uuid import UUID
 import pandas as pd
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, select, and_
 
 from app.db.session import get_db
 from models.ml_model import MLModel
@@ -539,3 +539,131 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
         "dataset_version": str(dataset_version.id),
         "rows_loaded": len(df)
     }
+
+
+# =========================================
+# MODEL DEACTIVATE
+# =========================================
+
+@router.post("/models/{model_id}/deactivate")
+def deactivate_model(
+    model_id: int,
+    db: Session = Depends(get_db),
+):
+    registry = ModelRegistryService(db)
+
+    try:
+        model = registry.deactivate_model(model_id)
+
+        return {
+            "status": "deactivated",
+            "model_id": model.id,
+            "name": model.name,
+            "version": model.version,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+
+# =========================================
+# MODEL DETAILS
+# =========================================
+
+@router.get("/models/{model_id}")
+def get_model_details(
+    model_id: int,
+    db: Session = Depends(get_db),
+):
+    stmt = select(MLModel).where(
+        and_(
+            MLModel.id == model_id,
+            MLModel.is_deleted.is_(False),
+        )
+    )
+
+    model = db.execute(stmt).scalar_one_or_none()
+
+    if model is None:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    return {
+        "id": model.id,
+        "name": model.name,
+        "version": model.version,
+        "algorithm": model.algorithm,
+        "model_type": model.model_type,
+        "target": model.target,
+        "dataset_version_id": str(model.dataset_version_id),
+        "features": model.features,
+        "metrics": model.metrics,
+        "trained_rows_count": model.trained_rows_count,
+        "model_path": model.model_path,
+        "is_active": model.is_active,
+        "trained_at": model.trained_at,
+    }
+
+# =========================================
+# MODEL METRICS
+# =========================================
+
+@router.get("/models/{model_id}/metrics")
+def get_model_metrics(
+    model_id: int,
+    db: Session = Depends(get_db),
+):
+    stmt = select(MLModel.metrics).where(
+        and_(
+            MLModel.id == model_id,
+            MLModel.is_deleted.is_(False),
+        )
+    )
+
+    metrics = db.execute(stmt).scalar_one_or_none()
+
+    if metrics is None:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    return {
+        "model_id": model_id,
+        "metrics": metrics,
+    }
+
+
+# =========================================
+# WHICH DATASET TEACHES MODEL
+# =========================================
+
+
+@router.get("/datasets/{dataset_version_id}/models")
+def get_models_by_dataset(
+    dataset_version_id: UUID,
+    db: Session = Depends(get_db),
+):
+
+    stmt = (
+        select(MLModel)
+        .where(
+            and_(
+                MLModel.dataset_version_id == dataset_version_id,
+                MLModel.is_deleted.is_(False),
+            )
+        )
+        .order_by(MLModel.created_at.desc())
+    )
+
+    models = db.execute(stmt).scalars().all()
+
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "version": m.version,
+            "is_active": m.is_active,
+            "trained_rows_count": m.trained_rows_count,
+            "trained_at": m.trained_at,
+        }
+        for m in models
+    ]
+

@@ -129,3 +129,32 @@ class ModelRegistryService:
             .order_by(MLModel.created_at.desc())
             .all()
         )
+
+
+
+    # =========================================
+    # DEACTIVATE MODEL
+    # =========================================
+
+    def deactivate_model(self, model_id: int) -> MLModel:
+
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.id == model_id,
+                MLModel.is_deleted.is_(False),
+            )
+        )
+
+        model = self.db.execute(stmt).scalar_one_or_none()
+
+        if model is None:
+            raise ValueError("Model not found")
+
+        model.is_active = False
+
+        self.db.commit()
+        self.db.refresh(model)
+
+        return model
+
+
