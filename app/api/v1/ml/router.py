@@ -30,6 +30,8 @@ from models.industrial_dataset import IndustrialDatasetRaw
 from app.ml.contract_check import validate_industrial_contract
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
+from app.schemas.datasset_schema import DatasetVersionResponse
+from app.services.dataset_service import DatasetService
 
 
 from app.api.v1.ml.schemas import (
@@ -198,7 +200,7 @@ def train_model(
 
 
 # =========================================
-# Evaluate отдельно
+# EVALUATE By Id
 # =========================================
 
 @router.post("/models/evaluate/{model_id}")
@@ -281,6 +283,7 @@ def list_models(db: Session = Depends(get_db)):
     """
     Возвращает список моделей из БД.
     """
+
     models = (
         db.query(MLModel)
         .filter(MLModel.is_deleted == False)
@@ -296,8 +299,10 @@ def list_models(db: Session = Depends(get_db)):
             "name": m.name,
             "algorithm": m.algorithm,
             "version": m.version,
+            "dataset_version_id": m.dataset_version_id,   # ← ДОБАВЛЕНО
             "is_active": m.is_active,
             "trained_at": m.trained_at,
+            "trained_rows_count": m.trained_rows_count,   # ← ДОБАВЛЕНО
             "features": m.features,
             "metrics": m.metrics,
             "active_in_runtime": m.id == active_model_id
@@ -305,47 +310,46 @@ def list_models(db: Session = Depends(get_db)):
         for m in models
     ]
 
-# =========================================
-# Dataset
-# =========================================
 
-# @router.get("/dataset")
-# def get_dataset(limit: int = 10000):
-#     df = load_dataset(limit=limit)
-#     return {
-#         "count": len(df),
-#         "items": df.to_dict(orient="records")
-#     }
 
 # =========================================
 # Promote via Registry (DB-driven)
 # =========================================
 
-
-
-
 @router.post("/models/{model_id}/promote")
-def promote_model(model_id: int, db: Session = Depends(get_db)):
+def promote_model(
+    model_id: int,
+    db: Session = Depends(get_db),
+    ):
     registry = ModelRegistryService(db)
 
-    model = registry.promote_model(model_id)
+    try:
+        model = registry.promote_model(model_id)
 
-    return {
-        "status": "promoted",
-        "name": model.name,
-        "version": model.version,
-    }
+        return {
+            "status": "promoted",
+            "model_id": model.id,
+            "name": model.name,
+            "version": model.version,
+            "dataset_version_id": str(model.dataset_version_id),
+        }
 
-
-
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 # =========================================
-# PREDICT
+# Dataset
 # =========================================
+
+@router.get("/datasets", response_model=list[DatasetVersionResponse])
+def list_datasets():
+
+    service = DatasetService()
+    return service.list_versions()
 
 
 # ========================================
-# PREDICT ENDPOINT (FastAPI)
+# PREDICT (FastAPI)
 # =======================================
 
 @router.post(

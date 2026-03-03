@@ -69,6 +69,7 @@ class ModelRegistryService:
     # =========================================
     # PROMOTE MODEL
     # =========================================
+
     def promote_model(self, model_id: int) -> MLModel:
 
         stmt = select(MLModel).where(
@@ -86,7 +87,12 @@ class ModelRegistryService:
         # deactivate all versions of same logical model
         self.db.execute(
             update(MLModel)
-            .where(MLModel.name == model.name)
+            .where(
+                and_(
+                    MLModel.name == model.name,
+                    MLModel.is_deleted.is_(False),
+                )
+            )
             .values(is_active=False)
         )
 
@@ -111,3 +117,15 @@ class ModelRegistryService:
         )
 
         return self.db.execute(stmt).scalar_one_or_none()
+
+    # =========================================
+    # LIST MODEL
+    # =========================================
+
+    def list_models(self):
+        return (
+            self.db.query(MLModel)
+            .filter(MLModel.is_deleted == False)
+            .order_by(MLModel.created_at.desc())
+            .all()
+        )
