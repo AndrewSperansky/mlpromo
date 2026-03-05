@@ -43,7 +43,11 @@
           <tbody>
 
             <tr v-for="ds in datasets" :key="ds.dataset_version_id">
-              <td>{{ ds.dataset_version_id }}</td>
+              <td>
+                <a href="#" @click.prevent="openDataset(ds.dataset_version_id)" class="dataset-link">
+                  {{ ds.dataset_version_id }}
+                </a>
+              </td>
               <td>{{ formatDate(ds.created_at) }}</td>
               <td>{{ ds.row_count }}</td>
 
@@ -72,6 +76,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
+import { useRouter } from "vue-router"
 import api, { fetchDatasets, deleteDataset } from "../services/api"
 
 interface Dataset {
@@ -80,10 +85,16 @@ interface Dataset {
   row_count: number
 }
 
+const router = useRouter()
 const datasets = ref<Dataset[]>([])
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
 const error = ref("")
+
+
+function openDataset(id: string) {
+  router.push(`/datasets/${id}`)
+}
 
 function formatDate(date: string) {
   return new Date(date).toLocaleString()
@@ -175,3 +186,17 @@ async function handleDelete(id: string) {
 
 onMounted(loadDatasets)
 </script>
+
+
+<style>
+.dataset-link {
+  text-decoration: none;
+  font-weight: 500;
+  color: #0d6efd;
+  cursor: pointer;
+}
+
+.dataset-link:hover {
+  text-decoration: underline;
+}
+</style>
