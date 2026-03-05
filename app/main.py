@@ -15,6 +15,7 @@ from app.core.logging_config import setup_logging
 
 # ---- Middleware ----
 from app.middleware.logging_middleware import RequestLoggingMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 # ---- Routers ----
 from app.api.v1.router import router as v1_router
@@ -120,7 +121,23 @@ app = FastAPI(
 # Подключение Middleware
 # ------------------------------------------------------
 
+# Разрешаем фронту обращаться к серверу
+origins = [
+    "http://localhost:5173",  # твой фронт
+    "http://localhost:3000",  # если будешь запускать другой порт
+    "http://127.0.0.1:5173",
+]
+
+
 # noinspection PyTypeChecker
+app.add_middleware(
+CORSMiddleware,
+    allow_origins=origins,       # откуда разрешены запросы
+    allow_credentials=True,      # куки и авторизация
+    allow_methods=["*"],         # GET, POST, PUT, DELETE...
+    allow_headers=["*"],         # любые заголовки
+    )
+
 app.add_middleware(RequestLoggingMiddleware)
 
 

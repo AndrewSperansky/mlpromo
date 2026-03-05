@@ -7,6 +7,42 @@ const api = axios.create({
     timeout: 5000
 })
 
+
+// Добавляем интерцепторы для логирования ВСЕХ запросов и ответов
+api.interceptors.request.use(request => {
+    console.log('🚀 Request:', {
+        method: request.method?.toUpperCase(),
+        url: request.url,
+        baseURL: request.baseURL,
+        fullURL: `${request.baseURL}${request.url}`,
+        params: request.params,
+        data: request.data
+    })
+    return request
+})
+
+api.interceptors.response.use(
+    response => {
+        console.log('✅ Response OK:', {
+            status: response.status,
+            url: response.config.url,
+            data: response.data
+        })
+        return response
+    },
+    error => {
+        console.error('❌ Response Error:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            url: error.config?.url,
+            method: error.config?.method?.toUpperCase(),
+            data: error.response?.data,
+            headers: error.response?.headers
+        })
+        return Promise.reject(error)
+    }
+)
+
 // ============================
 // TYPES
 // ============================
@@ -14,7 +50,7 @@ const api = axios.create({
 export interface Dataset {
     dataset_version_id: string
     created_at: string
-    rows_count: number
+    row_count: number
 }
 
 export interface ModelItem {
@@ -118,39 +154,54 @@ export const trainModel = (data: { dataset_version_id: string }) =>
 // DATASETS
 // ============================
 
-export const fetchDatasets = () =>
-    api.get<Dataset[]>('/ml/datasets')
-
-
-export async function fetchDatasetModels(datasetId: string) {
-    return fetch(`api/v1/ml/datasets/${datasetId}/models`).then(r => r.json());
+export const fetchDatasets = () => {
+    console.log('📊 Fetching datasets...')
+    return api.get<Dataset[]>('/ml/datasets')
 }
 
+export const fetchDatasetModels = (datasetId: string) => {
+    console.log('📊 Fetching models for dataset:', datasetId)
+    return api.get(`/ml/datasets/${datasetId}/models`)
+}
 
+export const deleteDataset = (datasetId: string) => {
+    console.log('🗑️ deleteDataset called with:', {
+        datasetId,
+        type: typeof datasetId,
+        value: datasetId,
+        isEmpty: !datasetId
+    })
+
+    if (!datasetId) {
+        console.error('❌ Cannot delete: datasetId is undefined or empty')
+        return Promise.reject(new Error('datasetId is required'))
+    }
+
+    const url = `/ml/datasets/${String(datasetId)}`
+    console.log('🗑️ DELETE URL:', url)
+
+    return api.delete(url)
+}
 
 // ============================
 // MODEL DETAILS
 // ============================
 
-export async function fetchModelDetails(modelId: number) {
-    return fetch(`/api/v1/models/${modelId}`).then(r => r.json());
-}
+export const fetchModelDetails = (modelId: number) =>
+    api.get(`/models/${modelId}`)
 
-export async function fetchModelMetrics(modelId: number) {
-    return fetch(`/api/v1/models/${modelId}/metrics`).then(r => r.json());
-}
 
-export async function promoteModel(modelId: number) {
-    return fetch(`/api/v1/models/${modelId}/promote`, {
-        method: "POST",
-    }).then(r => r.json());
-}
+export const fetchModelMetrics = (modelId: number) =>
+    api.get(`/models/${modelId}/metrics`)
 
-export async function deactivateModel(modelId: number) {
-    return fetch(`/api/v1/models/${modelId}/deactivate`, {
-        method: "POST",
-    }).then(r => r.json());
-}
+
+export const promoteModel = (modelId: number) =>
+    api.post(`/models/${modelId}/promote`)
+
+
+
+export const deactivateModel = (modelId: number) =>
+    api.post(`/models/${modelId}/deactivate`)
 
 
 export default api

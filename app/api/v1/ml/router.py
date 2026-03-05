@@ -7,11 +7,12 @@ import tempfile
 import zipfile
 import json
 import uuid
+from io import BytesIO
 from uuid import UUID
 import pandas as pd
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import text, select, and_
+from sqlalchemy import text, select, delete, and_
 
 from app.db.session import get_db
 from models.ml_model import MLModel
@@ -30,7 +31,7 @@ from models.industrial_dataset import IndustrialDatasetRaw
 from app.ml.contract_check import validate_industrial_contract
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
-from app.schemas.datasset_schema import DatasetVersionResponse
+from app.schemas.dataset_schema import DatasetVersionResponse
 from app.services.dataset_service import DatasetService
 
 
@@ -337,15 +338,7 @@ def promote_model(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-# =========================================
-# Dataset
-# =========================================
 
-@router.get("/datasets", response_model=list[DatasetVersionResponse])
-def list_datasets():
-
-    service = DatasetService()
-    return service.list_versions()
 
 
 # ========================================
@@ -505,28 +498,61 @@ def activate_model(ml_model_id: str):
 
 
 # =========================================
+# Dataset
+# =========================================
+
+@router.get("/datasets", response_model=list[DatasetVersionResponse])
+def list_datasets():
+
+    service = DatasetService()
+    return service.list_versions()
+
+
+# =========================================
 # DATASET UPLOAD
 # =========================================
 
 
 @router.post("/dataset/upload")
 def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # Читаем файл в байты
+    content = file.file.read()
 
-    df = pd.read_csv(file.file)
+    df: pd.DataFrame | None = None
+    detected_encoding: str | None = None
 
+    # Пробуем сначала utf-8, потом cp1251
+    for encoding in ("utf-8", "cp1251"):
+        try:
+            df = pd.read_csv(BytesIO(content), encoding=encoding)
+            detected_encoding = encoding
+            break
+        except UnicodeDecodeError:
+            continue
+
+    if df is None:
+        raise ValueError("Не удалось прочитать CSV: поддерживаются только utf-8 или cp1251")
+
+    # Преобразуем булевы поля
+    BOOL_MAP = {"Да": True, "Нет": False, "да": True, "нет": False}
+    for col in ["ManualCoefficientFlag", "IsNewSKU", "IsAnalogSKU"]:
+        if col in df.columns:
+            df[col] = df[col].map(BOOL_MAP).fillna(False)  # type: ignore
+
+    # Валидация датасета
     validate_industrial_contract(df)
 
+    # Создаём версию датасета
     dataset_version = DatasetVersion(
         id=uuid.uuid4(),
         row_count=len(df),
         status="READY"
     )
-
     db.add(dataset_version)
     db.flush()
 
+    # Запись всех строк в raw таблицу
     records = df.to_dict(orient="records")
-
     for row in records:
         db_row = IndustrialDatasetRaw(
             dataset_version_id=dataset_version.id,
@@ -538,8 +564,58 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     return {
         "dataset_version": str(dataset_version.id),
-        "rows_loaded": len(df)
+        "rows_loaded": len(df),
+        "detected_encoding": detected_encoding
     }
+
+# =========================================
+# DATASET DELETE
+# =========================================
+
+
+@router.delete("/datasets/{dataset_id}")
+def delete_dataset(
+        dataset_id: UUID,
+        db: Session = Depends(get_db)
+):
+    # Находим версию датасета
+    dataset = db.get(DatasetVersion, dataset_id)
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    try:
+
+        # если нужно удалить только строки датасета
+        # db.query(IndustrialDatasetRaw).filter_by(dataset_version_id=dataset_id).delete()
+
+        # Пытаемся удалить версию и строки датасета каскадно
+        db.delete(dataset)
+        db.commit()
+
+        return {
+            "status": "deleted",
+            "dataset_version_id": str(dataset_id),
+            "rows_deleted": dataset.row_count
+        }
+
+    except Exception as e:
+        db.rollback()
+
+        # Проверяем, не из-за внешнего ключа ли ошибка
+        if "foreign key" in str(e).lower() or "restrict" in str(e).lower():
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete dataset: it is used by one or more models"
+            )
+
+        # Другая ошибка
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database error: {str(e)}"
+        )
+
+
 
 
 # =========================================
