@@ -11,7 +11,7 @@
       </div>
 
       <!-- ROW 2 -->
-      <div class="d-flex mt-4 gap-2">
+      <div class="d-flex mt-4 gap-2 align-items-center">
 
         <!-- DATASET SELECT -->
         <select v-model="selectedDataset" class="form-select w-auto">
@@ -21,8 +21,20 @@
           </option>
         </select>
 
+        <!-- CHECKBOX TRAIN ON ALL -->
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" id="trainAllCheckbox" v-model="trainOnAll"
+            :disabled="training">
+          <label class="form-check-label" for="trainAllCheckbox">
+            Train on all datasets
+          </label>
+        </div>
+
+
         <!-- TRAIN -->
-        <button class="btn btn-primary" :disabled="training || !selectedDataset" @click="openTrainModal">
+        <!-- TRAIN BUTTON -->
+        <button class="btn btn-primary" :disabled="training || (!selectedDataset && !trainOnAll)"
+          @click="openTrainModal">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
@@ -136,6 +148,8 @@ const showTrainModal = ref(false)
 const showActivateModal = ref(false)
 const selectedModelForActivation = ref<string>('')
 
+const trainOnAll = ref(false)
+
 async function loadModels() {
   const response = await getModels()
   models.value = response.data
@@ -153,7 +167,7 @@ async function loadDatasets() {
 }
 
 function openTrainModal() {
-  if (!selectedDataset.value) return
+  if (!selectedDataset.value && !trainOnAll.value) return
   showTrainModal.value = true
 }
 
@@ -162,16 +176,21 @@ async function handleTrain() {
     training.value = true
 
     const response = await trainModel({
-      dataset_version_id: selectedDataset.value
+      ...(trainOnAll.value
+        ? { train_on_all: true }
+        : { dataset_version_id: selectedDataset.value }
+      ),
+      promote: false  // опционально
     })
 
     uploadResult.value = response.data
-
     await loadModels()
 
   } finally {
     training.value = false
     showTrainModal.value = false
+    trainOnAll.value = false
+    selectedDataset.value = ''
   }
 }
 

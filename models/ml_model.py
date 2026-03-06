@@ -22,7 +22,7 @@ class MLModel(IDMixin, AuditMixin, Base):
 
     name: Mapped[str] = mapped_column(String(100))
     algorithm: Mapped[str] = mapped_column(String(50))  # catboost, xgboost, etc
-    dataset_version_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=False,)
+    dataset_version_id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=True,)
 
     version: Mapped[str] = mapped_column(String(20))
 

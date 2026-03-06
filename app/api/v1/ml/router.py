@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from pathlib import Path
+import logging
 import shutil
 import tempfile
 import zipfile
@@ -31,7 +32,11 @@ from models.industrial_dataset import IndustrialDatasetRaw
 from app.ml.contract_check import validate_industrial_contract
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
-from app.schemas.dataset_schema import DatasetVersionResponse
+from app.schemas.dataset_schema import (
+    DatasetVersionResponse,
+    TrainRequest,
+    TrainOnAllResponse,
+)
 from app.services.dataset_service import DatasetService
 
 
@@ -43,6 +48,7 @@ from app.api.v1.ml.schemas import (
     ShapValue,
 )
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ml"])
 
@@ -187,17 +193,45 @@ training_service = MLTrainingService()
 
 @router.post("/train")
 def train_model(
-    dataset_version_id: UUID,
-    promote: bool = Query(False),
+        request: TrainRequest,  # ← используем новую схему
+        # db: Session = Depends(get_db)
 ):
+    """
+    Обучает модель на одном или всех датасетах.
 
-    result = training_service.train(
-        dataset_version_id=dataset_version_id,
-        promote=promote,
-        trigger="api",
-    )
+    - Если train_on_all=True: обучает на всех доступных датасетах
+    - Если train_on_all=False: обучает на конкретном dataset_version_id
+    """
 
-    return result
+    # 🔍 ДОБАВЛЯЕМ ЛОГИРОВАНИЕ
+    logger.info(f"🔥 RAW TRAIN REQUEST: {request}")
+    logger.info(f"🔥 REQUEST DICT: {request.model_dump()}")
+    logger.info(f"🔥 train_on_all: {request.train_on_all}")
+    logger.info(f"🔥 dataset_version_id: {request.dataset_version_id}")
+    logger.info(f"🔥 promote: {request.promote}")
+
+    if request.train_on_all:
+        # Обучение на всех датасетах
+        result = training_service.train_on_all_datasets(
+            promote=request.promote,
+            trigger="api"
+        )
+        return TrainOnAllResponse(**result)
+    else:
+        # Обучение на одном датасете
+        if not request.dataset_version_id:
+            raise HTTPException(
+                status_code=400,
+                detail="dataset_version_id required when train_on_all=False"
+            )
+
+        result = training_service.train(
+            dataset_version_id=request.dataset_version_id,
+            promote=request.promote,
+            trigger="api",
+        )
+
+        return result
 
 
 # =========================================
@@ -276,7 +310,7 @@ def get_lineage():
         return json.load(f)
 
 # =========================================
-# Models
+# MODELS LIST
 # =========================================
 
 @router.get("/models")
@@ -284,7 +318,6 @@ def list_models(db: Session = Depends(get_db)):
     """
     Возвращает список моделей из БД.
     """
-
     models = (
         db.query(MLModel)
         .filter(MLModel.is_deleted == False)
@@ -300,17 +333,17 @@ def list_models(db: Session = Depends(get_db)):
             "name": m.name,
             "algorithm": m.algorithm,
             "version": m.version,
-            "dataset_version_id": m.dataset_version_id,   # ← ДОБАВЛЕНО
+            "dataset_version_id": str(m.dataset_version_id) if m.dataset_version_id else None,  # ← может быть null
+            "trained_on_all": m.dataset_version_id is None,  # ← флаг для UI
             "is_active": m.is_active,
             "trained_at": m.trained_at,
-            "trained_rows_count": m.trained_rows_count,   # ← ДОБАВЛЕНО
+            "trained_rows_count": m.trained_rows_count,
             "features": m.features,
             "metrics": m.metrics,
             "active_in_runtime": m.id == active_model_id
         }
         for m in models
     ]
-
 
 
 # =========================================
@@ -715,9 +748,13 @@ def get_model_metrics(
 
 @router.get("/datasets/{dataset_version_id}/models")
 def get_models_by_dataset(
-    dataset_version_id: UUID,
-    db: Session = Depends(get_db),
+        dataset_version_id: UUID,
+        db: Session = Depends(get_db),
 ):
+    """
+    Возвращает модели, обученные на конкретном датасете.
+    Для моделей, обученных на всех датасетах, dataset_version_id = null
+    """
 
     stmt = (
         select(MLModel)
@@ -740,6 +777,7 @@ def get_models_by_dataset(
             "is_active": m.is_active,
             "trained_rows_count": m.trained_rows_count,
             "trained_at": m.trained_at,
+            "trained_on_all": m.dataset_version_id is None,  # ← флаг для UI
         }
         for m in models
     ]

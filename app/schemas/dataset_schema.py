@@ -1,9 +1,9 @@
 # app/schemas/dataset_schema.py
 
-
 from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 
 
 class DatasetVersionResponse(BaseModel):
@@ -17,3 +17,23 @@ class DatasetVersionResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True  # позволяет обращаться и по id, и по dataset_version_id
+
+
+# Добавляем новый response для обучения на всех датасетах
+class TrainOnAllResponse(BaseModel):
+    status: str
+    model_id: int
+    model_name: str
+    datasets_used: List[str]
+    total_rows: int
+    metrics: Dict[str, Any]
+    promoted: bool = False
+    stage: Optional[str] = None
+    note: Optional[str] = None
+
+
+# Обновляем request для train
+class TrainRequest(BaseModel):
+    dataset_version_id: Optional[UUID] = None  # теперь может быть None
+    train_on_all: bool = False
+    promote: bool = False
