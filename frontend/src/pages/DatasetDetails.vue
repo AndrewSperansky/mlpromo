@@ -1,4 +1,5 @@
 <!-- frontend\src\pages\DatasetDetails.vue -->
+<!-- НЕ ИСПОЛЬЗУЕТСЯ (вместо страницы используется модальное окно) -->
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue"

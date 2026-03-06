@@ -3,23 +3,29 @@
 <template>
   <div>
     <!-- ===== HEADER ===== -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2>Model Registry</h2>
+    <div class="mb-4">
 
-      <div class="d-flex gap-2">
+      <!-- ROW 1 -->
+      <div class="mb-6">
+        <h2>Model Registry</h2>
+      </div>
+
+      <!-- ROW 2 -->
+      <div class="d-flex mt-4 gap-2">
+
+        <!-- DATASET SELECT -->
+        <select v-model="selectedDataset" class="form-select w-auto">
+          <option disabled value="">Select Dataset</option>
+          <option v-for="d in datasets" :key="d.dataset_version_id" :value="d.dataset_version_id">
+            {{ d.dataset_version_id }}
+          </option>
+        </select>
 
         <!-- TRAIN -->
         <button class="btn btn-primary" :disabled="training || !selectedDataset" @click="openTrainModal">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
-        <!-- DATASET SELECT -->
-        <select v-model="selectedDataset" class="form-select">
-          <option disabled value="">Select Dataset</option>
-          <option v-for="d in datasets" :key="d.dataset_version_id" :value="d.dataset_version_id">
-            {{ d.dataset_version_id }}
-          </option>
-        </select>
 
         <!-- UPLOAD MODEL -->
         <input type="file" ref="fileInput" accept=".zip" class="d-none" @change="handleFileSelect" />
@@ -29,56 +35,57 @@
         </button>
       </div>
     </div>
-
-    <!-- ===== RESULT CARD ===== -->
-    <div v-if="uploadResult" class="alert alert-info">
-      <strong>Result:</strong>
-      <pre class="mb-0">{{ uploadResult }}</pre>
-    </div>
-
-    <!-- ===== TABLE ===== -->
-    <ModelTable :models="models" @activate="openActivateModal" @rollback="handleRollback" @evaluate="handleEvaluate"
-      @row-click="goToModel" />
-
-    <!-- ===== TRAIN MODAL ===== -->
-    <div v-if="showTrainModal" class="modal-backdrop">
-      <div class="modal-box">
-        <h5>Confirm Training</h5>
-        <p>Train model using dataset:</p>
-        <strong>{{ selectedDataset }}</strong>
-
-        <div class="mt-3 d-flex justify-content-end gap-2">
-          <button class="btn btn-secondary" @click="showTrainModal = false">
-            Cancel
-          </button>
-
-          <button class="btn btn-primary" :disabled="training" @click="handleTrain">
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== ACTIVATE MODAL ===== -->
-    <div v-if="showActivateModal" class="modal-backdrop">
-      <div class="modal-box">
-        <h5>Activate Model</h5>
-        <p>Activate model:</p>
-        <strong>{{ selectedModelForActivation }}</strong>
-
-        <div class="mt-3 d-flex justify-content-end gap-2">
-          <button class="btn btn-secondary" @click="showActivateModal = false">
-            Cancel
-          </button>
-
-          <button class="btn btn-success" @click="confirmActivate">
-            Activate
-          </button>
-        </div>
-      </div>
-    </div>
-
   </div>
+
+  <!-- ===== RESULT CARD ===== -->
+  <div v-if="uploadResult" class="alert alert-info">
+    <strong>Result:</strong>
+    <pre class="mb-0">{{ uploadResult }}</pre>
+  </div>
+
+  <!-- ===== TABLE ===== -->
+  <ModelTable class="mt-4" :models="models" @activate="openActivateModal" @rollback="handleRollback"
+    @evaluate="handleEvaluate" @row-click="goToModel" />
+
+  <!-- ===== TRAIN MODAL ===== -->
+  <div v-if="showTrainModal" class="modal-backdrop">
+    <div class="modal-box">
+      <h5>Confirm Training</h5>
+      <p>Train model using dataset:</p>
+      <strong>{{ selectedDataset }}</strong>
+
+      <div class="mt-3 d-flex justify-content-end gap-2">
+        <button class="btn btn-secondary" @click="showTrainModal = false">
+          Cancel
+        </button>
+
+        <button class="btn btn-primary" :disabled="training" @click="handleTrain">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ACTIVATE MODAL ===== -->
+  <div v-if="showActivateModal" class="modal-backdrop">
+    <div class="modal-box">
+      <h5>Activate Model</h5>
+      <p>Activate model:</p>
+      <strong>{{ selectedModelForActivation }}</strong>
+
+      <div class="mt-3 d-flex justify-content-end gap-2">
+        <button class="btn btn-secondary" @click="showActivateModal = false">
+          Cancel
+        </button>
+
+        <button class="btn btn-success" @click="confirmActivate">
+          Activate
+        </button>
+      </div>
+
+    </div>
+  </div>
+
 </template>
 
 <script setup lang="ts">
@@ -93,7 +100,8 @@ import {
   trainModel,
   fetchDatasets
 } from '../services/api'
-import ModelTable from '../components/ModelTable.vue'
+
+import ModelTable, { type ModelItem } from '../components/ModelTable.vue'
 
 const router = useRouter()
 
@@ -101,18 +109,19 @@ function goToModel(id: string) {
   router.push(`/models/${id}`)
 }
 
-interface ModelItem {
+// Убираем локальное объявление ModelItem
+/* interface ModelItem {
   ml_model_id: string
   version: string
   active: boolean
   created_at: string
-}
+} */
 
 interface DatasetItem {
   dataset_version_id: string
 }
 
-const models = ref<ModelItem[]>([])
+const models = ref<ModelItem[]>([])    // используем импортированный тип
 const datasets = ref<DatasetItem[]>([])
 const selectedDataset = ref<string>('')
 
@@ -134,7 +143,13 @@ async function loadModels() {
 
 async function loadDatasets() {
   const response = await fetchDatasets()
-  datasets.value = response.data
+
+  // 🔥 Трансформируем данные: id → dataset_version_id
+  datasets.value = response.data.map((item: any) => ({
+    dataset_version_id: item.id  // ← переименовываем поле
+  }))
+
+  console.log('Трансформированные datasets:', datasets.value)
 }
 
 function openTrainModal() {

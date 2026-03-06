@@ -27,6 +27,8 @@
       {{ error }}
     </div>
 
+    <!-- модальное окно -->
+
     <div class="card">
       <div class="card-body p-0">
 
@@ -44,7 +46,7 @@
 
             <tr v-for="ds in datasets" :key="ds.dataset_version_id">
               <td>
-                <a href="#" @click.prevent="openDataset(ds.dataset_version_id)" class="dataset-link">
+                <a href="#" @click.prevent="openDatasetDetails(ds.dataset_version_id)" class="dataset-link">
                   {{ ds.dataset_version_id }}
                 </a>
               </td>
@@ -72,12 +74,68 @@
     </div>
 
   </div>
+
+  <div v-if="showModal" class="modal fade show d-block" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title">
+            Models trained on dataset
+            <span class="dataset-id">{{ selectedDataset }}</span>
+          </h5>
+
+          <button type="button" class="btn-close" @click="showModal = false"></button>
+        </div>
+
+        <div class="modal-body">
+
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Version</th>
+                <th>Rows</th>
+                <th>Active</th>
+              </tr>
+            </thead>
+
+            <tbody>
+
+              <tr v-for="m in datasetModels" :key="m.id">
+                <td>{{ m.name }}</td>
+                <td>{{ m.version }}</td>
+                <td>{{ m.trained_rows_count }}</td>
+                <td>{{ m.is_active ? "Yes" : "No" }}</td>
+              </tr>
+
+              <tr v-if="datasetModels.length === 0">
+                <td colspan="4" class="text-center text-muted">
+                  No models trained on this dataset
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showModal" class="modal-backdrop fade show"></div>
+
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { useRouter } from "vue-router"
+// import { useRouter } from "vue-router"
+import { fetchDatasetModels } from "../services/api"
 import api, { fetchDatasets, deleteDataset } from "../services/api"
+const selectedDataset = ref<string | null>(null)
+const datasetModels = ref<any[]>([])
+const showModal = ref(false)
 
 interface Dataset {
   dataset_version_id: string
@@ -85,16 +143,16 @@ interface Dataset {
   row_count: number
 }
 
-const router = useRouter()
+// const router = useRouter()
 const datasets = ref<Dataset[]>([])
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
 const error = ref("")
 
 
-function openDataset(id: string) {
+/* function openDataset(id: string) {
   router.push(`/datasets/${id}`)
-}
+} */
 
 function formatDate(date: string) {
   return new Date(date).toLocaleString()
@@ -182,6 +240,20 @@ async function handleDelete(id: string) {
     console.error('Error response:', e.response?.data)
     error.value = e.response?.data?.detail || "Delete failed"
   }
+
+}
+
+
+async function openDatasetDetails(id: string) {
+  selectedDataset.value = id
+  showModal.value = true
+
+  try {
+    const res = await fetchDatasetModels(id)
+    datasetModels.value = res.data
+  } catch (e) {
+    console.error("Failed to load models", e)
+  }
 }
 
 onMounted(loadDatasets)
@@ -198,5 +270,11 @@ onMounted(loadDatasets)
 
 .dataset-link:hover {
   text-decoration: underline;
+}
+
+.dataset-id {
+  color: #198754;
+  /* bootstrap green */
+  font-weight: 600;
 }
 </style>

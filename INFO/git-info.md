@@ -647,6 +647,7 @@ git cherry-pick --abort
 
 `git restore .   `            все изменения!!!!!  
 `git restore models/model.cbm`
+`git restore frontend/src/components/ModelTable.vue`
 `git checkout --  models/model.cbm `   Устаревшая
 
 ## Отмена последнего коммита (не push):
@@ -665,3 +666,6 @@ git cherry-pick --abort
 
 ### Посмотреть тэги
 `git tag`    
+
+
+git restore frontend/src/components/ModelTable.vue
