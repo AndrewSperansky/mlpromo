@@ -20,7 +20,11 @@ const metrics = ref<Record<string, any> | null>(null)
 onMounted(async () => {
     const id = Number(route.params.id)
     model.value = await fetchModelDetails(id)
-    metrics.value = await fetchModelMetrics(id)
+    // const modelResponse = await fetchModelDetails(id)
+    // model.value = modelResponse.data
+
+    const metricsResponse = await fetchModelMetrics(id)
+    metrics.value = metricsResponse.data
 })
 
 async function promote() {

@@ -341,6 +341,7 @@ docker volume prune — удаление неиспользуемых томов
 ### 🐍 B. Меняли backend код или logging
 `docker compose build backend`  
 `docker compose up -d backend`
+`docker compose up -d --build backend`
 
 docker compose build backend && docker compose restart backend
 

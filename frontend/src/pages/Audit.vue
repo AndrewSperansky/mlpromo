@@ -46,14 +46,22 @@ const results = ref<any[]>([])
 const page = ref(1)
 const filterModel = ref('')
 
-async function loadAudit(reset = false) {
-  if (reset) {
-    page.value = 1
-    results.value = []
-  }
 
-  const response = await getAuditPage(page.value, filterModel.value)
-  results.value.push(...response.data)
+async function loadAudit(reset = false) {
+  try {
+
+    if (reset) {
+      page.value = 1
+      results.value = []
+    }
+
+    const response = await getAuditPage(page.value, filterModel.value)
+
+    results.value.push(...response.data.items)
+
+  } catch (err) {
+    console.error("Audit load failed", err)
+  }
 }
 
 function loadMore() {

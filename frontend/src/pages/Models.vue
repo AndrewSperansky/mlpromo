@@ -4,7 +4,6 @@
   <div>
     <!-- ===== HEADER ===== -->
     <div class="mb-4">
-
       <!-- ROW 1 -->
       <div class="mb-6">
         <h2>Model Registry</h2>
@@ -12,7 +11,6 @@
 
       <!-- ROW 2 -->
       <div class="d-flex mt-4 gap-2 align-items-center">
-
         <!-- DATASET SELECT -->
         <select v-model="selectedDataset" class="form-select w-auto">
           <option disabled value="">Select Dataset</option>
@@ -30,18 +28,14 @@
           </label>
         </div>
 
-
-        <!-- TRAIN -->
         <!-- TRAIN BUTTON -->
         <button class="btn btn-primary" :disabled="training || (!selectedDataset && !trainOnAll)"
           @click="openTrainModal">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
-
         <!-- UPLOAD MODEL -->
         <input type="file" ref="fileInput" accept=".zip" class="d-none" @change="handleFileSelect" />
-
         <button class="btn btn-success" :disabled="uploading" @click="triggerFileInput">
           {{ uploading ? 'Uploading...' : 'Upload Model' }}
         </button>
@@ -57,7 +51,7 @@
 
   <!-- ===== TABLE ===== -->
   <ModelTable class="mt-4" :models="models" @activate="openActivateModal" @rollback="handleRollback"
-    @evaluate="handleEvaluate" @row-click="goToModel" />
+    @evaluate="handleEvaluate" @row-click="goToModel" @delete="openDeleteModal" />
 
   <!-- ===== TRAIN MODAL ===== -->
   <div v-if="showTrainModal" class="modal-backdrop">
@@ -70,7 +64,6 @@
         <button class="btn btn-secondary" @click="showTrainModal = false">
           Cancel
         </button>
-
         <button class="btn btn-primary" :disabled="training" @click="handleTrain">
           Confirm
         </button>
@@ -89,20 +82,39 @@
         <button class="btn btn-secondary" @click="showActivateModal = false">
           Cancel
         </button>
-
         <button class="btn btn-success" @click="confirmActivate">
           Activate
         </button>
       </div>
-
     </div>
   </div>
 
+  <!-- ===== DELETE MODAL ===== -->
+  <div v-if="showDeleteModal" class="modal-backdrop" @click.self="showDeleteModal = false">
+    <div class="modal-box">
+      <h5 class="text-danger">Confirm Deletion</h5>
+      <p>Are you sure you want to delete model:</p>
+      <strong>ID: {{ modelToDelete }}</strong>
+      <p class="text-warning mt-2">⚠️ This action cannot be undone!</p>
+
+      <div class="mt-3 d-flex justify-content-end gap-2">
+        <button class="btn btn-secondary" @click="showDeleteModal = false">
+          Cancel
+        </button>
+        <button class="btn btn-danger" @click="confirmDelete">
+          Delete Permanently
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODEL DETAIL MODAL ===== -->
+  <ModelDetailsModal :modelId="selectedModelId" @closed="selectedModelId = null" />
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+// import { useRouter } from 'vue-router'
 import {
   getModels,
   activateModel,
@@ -110,32 +122,24 @@ import {
   evaluateModel,
   rollbackModel,
   trainModel,
-  fetchDatasets
+  fetchDatasets,
+  deleteModel,
+  type ModelItem,
+  type TrainModelParams  // ← ИМПОРТИРОВАНО!
 } from '../services/api'
+import ModelTable from '../components/ModelTable.vue'
+import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 
-import ModelTable, { type ModelItem } from '../components/ModelTable.vue'
+// const router = useRouter()
 
-const router = useRouter()
-
-function goToModel(id: string) {
-  router.push(`/models/${id}`)
+function goToModel(id: number) {
+  selectedModelId.value = id
 }
 
-// Убираем локальное объявление ModelItem
-/* interface ModelItem {
-  ml_model_id: string
-  version: string
-  active: boolean
-  created_at: string
-} */
-
-interface DatasetItem {
-  dataset_version_id: string
-}
-
-const models = ref<ModelItem[]>([])    // используем импортированный тип
-const datasets = ref<DatasetItem[]>([])
+const models = ref<ModelItem[]>([])
+const datasets = ref<{ dataset_version_id: string }[]>([])
 const selectedDataset = ref<string>('')
+const trainOnAll = ref(false)
 
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -144,11 +148,16 @@ const training = ref(false)
 
 const uploadResult = ref<any>(null)
 
+const selectedModelId = ref<number | null>(null)
+
 const showTrainModal = ref(false)
 const showActivateModal = ref(false)
 const selectedModelForActivation = ref<string>('')
 
-const trainOnAll = ref(false)
+
+// ===== DELETE MODAL =====
+const showDeleteModal = ref(false)
+const modelToDelete = ref<number | null>(null)
 
 async function loadModels() {
   const response = await getModels()
@@ -157,13 +166,7 @@ async function loadModels() {
 
 async function loadDatasets() {
   const response = await fetchDatasets()
-
-  // 🔥 Трансформируем данные: id → dataset_version_id
-  datasets.value = response.data.map((item: any) => ({
-    dataset_version_id: item.id  // ← переименовываем поле
-  }))
-
-  console.log('Трансформированные datasets:', datasets.value)
+  datasets.value = response.data
 }
 
 function openTrainModal() {
@@ -175,14 +178,17 @@ async function handleTrain() {
   try {
     training.value = true
 
-    const response = await trainModel({
-      ...(trainOnAll.value
-        ? { train_on_all: true }
-        : { dataset_version_id: selectedDataset.value }
-      ),
-      promote: false  // опционально
-    })
+    const params: TrainModelParams = {
+      promote: false
+    }
 
+    if (trainOnAll.value) {
+      params.train_on_all = true
+    } else {
+      params.dataset_version_id = selectedDataset.value
+    }
+
+    const response = await trainModel(params)
     uploadResult.value = response.data
     await loadModels()
 
@@ -194,8 +200,8 @@ async function handleTrain() {
   }
 }
 
-function openActivateModal(modelId: string) {
-  selectedModelForActivation.value = modelId
+function openActivateModal(modelId: number) {  // ← ИСПРАВЛЕНО: string → number
+  selectedModelForActivation.value = modelId.toString()  // ← конвертируем для отображения
   showActivateModal.value = true
 }
 
@@ -205,14 +211,32 @@ async function confirmActivate() {
   await loadModels()
 }
 
-async function handleEvaluate(modelId: string) {
-  const response = await evaluateModel(modelId)
+async function handleEvaluate(modelId: number) {
+  const response = await evaluateModel(modelId.toString())
   uploadResult.value = response.data
 }
 
-async function handleRollback(modelId: string) {
-  await rollbackModel(modelId)
+async function handleRollback(modelId: number) {
+  await rollbackModel(modelId.toString())
   await loadModels()
+}
+
+function openDeleteModal(modelId: number) {
+  modelToDelete.value = modelId
+  showDeleteModal.value = true
+}
+
+async function confirmDelete() {
+  if (!modelToDelete.value) return
+
+  try {
+    await deleteModel(modelToDelete.value)
+    await loadModels()
+    showDeleteModal.value = false
+    modelToDelete.value = null
+  } catch (error) {
+    console.error('Failed to delete model:', error)
+  }
 }
 
 function triggerFileInput() {

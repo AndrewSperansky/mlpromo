@@ -382,3 +382,31 @@ ON industrial_dataset_raw("StoreID");
 
 CREATE INDEX IF NOT EXISTS idx_industrial_date
 ON industrial_dataset_raw("Date");
+
+
+-- =====================================================
+-- ML Prediction Audit Log
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS ml_prediction_audit (
+
+    id SERIAL PRIMARY KEY,
+
+    request_id UUID NOT NULL,
+
+    model_id INTEGER NOT NULL,
+    model_version TEXT,
+
+    prediction_value DOUBLE PRECISION,
+
+    features JSONB,
+
+    created_at TIMESTAMP DEFAULT NOW()
+
+);
+
+CREATE INDEX idx_ml_audit_model
+ON ml_prediction_audit(model_id);
+
+CREATE INDEX idx_ml_audit_created
+ON ml_prediction_audit(created_at DESC);

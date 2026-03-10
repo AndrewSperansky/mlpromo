@@ -1,6 +1,7 @@
 // frontend\src\services\api.ts
 
 import axios from 'axios'
+import type { Model } from "@/types"
 
 const api = axios.create({
     baseURL: '/api/v1',
@@ -53,7 +54,7 @@ export interface Dataset {
 }
 
 export interface ModelItem {
-    ml_model_id: string
+    ml_model_id: number
     version: string
     active: boolean
     created_at: string
@@ -125,6 +126,50 @@ export const rollbackModel = (id: string) =>
     api.post(`/ml/models/rollback/${id}`)
 
 // ============================
+// MODEL TRAIN (ОБНОВЛЕНО!)
+// ============================  
+
+export interface TrainModelParams {
+    dataset_version_id?: string
+    train_on_all?: boolean
+    promote?: boolean
+}
+
+export const trainModel = (data: TrainModelParams) =>
+    api.post('/ml/train', data)
+
+// ============================
+// MODEL DELETE
+// ============================ 
+
+export const deleteModel = (modelId: number) => {
+    console.log(`🗑️ Deleting model ${modelId}`);
+    return api.delete(`/ml/models/${modelId}`);
+}
+
+
+// ============================
+// MODEL DETAILS
+// ============================
+
+export const fetchModelDetails = async (modelId: number): Promise<Model> => {
+    const response = await api.get(`/ml/models/${modelId}`)
+    return response.data
+}
+
+export const fetchModelMetrics = (modelId: number) =>
+    api.get(`/ml/models/${modelId}/metrics`)
+
+export const promoteModel = (modelId: number) =>
+    api.post(`/ml/models/${modelId}/promote`)
+
+export const deactivateModel = (modelId: number) =>
+    api.post(`/ml/models/${modelId}/deactivate`)
+
+export default api
+
+
+// ============================
 // LINEAGE
 // ============================ 
 
@@ -142,17 +187,17 @@ export const predictBatch = (rows: any[]) =>
 // AUDIT
 // ============================ 
 
-export const getAuditPage = (page: number, modelId: string) =>
-    api.get('/ml/audit', {
-        params: { page, model_id: modelId }
-    })
+export function getAuditPage(page: number, modelId?: string) {
 
-// ============================
-// MODEL TRAIN (ОБНОВЛЕНО!)
-// ============================    
+    const params: any = { page }
 
-export const trainModel = (data: TrainModelParams) =>
-    api.post('/ml/train', data)
+    if (modelId && modelId.trim() !== "") {
+        params.model_id = modelId
+    }
+
+    return api.get("/ml/audit", { params })
+}
+
 
 // ============================
 // DATASETS
@@ -187,20 +232,3 @@ export const deleteDataset = (datasetId: string) => {
     return api.delete(url)
 }
 
-// ============================
-// MODEL DETAILS
-// ============================
-
-export const fetchModelDetails = (modelId: number) =>
-    api.get(`/models/${modelId}`)
-
-export const fetchModelMetrics = (modelId: number) =>
-    api.get(`/models/${modelId}/metrics`)
-
-export const promoteModel = (modelId: number) =>
-    api.post(`/models/${modelId}/promote`)
-
-export const deactivateModel = (modelId: number) =>
-    api.post(`/models/${modelId}/deactivate`)
-
-export default api

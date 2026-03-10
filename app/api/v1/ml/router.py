@@ -9,7 +9,7 @@ import zipfile
 import json
 import uuid
 from io import BytesIO
-from uuid import UUID
+from uuid import UUID, uuid4
 import pandas as pd
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
@@ -39,7 +39,6 @@ from app.schemas.dataset_schema import (
 )
 from app.services.dataset_service import DatasetService
 
-
 from app.api.v1.ml.schemas import (
     PredictionRequest,
     PredictionResponse,
@@ -47,6 +46,9 @@ from app.api.v1.ml.schemas import (
     OneCPredictResponse,
     ShapValue,
 )
+
+from app.services.audit_service import get_audit_page
+
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +112,22 @@ def get_current_metrics():
 
 
 # ============================ ENDPOINTS ===============================
+
+# =========================================
+# AUDIT
+# =========================================
+
+
+@router.get("/audit")
+def list_prediction_audit(
+    page: int = 1,
+    model_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+
+    return get_audit_page(db, page, model_id)
+
+
 
 # =========================================
 # Upload + Decision
@@ -297,7 +315,7 @@ def rollback_model(model_id: str):
 
 
 # =========================================
-# Lineage
+# LINEAGE
 # =========================================
 
 @router.get("/models/lineage")
@@ -386,6 +404,7 @@ def promote_model(
 def predict(
     payload: PredictionRequest,
     svc: MLPredictionService = Depends(get_prediction_service),
+    db: Session = Depends(get_db),
 ):
     """
     Выполняет ML-предсказание.
@@ -410,6 +429,10 @@ def predict(
     # Преобразуем shap в Pydantic объекты
     shap_objs = [ShapValue(feature=s["feature"], effect=s["effect"]) for s in shap_list]
 
+    # 🔥 ВАЖНО: получаем model_id и model_version из runtime state
+    model_id = ML_RUNTIME_STATE.get("ml_model_id")
+    model_version = ML_RUNTIME_STATE.get("version")
+
     # Формируем response
     response = PredictionResponse(
         promo_code=payload.promo_code,
@@ -426,6 +449,40 @@ def predict(
         fallback_used=prediction_result["fallback_used"],
         reason=prediction_result["reason"],
     )
+
+    # Сохраняем в аудит
+
+    request_id = uuid4()
+
+    db.execute(
+        text("""
+            INSERT INTO ml_prediction_audit
+            (
+                request_id,
+                model_id,
+                model_version,
+                prediction_value,
+                features
+            )
+            VALUES
+            (
+                :request_id,
+                :model_id,
+                :model_version,
+                :prediction_value,
+                :features
+            )
+        """),
+        {
+            "request_id": request_id,
+            "model_id": model_id,  # теперь определена
+            "model_version": model_version,  # теперь определена
+            "prediction_value": prediction_result["prediction"],  # исправлено
+            "features": json.dumps(input_data),  # используем input_data вместо payload.dict()
+        }
+    )
+
+    db.commit()
 
     return response
 
@@ -498,6 +555,8 @@ def predict_from_1c(
 # =========================================
 # MODEL ACTIVATE
 # =========================================
+# Параметр ml_model_id - это строка, имя файла модели (без .cbm)
+# Например: "cb_promo_v1", "model_20260306_123456"
 
 @router.post("/models/{ml_model_id}/activate")
 def activate_model(ml_model_id: str):
@@ -524,6 +583,8 @@ def activate_model(ml_model_id: str):
     ML_RUNTIME_STATE["version"] = "manual-activation"
     ML_RUNTIME_STATE["model_loaded"] = False  # форс reload при следующем predict
 
+    logger.info(f"Model {ml_model_id} activated")
+
     return {
         "status": "activated",
         "ml_model_id": ml_model_id
@@ -531,7 +592,41 @@ def activate_model(ml_model_id: str):
 
 
 # =========================================
-# Dataset
+# MODEL DELETE
+# =========================================
+
+@router.delete("/models/{model_id}")
+def delete_model(
+        model_id: int,
+        db: Session = Depends(get_db)
+):
+    """
+    Удаляет модель (soft delete или hard delete).
+    """
+    model = db.get(MLModel, model_id)
+
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    # Вариант 1: Hard delete (полное удаление)
+    # db.delete(model)
+
+    # Вариант 2: Soft delete (рекомендуется)
+    model.is_deleted = True
+    model.is_active = False
+
+    db.commit()
+
+    logger.info(f"Model {model_id} deleted")
+
+    return {
+        "status": "deleted",
+        "model_id": model_id
+    }
+
+
+# =========================================
+# DATASET LIST
 # =========================================
 
 @router.get("/datasets", response_model=list[DatasetVersionResponse])
