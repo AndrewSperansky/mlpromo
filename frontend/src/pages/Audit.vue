@@ -10,7 +10,7 @@
     </div>
 
     <table class="table table-bordered">
-      <thead>
+      <thead class="table-dark">
         <tr>
           <th>Request ID</th>
           <th>Model</th>

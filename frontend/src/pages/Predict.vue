@@ -5,13 +5,34 @@
 
     <h2 class="mb-4">Predictions Test Page</h2>
 
-    <div class="mb-3">
-      <input type="file" accept=".csv" @change="handleCSVUpload" />
-    </div>
+    <div class="input-group mb-3">
+      <!-- Левая кнопка (зеленая) -->
+      <label class="btn btn-primary" for="csvUpload">
+        <i class="bi bi-cloud-upload me-2"></i>Load CSV
+        <input type="file" id="csvUpload" class="d-none" accept=".csv" @change="handleCSVUpload" />
+      </label>
 
-    <button class="btn btn-primary mb-3" :disabled="!rows.length || loading" @click="runBatchPredict">
-      {{ loading ? 'Predicting...' : 'Run Batch Predict' }}
-    </button>
+      <!-- Отображение статуса (вместо input) -->
+      <div class="form-control bg-light d-flex align-items-center justify-content-between">
+        <span>
+          <i v-if="!rows.length" class="bi bi-file-earmark text-muted me-2"></i>
+          <i v-else class="bi bi-check-circle-fill text-success me-2"></i>
+          <span :class="{ 'text-success': rows.length }">
+            {{ statusText }}
+          </span>
+        </span>
+        <span v-if="rows.length" class="badge bg-success rounded-pill">
+          {{ rows.length }} rows
+        </span>
+      </div>
+
+      <!-- Правая кнопка (зеленая) -->
+      <button class="btn btn-success" type="button" :disabled="!rows.length || loading" @click="runBatchPredict">
+        <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
+        <i v-else class="bi bi-play-fill me-2"></i>
+        {{ loading ? 'Predicting...' : 'Run' }}
+      </button>
+    </div>
 
     <div v-if="predictions.length" class="mb-4">
       <canvas ref="chartRef"></canvas>
@@ -30,9 +51,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+
 import { predictBatch } from '../services/api'
 import Chart from 'chart.js/auto'
+import { ref, nextTick, computed } from 'vue'  // ← ВАЖНО: добавили computed
 
 interface CsvRow {
   [key: string]: number
@@ -44,6 +66,19 @@ const loading = ref(false)
 const chartRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: Chart | null = null
 const topShap = ref<{ feature: string; value: number }[]>([])
+
+const statusText = computed(() => {
+  if (!rows.value.length) return 'No data loaded'
+  return `Ready to predict (${rows.value.length} samples)`
+})
+
+const distributionChartRef = ref<HTMLCanvasElement | null>(null)
+const shapChartRef = ref<HTMLCanvasElement | null>(null)
+const heatmapChartRef = ref<HTMLCanvasElement | null>(null)
+
+let distributionChart: Chart | null = null
+let shapChart: Chart | null = null
+let heatmapChart: Chart | null = null
 
 
 // =========================
@@ -96,18 +131,27 @@ function parseCSV(text: string) {
     .map(line => {
 
       const values = line.split(',')
-      const obj: CsvRow = {}
-
+      const obj: any = {}
       headers.forEach((header, index) => {
 
-        const raw = values[index] ?? '0'
-        const parsed = Number(raw.trim())
+        const raw = (values[index] ?? '').trim()
 
-        obj[header] = isNaN(parsed) ? 0 : parsed
+        // convert only numeric fields
+        if (header === "price" || header === "discount") {
+
+          const num = Number(raw)
+          obj[header] = isNaN(num) ? 0 : num
+
+        } else {
+          obj[header] = raw
+        }
       })
 
       return obj
     })
+
+  console.log("📦 parsed rows", rows.value)
+
 }
 
 
@@ -116,23 +160,58 @@ function parseCSV(text: string) {
 // =========================
 
 async function runBatchPredict() {
-
   loading.value = true
 
   try {
+    predictions.value = []
+    topShap.value = []
 
-    const response = await predictBatch(rows.value)
+    // Проходим по каждой строке и отправляем отдельный запрос
+    for (const row of rows.value) {
 
-    predictions.value = response.data?.predictions ?? []
+      // Добавляем недостающие поля со значениями по умолчанию
+      const payload = {
+        promo_code: String(row.promo_code),
+        sku: String(row.sku),
+        prediction_date: String(row.prediction_date),
+        price: Number(row.price),
+        discount: Number(row.discount),
 
-    const shapArray = response.data?.shap_values
-    if (Array.isArray(shapArray) && shapArray.length > 0) {
-      computeTopShap(shapArray[0])
+        // ОБЯЗАТЕЛЬНЫЕ ПОЛЯ, КОТОРЫХ НЕТ В CSV
+        avg_sales_7d: 100,  // значение по умолчанию
+        avg_discount_7d: 5, // значение по умолчанию
+        promo_days_left: 7, // значение по умолчанию
+      }
+
+      console.log("📤 sending payload", payload)
+
+      // Отправляем ОДИН объект, не массив!
+      const response = await predictBatch(payload)
+
+      const prediction = response.data?.prediction
+      if (prediction !== undefined) {
+        predictions.value.push(prediction)
+      }
+
+      // SHAP для первой строки (или для всех, если нужно)
+      if (response.data?.shap_values && topShap.value.length === 0) {
+        const shapArray = response.data.shap_values
+        const shapObj: Record<string, number> = {}
+        shapArray.forEach((s: any) => {
+          shapObj[s.feature] = s.effect
+        })
+        computeTopShap(shapObj)
+      }
     }
 
     await nextTick()
     renderChart()
+    renderDistributionChart()
+    renderShapChart()
+    renderHeatmap()
 
+  } catch (error) {
+    console.error("Prediction error:", error)
   } finally {
     loading.value = false
   }
@@ -164,6 +243,99 @@ function renderChart() {
   })
 }
 
+function renderDistributionChart() {
+
+  const canvas = distributionChartRef.value
+  if (!canvas) return
+
+  if (distributionChart) {
+    distributionChart.destroy()
+  }
+
+  distributionChart = new Chart(canvas, {
+
+    type: 'bar',
+
+    data: {
+
+      labels: predictions.value.map((_, i) => `S${i + 1}`),
+
+      datasets: [{
+        label: 'Prediction distribution',
+        data: predictions.value
+      }]
+
+    }
+
+  })
+}
+
+
+function renderShapChart() {
+
+  const canvas = shapChartRef.value
+  if (!canvas) return
+
+  if (shapChart) {
+    shapChart.destroy()
+  }
+
+  shapChart = new Chart(canvas, {
+
+    type: 'bar',
+
+    data: {
+
+      labels: topShap.value.map(s => s.feature),
+
+      datasets: [{
+        label: 'SHAP impact',
+        data: topShap.value.map(s => s.value)
+      }]
+
+    },
+
+    options: {
+      indexAxis: 'y'
+    }
+
+  })
+}
+
+function renderHeatmap() {
+
+  const canvas = heatmapChartRef.value
+  if (!canvas) return
+
+  if (heatmapChart) {
+    heatmapChart.destroy()
+  }
+
+  heatmapChart = new Chart(canvas, {
+
+    type: 'bar',
+
+    data: {
+
+      labels: topShap.value.map(v => v.feature),
+
+      datasets: [{
+        label: 'Feature strength',
+        data: topShap.value.map(v => v.value)
+      }]
+
+    },
+
+    options: {
+
+      plugins: {
+        legend: { display: false }
+      }
+
+    }
+
+  })
+}
 
 // =========================
 // SHAP TOP 5
@@ -183,3 +355,20 @@ function computeTopShap(shapObj: Record<string, number>) {
 }
 
 </script>
+
+<style scoped>
+.border-success.border-dashed {
+  border-style: dashed !important;
+  transition: all 0.3s ease;
+}
+
+.border-success.border-dashed:hover {
+  background-color: rgba(25, 135, 84, 0.15) !important;
+  cursor: pointer;
+}
+
+.btn-outline-success:hover i {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+</style>

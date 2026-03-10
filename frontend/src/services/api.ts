@@ -177,11 +177,11 @@ export const getLineage = () =>
     api.get('/ml/models/lineage')
 
 // ============================
-// PREDICT BATCH
+// PREDICT BATCH (ИСПРАВЛЕНО!)
 // ============================ 
 
-export const predictBatch = (rows: any[]) =>
-    api.post('/ml/predict', { data: rows })
+export const predictBatch = (payload: any) =>
+    api.post('/ml/predict', payload)  // ← УБРАЛИ ЛИШНЮЮ ОБЕРТКУ!
 
 // ============================
 // AUDIT
@@ -231,4 +231,3 @@ export const deleteDataset = (datasetId: string) => {
 
     return api.delete(url)
 }
-

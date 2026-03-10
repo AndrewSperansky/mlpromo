@@ -441,7 +441,7 @@ def predict(
         prediction=prediction_result["prediction"],
         baseline=prediction_result["baseline"],
         uplift=prediction_result["uplift"],
-        shap_values=shap_objs,  # список ShapValue
+        shap_values=shap_objs,
         ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
         version=ML_RUNTIME_STATE["version"],
         trained_at=ML_RUNTIME_STATE.get("trained_at"),
@@ -451,8 +451,10 @@ def predict(
     )
 
     # Сохраняем в аудит
-
     request_id = uuid4()
+
+    # 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: используем model_dump() с default=str
+    features_json = json.dumps(payload.model_dump(), default=str)
 
     db.execute(
         text("""
@@ -470,15 +472,15 @@ def predict(
                 :model_id,
                 :model_version,
                 :prediction_value,
-                :features
+                CAST(:features AS JSONB)
             )
         """),
         {
             "request_id": request_id,
-            "model_id": model_id,  # теперь определена
-            "model_version": model_version,  # теперь определена
-            "prediction_value": prediction_result["prediction"],  # исправлено
-            "features": json.dumps(input_data),  # используем input_data вместо payload.dict()
+            "model_id": model_id,
+            "model_version": model_version,
+            "prediction_value": prediction_result["prediction"],
+            "features": features_json,  # ← используем подготовленный JSON
         }
     )
 
