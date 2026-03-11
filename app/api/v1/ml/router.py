@@ -669,8 +669,53 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
         if col in df.columns:
             df[col] = df[col].map(BOOL_MAP).fillna(False)  # type: ignore
 
+    # ========== ВАЖНО: КОНВЕРТИРУЕМ NaN В None ==========
+
+    # Создаем новый DataFrame без NaN
+    data_for_db = []
+    for _, row in df.iterrows():
+        clean_row = {}
+        for col_name, value in row.items():
+            if pd.isna(value):
+                clean_row[col_name] = None
+            elif isinstance(value, float) and str(value).lower() == 'nan':
+                clean_row[col_name] = None
+            else:
+                clean_row[col_name] = value
+        data_for_db.append(clean_row)
+
+    # Преобразуем обратно в DataFrame для валидации
+    df_clean = pd.DataFrame(data_for_db)
+
+    # ========== ТЕКСТОВЫЕ ПОЛЯ: NULL -> "" ==========
+    text_columns = [
+        "PromoID", "SKU", "SKU_Level2", "SKU_Level3", "SKU_Level4", "SKU_Level5",
+        "Category", "Supplier", "Region", "StoreID", "Store_Location_Type",
+        "PromoMechanics", "PreviousPromoID", "PromoStatus", "MarketingCarrier",
+        "MarketingMaterial", "FormatAssortment"
+    ]
+
+    for col in text_columns:
+        if col in df_clean.columns:
+            df_clean[col] = df_clean[col].fillna("")
+    # =================================================
+
+    # ==========  Числовые поля: NULL -> 0  ==========
+    numeric_columns = [
+        "RegularPrice", "PromoPrice", "PurchasePriceBefore", "PurchasePricePromo",
+        "PercentPriceDrop", "VolumeRegular", "HistoricalSalesPromo",
+        "SalesQty_Promo", "SalesQty_PrevModel", "FM_Regular", "FM_Promo",
+        "TurnoverBefore", "TurnoverPromo", "SeasonCoef_Week"
+    ]
+
+    for col in numeric_columns:
+        if col in df_clean.columns:
+            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0)
+
+    # ====================================================
+
     # Валидация датасета
-    validate_industrial_contract(df)
+    validate_industrial_contract(df_clean)
 
     # Создаём версию датасета
     dataset_version = DatasetVersion(
@@ -682,7 +727,7 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
     db.flush()
 
     # Запись всех строк в raw таблицу
-    records = df.to_dict(orient="records")
+    records = df_clean.to_dict(orient="records")
     for row in records:
         db_row = IndustrialDatasetRaw(
             dataset_version_id=dataset_version.id,
@@ -694,7 +739,7 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     return {
         "dataset_version": str(dataset_version.id),
-        "rows_loaded": len(df),
+        "rows_loaded": len(df_clean),
         "detected_encoding": detected_encoding
     }
 

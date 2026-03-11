@@ -135,8 +135,33 @@ export interface TrainModelParams {
     promote?: boolean
 }
 
-export const trainModel = (data: TrainModelParams) =>
-    api.post('/ml/train', data)
+export const trainModel = async (data: TrainModelParams) => {
+    console.log('🚀 Starting model training...', data)
+
+    try {
+        const response = await api.post('/ml/train', data, {
+            timeout: 300000  // 5 минут
+        })
+
+        console.log('✅ Training completed:', response.data)
+        return response
+
+    } catch (error: unknown) {
+        // Проверяем тип ошибки
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNABORTED') {
+            console.error('❌ Training timeout - operation took too long')
+            throw new Error('Training timeout. The model training is taking longer than expected. Please try again or check server logs.')
+        }
+
+        if (error instanceof Error) {
+            console.error('❌ Training failed:', error.message)
+        } else {
+            console.error('❌ Training failed with unknown error:', error)
+        }
+
+        throw error
+    }
+}
 
 // ============================
 // MODEL DELETE

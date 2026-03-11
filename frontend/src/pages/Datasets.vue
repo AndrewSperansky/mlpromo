@@ -6,19 +6,17 @@
 
     <div class="card mb-4">
       <div class="card-body">
-        <div class="row g-2 align-items-center">
-
-          <div class="col-auto">
+        <div class="d-flex gap-2">
+          <div class="flex-grow-1">
             <input type="file" class="form-control" accept=".csv" @change="handleFileSelect" />
           </div>
 
-          <div class="col-auto">
+          <div class="flex-shrink-0">
             <button class="btn btn-primary" @click="uploadDataset" :disabled="!selectedFile || uploading">
               <span v-if="uploading" class="spinner-border spinner-border-sm"></span>
               Upload Dataset
             </button>
           </div>
-
         </div>
       </div>
     </div>
