@@ -4,6 +4,7 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from app.core.settings import settings
+from sqlalchemy import event
 
 DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/promo"
 #postgresql+psycopg2://<user>:<password>@<host>:<port>/<dbname>
@@ -13,6 +14,15 @@ engine = create_engine(
     echo=settings.SQLALCHEMY_ECHO,
     future=True,
 )
+
+@event.listens_for(engine, "connect")
+def set_datestyle(dbapi_connection, connection_record):
+    """Устанавливаем правильный формат дат (DD.MM.YYYY) при подключении"""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("SET datestyle = 'ISO, DMY';")
+    cursor.close()
+    # connection_record не используем, но это нормально для listener
+
 
 SessionLocal = sessionmaker(
     bind=engine,
