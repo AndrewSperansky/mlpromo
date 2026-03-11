@@ -1,6 +1,7 @@
 # app/ml/train/train_pipeline.py
 
 import json
+import logging
 import pandas as pd
 from uuid import UUID
 from pathlib import Path
@@ -22,6 +23,9 @@ from app.ml.model_registry.promotion_policy import decide_promotion
 from app.ml.registry.service import ModelRegistryService
 from app.core.settings import settings
 from app.db.session import SessionLocal
+
+
+logger = logging.getLogger(__name__)
 
 
 TARGET = "SalesQty_Promo"
@@ -81,9 +85,23 @@ def train_pipeline(
     if df.empty:
         raise RuntimeError("Dataset is empty.")
 
+    # ========== ВАЖНО: УДАЛЯЕМ СТРОКИ С NULL В ЦЕЛЕВОЙ ПЕРЕМЕННОЙ ==========
+    original_count = len(df)
+    df = df.dropna(subset=[TARGET])
+    cleaned_count = len(df)
+
+    if cleaned_count == 0:
+        raise ValueError(f"All {original_count} rows have NULL target values! Cannot train.")
+
+    if cleaned_count < original_count:
+        logger.warning(f"Removed {original_count - cleaned_count} rows with NULL target values")
+
+    rows_used = cleaned_count
+    # ======================================================================
+
+
     rows_used = len(df)
 
-    # 🔧 ИСПРАВЛЕНО: самый простой способ - напрямую использовать columns
     exclude_cols = {"id", "dataset_version_id", TARGET}
 
     # Получаем все числовые колонки
@@ -205,12 +223,31 @@ def train_pipeline(
     finally:
         db.close()
 
+    logger.info(f"🔥 TRAIN PIPELINE RESULT: model_id={db_model.id} (type={type(db_model.id)})")
+    result_dict = {
+        'status': 'trained',
+        'model_id': db_model.id,
+        'metrics': meta['metrics'],
+        'promoted': promoted,
+        'stage': meta['stage'],
+        'promotion_decision': promotion_decision,
+        'rows_original': original_count,
+        'rows_used': rows_used,
+        'rows_removed': original_count - rows_used,
+        'model_name': 'promo_uplift'
+    }
+    logger.info(f"🔥 TRAIN PIPELINE RESULT: {result_dict}")
+
     return {
         "status": "trained",
-        "model_id": model_id,
+        "model_id": db_model.id,  # ← ЭТО INT! (раньше была строка)
         "metrics": meta["metrics"],
         "promoted": promoted,
         "stage": meta["stage"],
         "promotion_decision": promotion_decision,
+        "rows_original": original_count,
+        "rows_used": rows_used,
+        "rows_removed": original_count - rows_used,
+        "model_name": "promo_uplift",
     }
 

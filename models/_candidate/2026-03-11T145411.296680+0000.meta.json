@@ -1,0 +1,30 @@
+{
+  "model_id": "2026-03-11T14:54:11.296680+00:00",
+  "model_name": "promo_uplift",
+  "dataset_version_id": "a2871394-1dd5-423c-99e0-9215cec01118",
+  "trained_at": "2026-03-11T14:54:11.296680+00:00",
+  "features": [
+    "RegularPrice",
+    "PromoPrice",
+    "PurchasePriceBefore",
+    "PurchasePricePromo",
+    "PercentPriceDrop",
+    "VolumeRegular",
+    "HistoricalSalesPromo",
+    "SalesQty_PrevModel",
+    "FM_Regular",
+    "FM_Promo",
+    "TurnoverBefore",
+    "TurnoverPromo",
+    "SeasonCoef_Week",
+    "ManualCoefficientFlag",
+    "IsNewSKU",
+    "IsAnalogSKU"
+  ],
+  "stage": "candidate",
+  "metrics": {
+    "rmse": 0.2005411340730688
+  },
+  "parent_model_id": "2026-02-26T17:23:55.035639+00:00",
+  "trigger": "api_combined"
+}

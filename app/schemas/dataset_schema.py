@@ -37,3 +37,17 @@ class TrainRequest(BaseModel):
     dataset_version_id: Optional[UUID] = None  # теперь может быть None
     train_on_all: bool = False
     promote: bool = False
+
+
+class TrainSingleResponse(BaseModel):
+    """Ответ от обучения на одном датасете"""
+    status: str
+    model_id: int
+    metrics: Dict[str, Any]
+    promoted: bool = False
+    stage: Optional[str] = None
+    promotion_decision: Optional[Dict] = None
+    rows_original: Optional[int] = None
+    rows_used: Optional[int] = None
+    rows_removed: Optional[int] = None
+    model_name: str = "promo_uplift"

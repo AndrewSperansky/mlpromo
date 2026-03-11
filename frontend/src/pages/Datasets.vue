@@ -217,28 +217,36 @@ async function uploadDataset() {
   }
 }
 
-async function handleDelete(id: string) {
-  console.log('🗑️ handleDelete called with id:', id, 'type:', typeof id)
 
-  if (!id) {
-    console.error('❌ handleDelete: id is undefined or empty')
-    error.value = "Cannot delete: invalid dataset ID"
-    return
-  }
-
-  if (!confirm("Delete this dataset?")) return
-
+async function handleDelete(datasetId: string) {
   try {
-    console.log('Calling deleteDataset with id:', id)
-    const result = await deleteDataset(id)
-    console.log('Delete result:', result)
-    await loadDatasets()
-  } catch (e: any) {
-    console.error('❌ Delete error:', e)
-    console.error('Error response:', e.response?.data)
-    error.value = e.response?.data?.detail || "Delete failed"
-  }
+    // Сначала пробуем без force
+    await deleteDataset(datasetId, false);
+    await loadDatasets(); // перезагружаем список
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      // Датасет используется моделями, спрашиваем пользователя
+      const modelsCount = error.response?.data?.detail?.models_count || 'несколько';
+      const confirmDelete = confirm(
+        `⚠️ Этот датасет используется ${modelsCount} моделью(ями). 
+Удалить датасет вместе с моделями?`
+      );
 
+      if (confirmDelete) {
+        try {
+          // Повторяем с force=true
+          await deleteDataset(datasetId, true);
+          await loadDatasets();
+        } catch (forceError) {
+          console.error('Force delete failed:', forceError);
+          alert('Не удалось удалить датасет даже с force=true');
+        }
+      }
+    } else {
+      console.error('❌ Delete error:', error);
+      alert('Ошибка при удалении датасета');
+    }
+  }
 }
 
 

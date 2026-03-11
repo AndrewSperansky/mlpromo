@@ -14,8 +14,8 @@
         <!-- DATASET SELECT -->
         <select v-model="selectedDataset" class="form-select w-auto">
           <option disabled value="">Select Dataset</option>
-          <option v-for="d in datasets" :key="d.dataset_version_id" :value="d.dataset_version_id">
-            {{ d.dataset_version_id }}
+          <option v-for="d in datasets" :key="d.id" :value="d.id">
+            {{ d.id }}
           </option>
         </select>
 
@@ -129,15 +129,15 @@ import {
 } from '../services/api'
 import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
+import { type Dataset } from '../services/api'
 
-// const router = useRouter()
 
 function goToModel(id: number) {
   selectedModelId.value = id
 }
 
 const models = ref<ModelItem[]>([])
-const datasets = ref<{ dataset_version_id: string }[]>([])
+const datasets = ref<Dataset[]>([])
 const selectedDataset = ref<string>('')
 const trainOnAll = ref(false)
 
@@ -166,6 +166,7 @@ async function loadModels() {
 
 async function loadDatasets() {
   const response = await fetchDatasets()
+  console.log('📊 Datasets loaded:', response.data)
   datasets.value = response.data
 }
 

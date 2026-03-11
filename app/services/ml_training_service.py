@@ -14,8 +14,12 @@ from app.ml.train.train_pipeline import train_pipeline
 from app.db.session import SessionLocal
 from models.dataset_version import DatasetVersion
 from sqlalchemy import text, select, delete, and_
+from models.industrial_dataset import IndustrialDatasetRaw
+
+
 
 logger = logging.getLogger("promo_ml")
+
 
 
 class MLTrainingService:
@@ -79,7 +83,7 @@ class MLTrainingService:
 
             return result
 
-    # app/services/ml_training_service.py
+    # ОБУЧЕНИЕ МОДЕЛИ СРАЗУ НА ВСЕХ ДАТАСЕТАХ
 
     def train_on_all_datasets(
             self,
@@ -87,7 +91,8 @@ class MLTrainingService:
             trigger: str = "api",
     ) -> Dict[str, Any]:
         """
-        Обучает модель на всех доступных датасетах.
+        Обучает ОДНУ модель на ВСЕХ доступных датасетах.
+        Создаёт временный объединённый датасет.
         """
         db = SessionLocal()
         try:
@@ -99,94 +104,166 @@ class MLTrainingService:
             if not datasets:
                 raise ValueError("No READY datasets found")
 
+            dataset_ids = [ds.id for ds in datasets]
+
             logger.info(
-                "ML training started on ALL datasets",
+                "🚀 ML training started on ALL datasets (combined)",
                 extra={
                     "datasets_count": len(datasets),
-                    "datasets": [str(ds.id) for ds in datasets],
+                    "datasets": [str(ds_id) for ds_id in dataset_ids],
                     "promote": promote,
                     "trigger": trigger,
                 },
             )
 
-            results = []
-            for ds in datasets:
-                try:
-                    logger.info(f"Training on dataset {ds.id}")
-                    result = train_pipeline(
-                        dataset_version_id=ds.id,
-                        promote=False,
-                        trigger=f"{trigger}_part_of_all",
-                    )
+            # ========== 1. ЗАГРУЖАЕМ ВСЕ ДАННЫЕ ==========
 
-                    # ✅ ПОЛУЧАЕМ ID МОДЕЛИ ИЗ БД
-                    model_name = result.get("model_name")
-                    model_version = result.get("version")
 
-                    # Ищем модель в БД по имени и версии
-                    model_in_db = db.query(MLModel).filter(
-                        and_(
-                            MLModel.name == model_name,
-                            MLModel.version == model_version,
-                            MLModel.is_deleted == False
-                        )
-                    ).first()
+            all_rows = []
+            rows_per_dataset = {}
 
-                    if model_in_db:
-                        # ✅ Подменяем строковый ID на числовой из БД
-                        result["model_id"] = model_in_db.id
-                        logger.info(f"Found model in DB with id={model_in_db.id}")
-                    else:
-                        logger.warning(f"Model not found in DB: {model_name}:{model_version}")
-                        result["model_id"] = 0
+            for ds_id in dataset_ids:
+                rows = db.query(IndustrialDatasetRaw).filter(
+                    IndustrialDatasetRaw.dataset_version_id == str(ds_id)
+                ).all()
 
-                    results.append(result)
-                    logger.info(f"Training on dataset {ds.id} completed, model_id={result.get('model_id')}")
+                rows_per_dataset[str(ds_id)] = len(rows)
 
-                except Exception as e:
-                    logger.error(f"Failed to train on dataset {ds.id}: {e}")
-                    continue
+                for row in rows:
+                    row_dict = {}
+                    # Преобразуем SQLAlchemy объект в словарь
+                    for column in row.__table__.columns:
+                        value = getattr(row, column.name)
+                        # Не копируем id и dataset_version_id
+                        if column.name not in ['id', 'dataset_version_id']:
+                            row_dict[column.name] = value
+                    all_rows.append(row_dict)
 
-            if not results:
-                raise ValueError("No datasets could be trained successfully")
-
-            # Выбираем лучшую модель
-            best_model = min(results, key=lambda x: x.get("metrics", {}).get("rmse", float("inf")))
-
-            # ✅ ФОРМИРУЕМ ПРАВИЛЬНУЮ СТРУКТУРУ
-            final_result = {
-                "status": "success",
-                "model_id": best_model.get("model_id", 0),  # ← теперь число!
-                "model_name": best_model.get("model_name", "unknown_model"),
-                "datasets_used": [str(ds.id) for ds in datasets],
-                "total_rows": sum(r.get("rows", 0) for r in results),
-                "metrics": best_model.get("metrics", {}),
-                "promoted": promote,
-                "stage": "all_datasets_trained",
-                "note": "Trained on each dataset separately, selected best model"
-            }
-
-            # Если promote=True, промотим лучшую модель
-            if promote and final_result["model_id"]:
-                from app.ml.registry.service import ModelRegistryService
-                reg_db = SessionLocal()
-                try:
-                    registry = ModelRegistryService(reg_db)
-                    registry.promote_model(final_result["model_id"])
-                    final_result["promoted"] = True
-                finally:
-                    reg_db.close()
+            if not all_rows:
+                raise ValueError("No data found in any dataset")
 
             logger.info(
-                "ML training on ALL datasets completed",
+                "📊 Data loaded from datasets",
                 extra={
-                    "total_datasets": len(datasets),
-                    "successful": len(results),
-                    "best_model_id": final_result["model_id"],
+                    "total_rows": len(all_rows),
+                    "rows_per_dataset": rows_per_dataset
+                }
+            )
+
+            # ========== 2. СОЗДАЁМ ВРЕМЕННЫЙ ДАТАСЕТ ==========
+            import uuid
+            from datetime import datetime
+
+            temp_dataset_id = uuid.uuid4()
+            temp_dataset = DatasetVersion(
+                id=temp_dataset_id,
+                row_count=len(all_rows),
+                status="READY",
+                created_at=datetime.now()
+            )
+            db.add(temp_dataset)
+            db.flush()
+
+            logger.info(f"📁 Created temporary dataset: {temp_dataset_id}")
+
+            # ========== 3. СОХРАНЯЕМ ВСЕ СТРОКИ ==========
+            batch_size = 1000
+            for i in range(0, len(all_rows), batch_size):
+                batch = all_rows[i:i + batch_size]
+                for row_dict in batch:
+                    db_row = IndustrialDatasetRaw(
+                        dataset_version_id=temp_dataset_id,
+                        **row_dict
+                    )
+                    db.add(db_row)
+
+                db.flush()
+                logger.info(f"💾 Saved batch {i // batch_size + 1}/{(len(all_rows) - 1) // batch_size + 1}")
+
+            db.commit()
+            logger.info(f"✅ Saved all {len(all_rows)} rows to temporary dataset")
+
+            # ========== 4. ОБУЧАЕМ МОДЕЛЬ ==========
+            from app.ml.train.train_pipeline import train_pipeline
+
+            logger.info("🎓 Starting model training on combined data...")
+
+            result = train_pipeline(
+                dataset_version_id=temp_dataset_id,
+                promote=promote,
+                trigger=f"{trigger}_combined",
+            )
+
+            logger.info(f"✅ Training completed, model_id: {result.get('model_id')}")
+
+            # ========== 5. ФОРМИРУЕМ ОТВЕТ ==========
+            final_result = {
+                "status": "success",
+                "model_id": result.get("model_id", 0),
+                "model_name": result.get("model_name", "promo_uplift"),
+                "datasets_used": [str(ds_id) for ds_id in dataset_ids],
+                "rows_per_dataset": rows_per_dataset,
+                "total_rows": len(all_rows),
+                "metrics": result.get("metrics", {}),
+                "promoted": result.get("promoted", False),
+                "stage": "all_datasets_combined",
+                "temporary_dataset_id": str(temp_dataset_id),
+                "note": "✅ Trained on combined data from all datasets"
+            }
+
+            logger.info(
+                "🎉 ML training on ALL datasets completed",
+                extra={
+                    "total_rows": len(all_rows),
+                    "model_id": final_result["model_id"],
+                    "metrics": final_result["metrics"],
                 },
             )
 
             return final_result
+
+        except Exception as e:
+            logger.error(f"❌ Error in combined training: {e}", exc_info=True)
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def cleanup_temp_datasets(self, hours: int = 24):
+        """
+        Удаляет временные датасеты старше N часов.
+        """
+        from datetime import datetime, timedelta
+        from sqlalchemy import and_
+
+        db = SessionLocal()
+        try:
+            cutoff = datetime.now() - timedelta(hours=hours)
+
+            # Находим старые датасеты с пометкой temporary
+            temp_datasets = db.query(DatasetVersion).filter(
+                and_(
+                    DatasetVersion.status == "READY",
+                    DatasetVersion.created_at < cutoff,
+                    DatasetVersion.id.in_(
+                        text(
+                            "SELECT dataset_version_id FROM industrial_dataset_raw WHERE dataset_version_id IS NOT NULL")
+                    )
+                )
+            ).all()
+
+            for ds in temp_datasets:
+                logger.info(f"🧹 Cleaning up temporary dataset: {ds.id}")
+                # Удаляем связанные строки
+                db.execute(
+                    text("DELETE FROM industrial_dataset_raw WHERE dataset_version_id = :ds_id"),
+                    {"ds_id": ds.id}
+                )
+                # Удаляем сам датасет
+                db.delete(ds)
+
+            db.commit()
+            logger.info(f"🧹 Cleaned up {len(temp_datasets)} temporary datasets")
 
         finally:
             db.close()

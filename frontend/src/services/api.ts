@@ -47,12 +47,24 @@ api.interceptors.response.use(
 // TYPES
 // ============================
 
+// Тип для датасета (соответствует API)
 export interface Dataset {
-    dataset_version_id: string
+    id: string
     created_at: string
     row_count: number
+    target_column: string
+    status: string
+    comment: string | null
 }
 
+// Тип для параметров обучения 
+export interface TrainModelParams {
+    dataset_version_id?: string
+    train_on_all?: boolean
+    promote?: boolean
+}
+
+// Тип для модели
 export interface ModelItem {
     ml_model_id: number
     version: string
@@ -60,15 +72,6 @@ export interface ModelItem {
     created_at: string
 }
 
-// ============================
-// TRAIN MODEL TYPES
-// ============================
-
-export interface TrainModelParams {
-    dataset_version_id?: string      // опционально, нужно если train_on_all = false
-    train_on_all?: boolean            // новый параметр
-    promote?: boolean                 // опционально
-}
 
 // ============================
 // SYSTEM HEALTH
@@ -125,15 +128,6 @@ export const evaluateModel = (id: string) =>
 export const rollbackModel = (id: string) =>
     api.post(`/ml/models/rollback/${id}`)
 
-// ============================
-// MODEL TRAIN (ОБНОВЛЕНО!)
-// ============================  
-
-export interface TrainModelParams {
-    dataset_version_id?: string
-    train_on_all?: boolean
-    promote?: boolean
-}
 
 export const trainModel = async (data: TrainModelParams) => {
     console.log('🚀 Starting model training...', data)
@@ -238,21 +232,24 @@ export const fetchDatasetModels = (datasetId: string) => {
     return api.get(`/ml/datasets/${datasetId}/models`)
 }
 
-export const deleteDataset = (datasetId: string) => {
+// ============================
+// DATASET DELETE
+// ============================
+
+export const deleteDataset = (datasetId: string, force: boolean = false) => {
     console.log('🗑️ deleteDataset called with:', {
         datasetId,
-        type: typeof datasetId,
-        value: datasetId,
-        isEmpty: !datasetId
-    })
+        force,
+        type: typeof datasetId
+    });
 
     if (!datasetId) {
-        console.error('❌ Cannot delete: datasetId is undefined or empty')
-        return Promise.reject(new Error('datasetId is required'))
+        console.error('❌ Cannot delete: datasetId is undefined or empty');
+        return Promise.reject(new Error('datasetId is required'));
     }
 
-    const url = `/ml/datasets/${String(datasetId)}`
-    console.log('🗑️ DELETE URL:', url)
+    const url = `/ml/datasets/${String(datasetId)}${force ? '?force=true' : ''}`;
+    console.log('🗑️ DELETE URL:', url);
 
-    return api.delete(url)
-}
+    return api.delete(url);
+};

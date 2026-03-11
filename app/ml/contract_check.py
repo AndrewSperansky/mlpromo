@@ -1,5 +1,6 @@
 # app/ml/contract_check.py
 
+import logging
 import pandas as pd
 from pathlib import Path
 from app.core.settings import settings
@@ -18,6 +19,7 @@ REQUIRED_COLUMNS = [
     "SalesQty_Promo",
 ]
 
+logger = logging.getLogger(__name__)
 
 def validate_industrial_contract(df: pd.DataFrame):
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
@@ -25,8 +27,14 @@ def validate_industrial_contract(df: pd.DataFrame):
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    if df["SalesQty_Promo"].isnull().any():
-        raise ValueError("Target column SalesQty_Promo contains NULL values")
+    # if df["SalesQty_Promo"].isnull().any():
+    #     raise ValueError("Target column SalesQty_Promo contains NULL values")
+
+    # Логируем NULL, но НЕ ПАДАЕМ
+    for col in REQUIRED_COLUMNS:
+        if col in df.columns and df[col].isnull().any():
+            null_count = df[col].isnull().sum()
+            logger.warning(f"⚠️ Column {col} contains {null_count} NULL values")
 
     return True
 

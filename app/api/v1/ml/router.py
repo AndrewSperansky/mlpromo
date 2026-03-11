@@ -11,6 +11,7 @@ import uuid
 from io import BytesIO
 from uuid import UUID, uuid4
 import pandas as pd
+from typing import Union
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text, select, delete, and_
@@ -36,6 +37,7 @@ from app.schemas.dataset_schema import (
     DatasetVersionResponse,
     TrainRequest,
     TrainOnAllResponse,
+    TrainSingleResponse,
 )
 from app.services.dataset_service import DatasetService
 
@@ -209,9 +211,11 @@ def upload_model_bundle(file: UploadFile = File(...)):
 training_service = MLTrainingService()
 
 
-@router.post("/train")
+
+
+@router.post("/train", response_model=Union[TrainOnAllResponse, TrainSingleResponse])
 def train_model(
-        request: TrainRequest,  # ← используем новую схему
+        request: TrainRequest,
         # db: Session = Depends(get_db)
 ):
     """
@@ -221,7 +225,6 @@ def train_model(
     - Если train_on_all=False: обучает на конкретном dataset_version_id
     """
 
-    # 🔍 ДОБАВЛЯЕМ ЛОГИРОВАНИЕ
     logger.info(f"🔥 RAW TRAIN REQUEST: {request}")
     logger.info(f"🔥 REQUEST DICT: {request.model_dump()}")
     logger.info(f"🔥 train_on_all: {request.train_on_all}")
@@ -229,19 +232,14 @@ def train_model(
     logger.info(f"🔥 promote: {request.promote}")
 
     if request.train_on_all:
-        # Обучение на всех датасетах
         result = training_service.train_on_all_datasets(
             promote=request.promote,
             trigger="api"
         )
         return TrainOnAllResponse(**result)
     else:
-        # Обучение на одном датасете
         if not request.dataset_version_id:
-            raise HTTPException(
-                status_code=400,
-                detail="dataset_version_id required when train_on_all=False"
-            )
+            raise HTTPException(400, "dataset_version_id required")
 
         result = training_service.train(
             dataset_version_id=request.dataset_version_id,
@@ -249,7 +247,8 @@ def train_model(
             trigger="api",
         )
 
-        return result
+        return TrainSingleResponse(**result)
+
 
 
 # =========================================
@@ -710,7 +709,12 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     for col in numeric_columns:
         if col in df_clean.columns:
-            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0)
+            # Конвертируем в числа
+            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+            # Заменяем NaN на None (который станет NULL в БД)
+            df_clean[col] = df_clean[col].where(pd.notnull(df_clean[col]), None)
+
+
 
     # ====================================================
 
@@ -728,10 +732,20 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     # Запись всех строк в raw таблицу
     records = df_clean.to_dict(orient="records")
+
     for row in records:
+        # Создаем чистую копию строки без NaN
+        clean_row = {}
+        for key, value in row.items():
+            # Если это float и это NaN - заменяем на None
+            if isinstance(value, float) and value != value:  # NaN != NaN
+                clean_row[key] = None
+            else:
+                clean_row[key] = value
+
         db_row = IndustrialDatasetRaw(
             dataset_version_id=dataset_version.id,
-            **row
+            **clean_row
         )
         db.add(db_row)
 
@@ -743,54 +757,91 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
         "detected_encoding": detected_encoding
     }
 
+
 # =========================================
-# DATASET DELETE
+# DATASET DELETE (УЛУЧШЕННАЯ ВЕРСИЯ)
 # =========================================
 
+# =========================================
+# DATASET DELETE (С ИГНОРИРОВАНИЕМ ЛИНТЕРА)
+# =========================================
 
 @router.delete("/datasets/{dataset_id}")
 def delete_dataset(
         dataset_id: UUID,
+        force: bool = False,
         db: Session = Depends(get_db)
 ):
     # Находим версию датасета
-    dataset = db.get(DatasetVersion, dataset_id)
+    dataset = db.query(DatasetVersion).filter(DatasetVersion.id == dataset_id).first()  # type: ignore
 
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
 
+    from models.ml_model import MLModel
+
+    # Преобразуем UUID в строку один раз
+    ds_id_str = str(dataset_id)
+
+    # ========== 1. ПРОВЕРЯЕМ СВЯЗАННЫЕ МОДЕЛИ ==========
+    # Считаем модели, использующие этот датасет
+    models_count = db.query(MLModel).filter(
+        MLModel.dataset_version_id == ds_id_str  # type: ignore
+    ).count()
+
+    if models_count > 0 and not force:
+        # Считаем активные модели
+        active_models = db.query(MLModel).filter(
+            MLModel.dataset_version_id == ds_id_str,  # type: ignore
+            MLModel.is_deleted == False  # type: ignore
+        ).count()
+
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Cannot delete dataset: it is used by one or more models",
+                "total_models": models_count,
+                "active_models": active_models,
+                "dataset_id": ds_id_str,
+                "suggestion": "Use force=true to delete dataset and all related models"
+            }
+        )
+
+    # ========== 2. ЕСЛИ force=True, УДАЛЯЕМ ВСЁ ==========
     try:
+        # 2.1 Сначала удаляем все строки из industrial_dataset_raw
+        raw_deleted = db.query(IndustrialDatasetRaw).filter(
+            IndustrialDatasetRaw.dataset_version_id == ds_id_str  # type: ignore
+        ).delete(synchronize_session=False)
 
-        # если нужно удалить только строки датасета
-        # db.query(IndustrialDatasetRaw).filter_by(dataset_version_id=dataset_id).delete()
+        # 2.2 Если force=True, удаляем связанные модели
+        if force and models_count > 0:
+            models_deleted = db.query(MLModel).filter(
+                MLModel.dataset_version_id == ds_id_str  # type: ignore
+            ).delete(synchronize_session=False)
+            logger.info(f"🗑️ Deleted {models_deleted} related models")
 
-        # Пытаемся удалить версию и строки датасета каскадно
+        # 2.3 Удаляем сам датасет
         db.delete(dataset)
+
+
         db.commit()
 
         return {
             "status": "deleted",
-            "dataset_version_id": str(dataset_id),
-            "rows_deleted": dataset.row_count
+            "dataset_version_id": ds_id_str,
+            "rows_deleted": raw_deleted,
+            "models_deleted": models_count if force else 0,
+            "force": force
         }
 
     except Exception as e:
         db.rollback()
-
-        # Проверяем, не из-за внешнего ключа ли ошибка
-        if "foreign key" in str(e).lower() or "restrict" in str(e).lower():
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot delete dataset: it is used by one or more models"
-            )
-
-        # Другая ошибка
+        logger.error(f"❌ Error deleting dataset {dataset_id}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Database error: {str(e)}"
         )
-
-
 
 
 # =========================================
