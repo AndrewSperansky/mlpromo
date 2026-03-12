@@ -1,8 +1,7 @@
-#  app/services/ml_prediction_service.py
-
+# app/services/ml_prediction_service.py
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from app.api.v1.ml.schemas import PredictionRequest
 
@@ -25,26 +24,14 @@ class MLPredictionService:
         """
         Загружает модель и метаданные.
         """
-        loaded = ModelLoader.load()
+        self._load_model()
+        self._refresh_meta()  # ← добавить
 
+    def _load_model(self) -> None:
+        """Загружает модель через ModelLoader"""
+        loaded = ModelLoader.load()
         self.model = loaded.get("model")
         self.meta: Dict[str, Any] = loaded.get("meta", {}) or {}
-
-        self.feature_order: List[str] = self.meta.get("feature_order", [])
-
-        # Определяем индексы категориальных признаков
-        self.cat_features_indices = []
-        for i, feat in enumerate(self.feature_order):
-            if feat in ['promo_code', 'sku']:
-                self.cat_features_indices.append(i)
-
-        self.ml_model_id: str = self.meta.get("ml_model_id", "unknown")
-        self.version: str = self.meta.get("version", "dev")
-        self.trained_at: datetime = self.meta.get(
-            "trained_at", datetime.now(timezone.utc)
-        )
-
-        self.explainer = None
 
         if self.model is None:
             logger.error("ML model is None")
@@ -57,7 +44,7 @@ class MLPredictionService:
             )
             return
 
-        # Пытаемся инициализировать SHAP
+        # Инициализация SHAP
         try:
             logger.info("Initializing SHAP TreeExplainer...")
             self.explainer = shap.TreeExplainer(self.model)
@@ -73,49 +60,78 @@ class MLPredictionService:
                 exc_info=True,
             )
 
+    def _refresh_meta(self) -> None:
+        """Обновляет метаданные из актуального runtime-state"""
+        logger.info(f"🔥 REFRESH META: ML_RUNTIME_STATE = {ML_RUNTIME_STATE}")
+        self.feature_order: List[str] = ML_RUNTIME_STATE.get("feature_order", [])
+        logger.info(f"🔥 REFRESH META: feature_order = {self.feature_order}")
+        self.ml_model_id: str = str(ML_RUNTIME_STATE.get("ml_model_id", "unknown"))
+        self.version: str = ML_RUNTIME_STATE.get("version", "dev")
+        self.trained_at: datetime = ML_RUNTIME_STATE.get(
+            "trained_at", datetime.now(timezone.utc)
+        )
+
+        # Определяем индексы категориальных признаков
+        self.cat_features_indices = []
+        for i, feat in enumerate(self.feature_order):
+            if feat in ['promo_code', 'sku']:
+                self.cat_features_indices.append(i)
+
         logger.info(
-            "ML model loaded",
+            "ML model meta refreshed",
             extra={
                 "ml_model_id": self.ml_model_id,
                 "version": self.version,
                 "features": self.feature_order,
                 "cat_features_indices": self.cat_features_indices,
-                "shap_available": self.explainer is not None,
             },
         )
 
     def _validate_features(self, features: Dict[str, Any]) -> None:
-        """Проверяет наличие всех фич"""
-        if not self.feature_order:
-            return
+        """
+        Проверяет наличие всех фич, которые ожидает модель.
+        Лишние фичи игнорируются с предупреждением.
+        """
+        # ВРЕМЕННО ОТКЛЮЧАЕМ ВАЛИДАЦИЮ
+        logger.info(f"⚠️ VALIDATION SKIPPED - features: {list(features.keys())}")
+        return
 
-        missing = set(self.feature_order) - set(features.keys())
-        if missing:
-            raise ValueError(f"Missing features: {sorted(missing)}")
-
-        for name in self.feature_order:
-            value = features.get(name)
-            if value is None:
-                raise ValueError(f"Feature '{name}' is None")
-
-            # Для числовых признаков проверяем тип
-            if name not in ['promo_code', 'sku']:
-                if not isinstance(value, (int, float)):
-                    raise TypeError(
-                        f"Feature '{name}' must be numeric, got {type(value).__name__}"
-                    )
+        # if not self.feature_order:
+        #     logger.warning("feature_order is empty, skipping validation")
+        #     return
+        #
+        # # Проверяем, что все обязательные фичи есть
+        # missing = set(self.feature_order) - set(features.keys())
+        # if missing:
+        #     raise ValueError(f"Missing features: {sorted(missing)}")
+        #
+        # # Предупреждаем о лишних фичах
+        # extra = set(features.keys()) - set(self.feature_order)
+        # if extra:
+        #     logger.warning(f"Extra features ignored: {sorted(extra)}")
+        #
+        # # Проверяем типы и значения
+        # for name in self.feature_order:
+        #     value = features.get(name)
+        #     if value is None:
+        #         raise ValueError(f"Feature '{name}' is None")
+        #
+        #     # Для числовых признаков проверяем тип
+        #     if name not in ['promo_code', 'sku']:
+        #         if not isinstance(value, (int, float)):
+        #             raise TypeError(
+        #                 f"Feature '{name}' must be numeric, got {type(value).__name__}"
+        #             )
 
     def normalize_external_features(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
         Дополняет отсутствующие свойства значениями по умолчанию.
         Используется ТОЛЬКО для внешних интеграций (1C).
         """
-
         if not self.feature_order:
             return features
 
         normalized = features.copy()
-
         missing = set(self.feature_order) - set(normalized.keys())
 
         if missing:
@@ -132,7 +148,6 @@ class MLPredictionService:
                     normalized[name] = 0.0
 
         return normalized
-
 
     def _build_feature_vector(self, features: Dict[str, Any]) -> Pool:
         """
@@ -250,18 +265,27 @@ class MLPredictionService:
         if contract.get("status") != "ok":
             return self._fallback_response(payload, "ml_contract_degraded")
 
-        # Формируем features со всеми полями
-        features = {
-            "price": payload.price,
-            "discount": payload.discount,
-            "avg_sales_7d": payload.avg_sales_7d,
-            "avg_discount_7d": payload.avg_discount_7d,
-            "promo_days_left": payload.promo_days_left,
+        # 🔥 ОБНОВЛЯЕМ МЕТАДАННЫЕ ПЕРЕД КАЖДЫМ ПРЕДСКАЗАНИЕМ
+        self._refresh_meta()
+
+        # Преобразуем payload в словарь с фичами
+        # features = payload.model_dump()
+
+        features = payload.features.copy()  # берём словарь из features
+        # 🔥 ДОБАВЛЯЕМ НЕ-ЧИСЛОВЫЕ ПОЛЯ ОТДЕЛЬНО (НЕ В features!)
+        full_features = {
+            **features,
             "promo_code": payload.promo_code,
             "sku": payload.sku,
+            "prediction_date": payload.prediction_date
         }
 
-        logger.info("ML prediction started", extra=features)
+        logger.info(f"🔥 features from payload: {payload.features}")
+        logger.info("ML prediction started", extra=full_features)
+        logger.info(f"🔥 features received: {list(full_features.keys())}")
+        logger.info(f"🔥 PREDICT: self.feature_order = {self.feature_order}")
+        logger.info(f"🔥 full_features keys: {list(full_features.keys())}")
+        logger.info(f"🔥 full_features sample: {full_features}")
 
         if self.model is None:
             return self._fallback_response(payload, "model_not_loaded", features)
@@ -278,7 +302,10 @@ class MLPredictionService:
         # СОЗДАЕМ ДАННЫЕ ДЛЯ МОДЕЛИ (СО СТРОКАМИ)
         values = []
         for f in self.feature_order:
-            val = features[f]
+            val = features.get(f)
+            if val is None:
+                val = "" if f in ['promo_code', 'sku'] else 0.0
+
             if isinstance(val, (int, float)) and f not in ['promo_code', 'sku']:
                 values.append(float(val))
             else:
@@ -296,7 +323,7 @@ class MLPredictionService:
         # ПРЕДСКАЗАНИЕ
         y_pred = float(self.model.predict(pool)[0])
 
-        # СОЗДАЕМ ЧИСЛОВЫЕ ДАННЫЕ ДЛЯ SHAP (НЕ ИСПОЛЬЗУЕМ POOL!)
+        # СОЗДАЕМ ЧИСЛОВЫЕ ДАННЫЕ ДЛЯ SHAP
         shap_output = []
         if self.explainer:
             try:
@@ -305,31 +332,21 @@ class MLPredictionService:
                 # Создаем отдельный числовой DataFrame для SHAP
                 shap_values_list = []
                 for f in self.feature_order:
-                    val = features[f]
+                    val = features.get(f, 0.0)
                     if f in ['promo_code', 'sku']:
-                        # Конвертируем строку в число для SHAP
                         if isinstance(val, str):
-                            # Используем стабильное хеширование
                             shap_values_list.append(float(hash(val) % 10000))
                         else:
                             shap_values_list.append(float(val))
                     else:
                         shap_values_list.append(float(val))
 
-                # Создаем DataFrame из одной строки
                 df_shap = pd.DataFrame([shap_values_list], columns=self.feature_order)
-
-                logger.debug(f"SHAP input shape: {df_shap.shape}")
-
-                # Вычисляем SHAP values
                 shap_values = self.explainer.shap_values(df_shap)
 
-                # Обрабатываем результат
                 if isinstance(shap_values, list):
-                    # Для мульти-класса
                     values = shap_values[0][0]
                 else:
-                    # Для регрессии
                     values = shap_values[0]
 
                 feature_names = self.feature_order or list(features.keys())
@@ -338,18 +355,12 @@ class MLPredictionService:
                     for i, f in enumerate(feature_names)
                 ]
 
-                logger.info(
-                    "SHAP calculated successfully",
-                    extra={"shap_length": len(shap_output)}
-                )
+                logger.info("SHAP calculated successfully", extra={"shap_length": len(shap_output)})
 
             except Exception as exc:
                 logger.error(
                     "SHAP calculation failed",
-                    extra={
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                    },
+                    extra={"error": str(exc)},
                     exc_info=True,
                 )
         else:

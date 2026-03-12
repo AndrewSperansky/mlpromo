@@ -629,9 +629,12 @@ def promote_model(
         # ✅ Обновляем runtime state
         ML_RUNTIME_STATE["ml_model_id"] = model.id
         ML_RUNTIME_STATE["version"] = model.version
-        ML_RUNTIME_STATE["feature_order"] = model.features
+        ML_RUNTIME_STATE["feature_order"] = list(model.features) if model.features else []
         ML_RUNTIME_STATE["model_path"] = model.model_path  # ← добавляем путь!
         ML_RUNTIME_STATE["model_loaded"] = False
+
+        # ✅ Очищаем старый contract
+        ML_RUNTIME_STATE["contract"]["model_path"] = model.model_path
 
         # ✅ Просто добавляем запись, НЕ коммитим
         history_entry = ModelActivationHistory(
@@ -640,6 +643,7 @@ def promote_model(
         )
         db.add(history_entry)
 
+        logger.info(f"✅ Model {model_id} promoted. Features: {ML_RUNTIME_STATE['feature_order']}")
 
         # Всё закоммитится автоматически при закрытии сессии
         # или можно сделать ещё один commit, но не обязательно
@@ -673,12 +677,21 @@ def predict(
     """
     Выполняет ML-предсказание.
     """
+    logger.info(f"🔥 Predict request payload: {payload}")
+    logger.info(f"🔥 Payload dict: {payload.model_dump()}")
 
-    # Pydantic v2: преобразуем payload в dict
-    input_data = payload.model_dump()
+    # 🔥 СОБИРАЕМ ВСЕ ФИЧИ В ОДИН СЛОВАРЬ
+    all_data = {
+        **payload.features,
+        "promo_code": payload.promo_code,
+        "sku": payload.sku,
+        "prediction_date": payload.prediction_date.isoformat()  # ← дату в строку
+    }
+
+    logger.info(f"🔥 all_data: {all_data}")
 
     # Получаем прогноз и shap от сервиса
-    prediction_result, shap_list = svc.predict_raw(input_data)
+    prediction_result, shap_list = svc.predict_raw(payload.features)
 
     # Если ML сервис вернул float, оборачиваем в dict
     if isinstance(prediction_result, float):
@@ -706,10 +719,10 @@ def predict(
         baseline=prediction_result["baseline"],
         uplift=prediction_result["uplift"],
         shap_values=shap_objs,
-        ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
+        ml_model_id=str(ML_RUNTIME_STATE["ml_model_id"]),
         version=ML_RUNTIME_STATE["version"],
         trained_at=ML_RUNTIME_STATE.get("trained_at"),
-        features=input_data,
+        features=all_data,
         fallback_used=prediction_result["fallback_used"],
         reason=prediction_result["reason"],
     )

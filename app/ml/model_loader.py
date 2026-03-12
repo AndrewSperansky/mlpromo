@@ -73,6 +73,7 @@ class ModelLoader:
 
         return model_path
 
+
     @classmethod
     def load(cls):
         """
@@ -106,33 +107,32 @@ class ModelLoader:
             model.load_model(str(model_path), format="cbm")
             cls._model = model
             cls._loaded_model_id = current_model_id
-
-            # Сохраняем путь для будущих загрузок
             ML_RUNTIME_STATE["model_path"] = str(model_path)
-
         except Exception as e:
             logger.error("Failed to load CatBoost model: %s", e)
             cls._model = None
             cls._loaded_model_id = None
 
-        # ===============  Load meta safely  =============================
-        # Пробуем найти meta.json рядом с моделью
-        meta_path = model_path.with_suffix('.meta.json')
+        # ===============  Load meta from RUNTIME STATE ===============
+        # Берём из runtime, а не из файла!
+        feature_order = ML_RUNTIME_STATE.get("feature_order", [])
+        version = ML_RUNTIME_STATE.get("version")
 
-        if not meta_path.exists():
-            # Если нет — пробуем старый путь из настроек
-            meta_path = Path(settings.ML_META_PATH)
+        cls._meta = {
+            "feature_order": feature_order,
+            "version": version,
+            "ml_model_id": current_model_id
+        }
 
-        if meta_path.exists():
-            try:
-                cls._meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            except Exception as e:
-                logger.warning("Meta file corrupted: %s", e)
-                cls._meta = {"feature_order": []}
-        else:
-            cls._meta = {"feature_order": []}
+        # Обновляем runtime
+        ML_RUNTIME_STATE["model_loaded"] = True
+        if version:
+            ML_RUNTIME_STATE["version"] = version
+
+        logger.info(f"Model loaded: {current_model_id}, features: {feature_order}")
 
         return {"model": cls._model, "meta": cls._meta}
+
 
     @classmethod
     def reload(cls):

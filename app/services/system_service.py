@@ -1,10 +1,5 @@
 # app/services/system_service.py
 
-"""
-System Service: технические методы системы.
-Router → Service → Repository
-"""
-
 from datetime import datetime, timezone
 import logging
 from sqlalchemy import text
@@ -12,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.settings import settings
 from app.ml.telemetry import TelemetryExporter
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
 logger = logging.getLogger("promo_ml")
 
@@ -58,7 +54,7 @@ class SystemService:
                 "config": "ok",
             },
             "environment": settings.ENV,
-            "version": settings.VERSION,
+            "version": settings.API_CONTRACT_VERSION,
         }
 
     # ==========================================================
@@ -79,8 +75,6 @@ class SystemService:
     # ==========================================================
 
     def freeze(self) -> dict:
-        from app.ml.runtime_state import ML_RUNTIME_STATE
-
         ML_RUNTIME_STATE["freeze_flag"] = True
 
         return {
@@ -89,8 +83,6 @@ class SystemService:
         }
 
     def unfreeze(self) -> dict:
-        from app.ml.runtime_state import ML_RUNTIME_STATE
-
         ML_RUNTIME_STATE["freeze_flag"] = False
 
         return {
@@ -99,8 +91,6 @@ class SystemService:
         }
 
     def clear_drift(self) -> dict:
-        from app.ml.runtime_state import ML_RUNTIME_STATE
-
         ML_RUNTIME_STATE["drift_flag"] = False
 
         return {
@@ -109,8 +99,6 @@ class SystemService:
         }
 
     def force_retrain(self) -> dict:
-        from app.ml.runtime_state import ML_RUNTIME_STATE
-
         ML_RUNTIME_STATE["retrain_requested"] = True
         ML_RUNTIME_STATE["last_retrain_request"] = datetime.now(
             timezone.utc
@@ -122,7 +110,6 @@ class SystemService:
         }
 
     def get_runtime_state(self) -> dict:
-        from app.ml.runtime_state import ML_RUNTIME_STATE
         return ML_RUNTIME_STATE
 
     # ==========================================================
@@ -134,8 +121,6 @@ class SystemService:
         Базовый runtime статус.
         Используется для /status
         """
-
-        from app.ml.runtime_state import ML_RUNTIME_STATE
 
         return {
             "status": ML_RUNTIME_STATE.get("status"),
@@ -160,21 +145,26 @@ class SystemService:
             - errors / warnings
         """
 
-        from app.ml.runtime_state import ML_RUNTIME_STATE
-
         telemetry = self.get_metrics()
+        runtime_state = ML_RUNTIME_STATE.copy()
 
+        # Формируем структуру ответа
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "runtime": {
-                "ml_model_id": ML_RUNTIME_STATE.get("ml_model_id"),
-                "version": ML_RUNTIME_STATE.get("version"),
-                "model_loaded": ML_RUNTIME_STATE.get("model_loaded"),
-                "freeze_flag": ML_RUNTIME_STATE.get("freeze_flag"),
-                "drift_flag": ML_RUNTIME_STATE.get("drift_flag"),
-                "retrain_requested": ML_RUNTIME_STATE.get("retrain_requested"),
+                "ml_model_id": runtime_state.get("ml_model_id"),
+                "version": runtime_state.get("version"),
+                "model_loaded": runtime_state.get("model_loaded", False),
+                "freeze_flag": runtime_state.get("freeze_flag", False),
+                "drift_flag": runtime_state.get("drift_flag", False),
+                "retrain_requested": runtime_state.get("retrain_requested", False),
             },
-            "telemetry": telemetry,
-            "errors": ML_RUNTIME_STATE.get("errors", []),
-            "warnings": ML_RUNTIME_STATE.get("warnings", []),
+            "telemetry": {
+                "latency_p95_ms": telemetry.get("latency_p95_ms"),
+                "predictions_count": telemetry.get("predictions_count", 0),
+                "errors_count": telemetry.get("errors_count", 0),
+                "timestamp": telemetry.get("timestamp"),
+            },
+            "errors": runtime_state.get("errors", []),
+            "warnings": runtime_state.get("warnings", []),
         }

@@ -169,23 +169,33 @@ async function runBatchPredict() {
     // Проходим по каждой строке и отправляем отдельный запрос
     for (const row of rows.value) {
 
-      // Добавляем недостающие поля со значениями по умолчанию
+      // 🔥 ВСЕ 16 ФИЧ ИДУТ ИЗ CSV
       const payload = {
         promo_code: String(row.promo_code),
         sku: String(row.sku),
         prediction_date: String(row.prediction_date),
-        price: Number(row.price),
-        discount: Number(row.discount),
-
-        // ОБЯЗАТЕЛЬНЫЕ ПОЛЯ, КОТОРЫХ НЕТ В CSV
-        avg_sales_7d: 100,  // значение по умолчанию
-        avg_discount_7d: 5, // значение по умолчанию
-        promo_days_left: 7, // значение по умолчанию
+        features: {
+          RegularPrice: Number(row.RegularPrice),
+          PromoPrice: Number(row.PromoPrice),
+          PurchasePriceBefore: Number(row.PurchasePriceBefore),
+          PurchasePricePromo: Number(row.PurchasePricePromo),
+          PercentPriceDrop: Number(row.PercentPriceDrop),
+          VolumeRegular: Number(row.VolumeRegular),
+          HistoricalSalesPromo: Number(row.HistoricalSalesPromo),
+          SalesQty_PrevModel: Number(row.SalesQty_PrevModel),
+          FM_Regular: Number(row.FM_Regular),
+          FM_Promo: Number(row.FM_Promo),
+          TurnoverBefore: Number(row.TurnoverBefore),
+          TurnoverPromo: Number(row.TurnoverPromo),
+          SeasonCoef_Week: Number(row.SeasonCoef_Week),
+          ManualCoefficientFlag: Number(row.ManualCoefficientFlag),
+          IsNewSKU: Number(row.IsNewSKU),
+          IsAnalogSKU: Number(row.IsAnalogSKU)
+        }
       }
 
       console.log("📤 sending payload", payload)
 
-      // Отправляем ОДИН объект, не массив!
       const response = await predictBatch(payload)
 
       const prediction = response.data?.prediction
@@ -193,7 +203,7 @@ async function runBatchPredict() {
         predictions.value.push(prediction)
       }
 
-      // SHAP для первой строки (или для всех, если нужно)
+      // SHAP для первой строки
       if (response.data?.shap_values && topShap.value.length === 0) {
         const shapArray = response.data.shap_values
         const shapObj: Record<string, number> = {}
