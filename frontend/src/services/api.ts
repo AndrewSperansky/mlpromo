@@ -125,8 +125,16 @@ export const evaluateModel = (id: string) =>
 // MODEL ROLLBACK
 // ============================ 
 
-export const rollbackModel = (id: string) =>
-    api.post(`/ml/models/rollback/${id}`)
+/* export const rollbackModel = (id: string) =>
+    api.post(`/ml/models/rollback/${id}`) */
+
+export const rollbackModel = () =>
+    api.post('/ml/models/rollback')
+
+
+// ============================
+// MODEL TRAIN
+// ============================ 
 
 
 export const trainModel = async (data: TrainModelParams) => {
@@ -189,11 +197,20 @@ export default api
 
 
 // ============================
-// LINEAGE
+// MODELS LINEAGE
 // ============================ 
 
 export const getLineage = () =>
     api.get('/ml/models/lineage')
+
+// ============================
+// MODELS Activation History
+// ============================ 
+
+
+export const getActivationHistory = (limit: number = 10) =>
+    api.get(`/ml/models/activation-history?limit=${limit}`)
+
 
 // ============================
 // PREDICT BATCH (ИСПРАВЛЕНО!)

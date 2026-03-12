@@ -6,7 +6,8 @@ from app.ml.runtime_state import ML_RUNTIME_STATE
 import json
 from app.core.settings import settings
 from catboost import CatBoostRegressor
-
+from app.db.session import SessionLocal
+from models.ml_model import MLModel
 
 logger = logging.getLogger("promo_ml")
 
@@ -27,10 +28,47 @@ class ModelLoader:
         Динамически формирует путь к модели
         на основе текущего ML_RUNTIME_STATE.
         """
-        model_id = ML_RUNTIME_STATE.get("ml_model_id")
-        model_filename = f"{model_id}.cbm"
-        model_path = Path(settings.ML_MODEL_DIR) / model_filename
+        # 1. Проверяем, есть ли сохранённый путь в runtime
+        saved_path = ML_RUNTIME_STATE.get("model_path")
+        if saved_path:
+            path = Path(saved_path)
+            if path.exists():
+                return path
 
+        # 2. Получаем model_id
+        model_id = ML_RUNTIME_STATE.get("ml_model_id")
+
+        # 3. Если это число — ищем в БД
+        if isinstance(model_id, int):
+            db = SessionLocal()
+            try:
+                model_record = db.query(MLModel).filter(MLModel.id == model_id).first()
+                if model_record and model_record.model_path:
+                    path = Path(model_record.model_path)
+                    if path.exists():
+                        # Сохраняем для будущих загрузок
+                        ML_RUNTIME_STATE["model_path"] = str(path)
+                        return path
+            except Exception as e:
+                logger.error(f"Error querying model from DB: {e}")
+            finally:
+                db.close()
+
+        # 4. Для старых моделей (cb_promo_v1) — старая логика
+        model_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
+
+        # Пробуем также в подпапках
+        if not model_path.exists():
+            alt_path = Path(settings.ML_MODEL_DIR) / "current" / f"{model_id}.cbm"
+            if alt_path.exists():
+                model_path = alt_path
+
+        if not model_path.exists():
+            alt_path = Path(settings.ML_MODEL_DIR) / "archive" / f"{model_id}.cbm"
+            if alt_path.exists():
+                model_path = alt_path
+
+        # Сохраняем в contract для обратной совместимости
         ML_RUNTIME_STATE["contract"]["model_path"] = str(model_path)
 
         return model_path
@@ -46,9 +84,9 @@ class ModelLoader:
 
         # Если модель уже загружена и id совпадает — возвращаем кэш
         if (
-            cls._model is not None
-            and cls._meta is not None
-            and cls._loaded_model_id == current_model_id
+                cls._model is not None
+                and cls._meta is not None
+                and cls._loaded_model_id == current_model_id
         ):
             return {"model": cls._model, "meta": cls._meta}
 
@@ -68,19 +106,26 @@ class ModelLoader:
             model.load_model(str(model_path), format="cbm")
             cls._model = model
             cls._loaded_model_id = current_model_id
+
+            # Сохраняем путь для будущих загрузок
+            ML_RUNTIME_STATE["model_path"] = str(model_path)
+
         except Exception as e:
             logger.error("Failed to load CatBoost model: %s", e)
             cls._model = None
             cls._loaded_model_id = None
 
         # ===============  Load meta safely  =============================
-        meta_path = Path(settings.ML_META_PATH)
+        # Пробуем найти meta.json рядом с моделью
+        meta_path = model_path.with_suffix('.meta.json')
+
+        if not meta_path.exists():
+            # Если нет — пробуем старый путь из настроек
+            meta_path = Path(settings.ML_META_PATH)
 
         if meta_path.exists():
             try:
-                cls._meta = json.loads(
-                    meta_path.read_text(encoding="utf-8")
-                )
+                cls._meta = json.loads(meta_path.read_text(encoding="utf-8"))
             except Exception as e:
                 logger.warning("Meta file corrupted: %s", e)
                 cls._meta = {"feature_order": []}

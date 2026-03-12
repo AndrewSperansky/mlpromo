@@ -3,10 +3,11 @@
 import time
 from pathlib import Path
 from sqlalchemy.orm import Session
+# from typing import Optional
 
 from app.db.session import SessionLocal
 from app.ml.registry.service import ModelRegistryService
-from models.ml_model import MLModelManager
+from models.ml_model import MLModelManager, MLModel  # ← добавили импорт MLModel
 from app.ml.monitoring.inference_metrics import collect_inference_metrics
 
 
@@ -20,7 +21,7 @@ class Predictor:
         self._load_active_model()
 
     def _load_active_model(self):
-
+        """Загружает активную модель (для production)"""
         db: Session = SessionLocal()
 
         try:
@@ -44,19 +45,51 @@ class Predictor:
         finally:
             db.close()
 
-    def predict(self, X):
+    # ===== НОВЫЙ МЕТОД для Evaluate =====
+    def load_by_id(self, model_record: MLModel) -> bool:
+        """
+        Загружает модель по объекту модели из БД.
+        Используется для evaluate, где модель уже получена.
+        """
+        manager = MLModelManager(Path(model_record.model_path))
+
+        if not manager.load():
+            return False
+
+        self.model = manager.model
+        self.meta = {
+            "ml_model_id": model_record.id,
+            "version": model_record.version,
+            "features": model_record.features,
+            "target": model_record.target
+        }
+        return True
+
+    def predict(self, X, collect_metrics: bool = True):
+        """
+        Делает предсказание.
+
+        Args:
+            X: признаки
+            collect_metrics: собирать ли метрики инференса (для evaluation = False)
+        """
+        if self.model is None:
+            raise RuntimeError("Model not loaded")
 
         start = time.perf_counter()
-
         preds = self.model.predict(X)
-
         latency_ms = (time.perf_counter() - start) * 1000
 
-        collect_inference_metrics(
-            ml_model_id=self.meta["ml_model_id"],
-            inputs=X,
-            outputs=preds,
-            latency_ms=latency_ms,
-        )
+        if collect_metrics and self.meta:
+            collect_inference_metrics(
+                ml_model_id=self.meta["ml_model_id"],
+                inputs=X,
+                outputs=preds,
+                latency_ms=latency_ms,
+            )
 
         return preds
+
+    def get_metadata(self):
+        """Возвращает метаданные модели"""
+        return self.meta

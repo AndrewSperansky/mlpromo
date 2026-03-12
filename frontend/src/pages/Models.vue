@@ -53,6 +53,10 @@
   <ModelTable class="mt-4" :models="models" @activate="openActivateModal" @rollback="handleRollback"
     @evaluate="handleEvaluate" @row-click="goToModel" @delete="openDeleteModal" />
 
+  <button class="btn btn-sm btn-outline-info" @click="showHistory = true">
+    Show Activation History
+  </button>
+
   <!-- ===== TRAIN MODAL ===== -->
   <div v-if="showTrainModal" class="modal-backdrop">
     <div class="modal-box">
@@ -110,10 +114,41 @@
 
   <!-- ===== MODEL DETAIL MODAL ===== -->
   <ModelDetailsModal :modelId="selectedModelId" @closed="selectedModelId = null" />
+
+  <!-- модальное окно с историей -->
+  <div v-if="showHistory" class="modal-backdrop" @click.self="showHistory = false">
+    <div class="modal-box" style="width: 600px;">
+      <h5>Model Activation History</h5>
+
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Model ID</th>
+            <th>Activated By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in history" :key="entry.id">
+            <td>{{ formatDate(entry.activated_at) }}</td>
+            <td>{{ entry.model_id }}</td>
+            <td>{{ entry.activated_by }}</td>
+          </tr>
+          <tr v-if="history.length === 0">
+            <td colspan="3" class="text-center">No history yet</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <button class="btn btn-secondary" @click="showHistory = false">Close</button>
+    </div>
+  </div>
+
+
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 // import { useRouter } from 'vue-router'
 import {
   getModels,
@@ -130,11 +165,18 @@ import {
 import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 import { type Dataset } from '../services/api'
+import { getActivationHistory } from '../services/api'
 
 
-function goToModel(id: number) {
-  selectedModelId.value = id
+interface ActivationHistoryItem {
+  id: number
+  model_id: number
+  activated_at: string
+  activated_by: string
 }
+
+
+
 
 const models = ref<ModelItem[]>([])
 const datasets = ref<Dataset[]>([])
@@ -159,9 +201,34 @@ const selectedModelForActivation = ref<string>('')
 const showDeleteModal = ref(false)
 const modelToDelete = ref<number | null>(null)
 
+// ===== MODELS ACTIVATION HISTORY MODAL =====
+const showHistory = ref(false)
+const history = ref<ActivationHistoryItem[]>([])
+
+
+
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleString('ru-RU')
+}
+
+
+function goToModel(id: number) {
+  selectedModelId.value = id
+}
+
+
 async function loadModels() {
   const response = await getModels()
-  models.value = response.data
+
+  models.value = response.data.map((m: any) => ({
+    ml_model_id: m.ml_model_id,
+    version: m.version,
+    active: m.is_active,
+    created_at: m.trained_at || m.created_at
+  }))
 }
 
 async function loadDatasets() {
@@ -217,9 +284,15 @@ async function handleEvaluate(modelId: number) {
   uploadResult.value = response.data
 }
 
-async function handleRollback(modelId: number) {
-  await rollbackModel(modelId.toString())
-  await loadModels()
+async function handleRollback() {
+  try {
+    // modelId больше не нужен! rollback сам определит
+    await rollbackModel()  // ← без параметров
+    await loadModels()
+  } catch (error) {
+    console.error('Rollback failed:', error)
+    alert('Rollback failed. Not enough history?')
+  }
 }
 
 function openDeleteModal(modelId: number) {
@@ -262,6 +335,19 @@ async function handleFileSelect(event: Event) {
     target.value = ''
   }
 }
+
+
+async function loadHistory() {
+  const response = await getActivationHistory()
+  history.value = response.data
+}
+
+// При открытии модального окна
+watch(showHistory, async (newVal) => {
+  if (newVal) {
+    await loadHistory()
+  }
+})
 
 onMounted(() => {
   loadModels()

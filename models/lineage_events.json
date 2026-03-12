@@ -10,5 +10,110 @@
         "promote": true
       }
     }
+  },
+  {
+    "timestamp": "2026-03-12T11:03:34.364902+00:00",
+    "event_type": "evaluate",
+    "model_id": "42",
+    "metadata": {
+      "dataset_version_id": "38b14bec-6bc4-4fab-8951-13a6d2e65992",
+      "metrics": {
+        "rmse": 0.2013,
+        "mae": 0.074,
+        "r2": 0.9264,
+        "mape": 412837092.55
+      },
+      "rows_evaluated": 4536
+    }
+  },
+  {
+    "timestamp": "2026-03-12T11:04:00.728799+00:00",
+    "event_type": "evaluate",
+    "model_id": "41",
+    "metadata": {
+      "dataset_version_id": "b603fca9-dad1-43dc-b00d-f31b3afd0e08",
+      "metrics": {
+        "rmse": 0.1997,
+        "mae": 0.0732,
+        "r2": 0.9276,
+        "mape": 410769881.64
+      },
+      "rows_evaluated": 4522
+    }
+  },
+  {
+    "timestamp": "2026-03-12T11:04:04.557438+00:00",
+    "event_type": "evaluate",
+    "model_id": "42",
+    "metadata": {
+      "dataset_version_id": "38b14bec-6bc4-4fab-8951-13a6d2e65992",
+      "metrics": {
+        "rmse": 0.2013,
+        "mae": 0.074,
+        "r2": 0.9264,
+        "mape": 412837092.55
+      },
+      "rows_evaluated": 4536
+    }
+  },
+  {
+    "timestamp": "2026-03-12T11:04:43.996425+00:00",
+    "event_type": "evaluate",
+    "model_id": "42",
+    "metadata": {
+      "dataset_version_id": "38b14bec-6bc4-4fab-8951-13a6d2e65992",
+      "metrics": {
+        "rmse": 0.2013,
+        "mae": 0.074,
+        "r2": 0.9264,
+        "mape": 412837092.55
+      },
+      "rows_evaluated": 4536
+    }
+  },
+  {
+    "timestamp": "2026-03-12T13:00:01.790639+00:00",
+    "event_type": "evaluate",
+    "model_id": "42",
+    "metadata": {
+      "dataset_version_id": "38b14bec-6bc4-4fab-8951-13a6d2e65992",
+      "metrics": {
+        "rmse": 0.2013,
+        "mae": 0.074,
+        "r2": 0.9264,
+        "mape": 412837092.55
+      },
+      "rows_evaluated": 4536
+    }
+  },
+  {
+    "timestamp": "2026-03-12T13:14:57.780846+00:00",
+    "event_type": "evaluate",
+    "model_id": "41",
+    "metadata": {
+      "dataset_version_id": "b603fca9-dad1-43dc-b00d-f31b3afd0e08",
+      "metrics": {
+        "rmse": 0.1997,
+        "mae": 0.0732,
+        "r2": 0.9276,
+        "mape": 410769881.64
+      },
+      "rows_evaluated": 4522
+    }
+  },
+  {
+    "timestamp": "2026-03-12T13:25:57.106053+00:00",
+    "event_type": "evaluate",
+    "model_id": "41",
+    "metadata": {
+      "dataset_version_id": "b603fca9-dad1-43dc-b00d-f31b3afd0e08",
+      "metrics": {
+        "rmse": 0.1997,
+        "mae": 0.0732,
+        "r2": 0.9276,
+        "mape": 410769881.64
+      },
+      "rows_evaluated": 4522
+    }
   }
 ]

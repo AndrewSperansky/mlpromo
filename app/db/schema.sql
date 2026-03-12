@@ -410,3 +410,23 @@ ON ml_prediction_audit(model_id);
 
 CREATE INDEX idx_ml_audit_created
 ON ml_prediction_audit(created_at DESC);
+
+-- Add column created_at into ml_model
+ALTER TABLE ml_model
+ADD COLUMN created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+
+
+
+-- Models Activation History
+
+CREATE TABLE model_activation_history (
+    id BIGSERIAL PRIMARY KEY,
+    model_id INTEGER NOT NULL REFERENCES ml_model(id),
+    activated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    activated_by VARCHAR(50)  -- опционально
+);
+
+CREATE INDEX idx_history_model ON model_activation_history(model_id);
+CREATE INDEX idx_history_date ON model_activation_history(activated_at DESC);-- Models Activation History
+

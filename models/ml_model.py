@@ -38,6 +38,8 @@ class MLModel(IDMixin, AuditMixin, Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
 
     trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),  server_default=func.now(), nullable=False)
+
 
     trained_rows_count: Mapped[int] = mapped_column(nullable=False, default=0)
 

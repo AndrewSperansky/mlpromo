@@ -11,12 +11,14 @@ import uuid
 from io import BytesIO
 from uuid import UUID, uuid4
 import pandas as pd
-from typing import Union
+from typing import Union, Optional
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text, select, delete, and_
 
 from app.db.session import get_db
+from app.ml.train.train_pipeline import load_dataset_by_version
+from models.activation_history import ModelActivationHistory
 from models.ml_model import MLModel
 
 from app.core.settings import settings
@@ -31,6 +33,10 @@ from app.ml.registry.service import ModelRegistryService
 from models.dataset_version import DatasetVersion
 from models.industrial_dataset import IndustrialDatasetRaw
 from app.ml.contract_check import validate_industrial_contract
+
+from app.ml.predictor import Predictor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import numpy as np
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.schemas.dataset_schema import (
@@ -132,7 +138,7 @@ def list_prediction_audit(
 
 
 # =========================================
-# Upload + Decision
+# MODEL Upload + Decision
 # =========================================
 
 @router.post("/models/upload")
@@ -252,69 +258,310 @@ def train_model(
 
 
 # =========================================
-# EVALUATE By Id
+# MODEL EVALUATE By Id
 # =========================================
 
 @router.post("/models/evaluate/{model_id}")
-def evaluate_model(model_id: str):
+def evaluate_model(
+        model_id: int,
+        dataset_version_id: Optional[UUID] = None,
+        db: Session = Depends(get_db)
+):
+    """
+    Оценивает качество модели на указанном датасете.
+    Если dataset_version_id не указан, использует датасет, на котором модель обучалась.
+    """
 
-    metrics_file = ARCHIVE_DIR / f"{model_id}.metrics.json"
 
-    if not metrics_file.exists():
+    # 1. Найти модель в БД
+    model_record = db.get(MLModel, model_id)
+    if not model_record or model_record.is_deleted:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    with open(metrics_file) as f:
-        metrics = json.load(f)
+    # 2. Определить датасет для оценки
+    eval_dataset_id = dataset_version_id or model_record.dataset_version_id
+    if not eval_dataset_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No dataset specified for evaluation and model has no training dataset"
+        )
 
-    decision = decide_promotion(
-        candidate_metrics=metrics,
-        current_metrics=get_current_metrics(),
-    )
+    # 3. Загрузить данные
+    try:
+        df = load_dataset_by_version(db, eval_dataset_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load dataset: {str(e)}")
 
+    if df.empty:
+        raise HTTPException(status_code=400, detail="Dataset is empty")
+
+    # 4. Проверить наличие целевой колонки
+    target = model_record.target
+    if target not in df.columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target column '{target}' not found in dataset"
+        )
+
+    # 5. Проверить наличие всех фич
+    features = [f for f in model_record.features]  # ← явное преобразование
+    missing = set(features) - set(df.columns)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing features in evaluation dataset: {missing}"
+        )
+
+    # 6. Подготовить данные
+    X = df[features]
+    y_true = df[target]
+
+    # 7. Проверить на NaN
+    if X.isnull().any().any():
+        null_counts = X.isnull().sum()
+        null_cols = [col for col in features if null_counts[col] > 0]
+        logger.warning(f"NaN values found in evaluation data: {null_counts}")
+
+        # Удаляем строки с NaN (или можно выдать ошибку)
+        X_clean = X.dropna()
+        y_clean = y_true[X_clean.index]
+
+        if len(X_clean) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="All rows contain NaN values after cleaning"
+            )
+
+        logger.info(f"Removed {len(X) - len(X_clean)} rows with NaN values")
+        X, y_true = X_clean, y_clean
+
+    # 8. Загрузить модель через Predictor
+    predictor = Predictor()
+    # noinspection PyTypeChecker
+    if not predictor.load_by_id(model_record):  # type: ignore
+        raise HTTPException(status_code=500, detail="Failed to load model file")
+
+    # 9. Сделать предсказания
+    try:
+        y_pred = predictor.predict(X, collect_metrics=False)  # ← вызываем метод predict у predictor
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+
+    # 10. Рассчитать метрики
+    rmse = float(mean_squared_error(y_true, y_pred, squared=False))
+    mae = float(mean_absolute_error(y_true, y_pred))
+    r2 = float(r2_score(y_true, y_pred))
+
+    # Дополнительные метрики
+    mape = float(np.mean(np.abs((y_true - y_pred) / (y_true + 1e-10))) * 100)
+
+    metrics = {
+        "rmse": round(rmse, 4),
+        "mae": round(mae, 4),
+        "r2": round(r2, 4),
+        "mape": round(mape, 2)
+    }
+
+    # 11. Записать в lineage
     record_lineage_event(
         "evaluate",
-        model_id,
-        {"decision": decision}
+        str(model_id),
+        {
+            "dataset_version_id": str(eval_dataset_id),
+            "metrics": metrics,
+            "rows_evaluated": len(y_true)
+        }
     )
+
+    logger.info(f"Model {model_id} evaluated on dataset {eval_dataset_id}: {metrics}")
 
     return {
         "model_id": model_id,
-        "promotion_decision": decision
+        "dataset_version_id": str(eval_dataset_id),
+        "rows_evaluated": len(y_true),
+        "metrics": metrics
     }
 
 
 # =========================================
-# Rollback
+# MODEL ROLLBACK
 # =========================================
 
-@router.post("/models/rollback/{model_id}")
-def rollback_model(model_id: str):
 
-    source_model = ARCHIVE_DIR / f"{model_id}.cbm"
-    source_meta = ARCHIVE_DIR / f"{model_id}.meta.json"
-    source_metrics = ARCHIVE_DIR / f"{model_id}.metrics.json"
+@router.post("/models/rollback")
+def rollback_model(
+    db: Session = Depends(get_db)
+):
+    """
+    Откатывает на предыдущую активную модель,
+    используя таблицу истории активаций.
+    """
+    from models.activation_history import ModelActivationHistory
 
-    if not source_model.exists():
-        raise HTTPException(status_code=404, detail="Model not found")
+    # 1. Найти последние 2 активации
+    last_two = db.query(ModelActivationHistory).order_by(
+        ModelActivationHistory.activated_at.desc()
+    ).limit(2).all()
 
-    shutil.copy(source_model, BASE_DIR / "current.cbm")
-    shutil.copy(source_meta, BASE_DIR / "current.meta.json")
-    shutil.copy(source_metrics, BASE_DIR / "current.metrics.json")
+    logger.info(f"📊 Last two: {[(h.id, h.model_id) for h in last_two]}")
 
-    record_lineage_event(
-        "rollback",
-        model_id,
-        {}
+    if len(last_two) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough activation history for rollback"
+        )
+
+    current_activation, previous_activation = last_two[0], last_two[1]
+
+    # 2. Получить модели
+    current_model = db.get(MLModel, current_activation.model_id)
+    previous_model = db.get(MLModel, previous_activation.model_id)
+
+    if not current_model or not previous_model:
+        raise HTTPException(status_code=404, detail="Models not found")
+
+    logger.info(f"📦 Current model active: {current_model.is_active}, Previous model active: {previous_model.is_active}")
+
+    # 3. Выполнить откат
+    current_model.is_active = False
+    previous_model.is_active = True
+
+    # 4. Записать новую активацию в историю
+    new_history = ModelActivationHistory(
+        model_id=previous_model.id,
+        activated_by="rollback"
     )
+    db.add(new_history)
+
+    db.commit()
+
+    # 5. Обновить runtime
+    from app.ml.runtime_state import ML_RUNTIME_STATE
+    ML_RUNTIME_STATE["ml_model_id"] = previous_model.id
+    ML_RUNTIME_STATE["model_loaded"] = False
+
+    logger.info(f"✅ Rollback completed: {current_model.id} -> {previous_model.id}")
 
     return {
         "status": "rolled_back",
-        "model_id": model_id
+        "from_model_id": current_model.id,
+        "to_model_id": previous_model.id,
+        "rolled_back_at": new_history.activated_at.isoformat()
     }
 
 
+# @router.post("/models/rollback/{model_id}")
+# def rollback_model(
+#     model_id: int,
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     Откатывает production-модель на предыдущую активную версию.
+#     Работает через БД, без копирования файлов.
+#     """
+#     # 1. Найти модель для отката
+#     target_model = db.get(MLModel, model_id)
+#     if not target_model or target_model.is_deleted:
+#         raise HTTPException(status_code=404, detail="Model not found")
+#
+#     # 2. Найти текущую активную модель
+#     current_active = db.query(MLModel).filter(
+#         MLModel.name == target_model.name,
+#         MLModel.is_active == True,
+#         MLModel.is_deleted == False
+#     ).first()
+#
+#     if not current_active:
+#         raise HTTPException(status_code=400, detail="No active model found")
+#
+#     # 3. Найти предыдущую активную модель
+#     # Берём две последние модели (по trained_at)
+#     recent_models = (
+#         db.query(MLModel)
+#         .filter(
+#             MLModel.name == target_model.name,
+#             MLModel.is_deleted == False
+#         )
+#         .order_by(MLModel.trained_at.desc())
+#         .limit(2)
+#         .all()
+#     )
+#
+#     if len(recent_models) < 2:
+#         raise HTTPException(
+#             status_code=400,
+#             detail="Not enough models in history for rollback"
+#         )
+#
+#     current, previous = recent_models[0], recent_models[1]
+#
+#     # 4. Если запрошен не тот откат — проверим
+#     if target_model.id != current.id and target_model.id != previous.id:
+#         raise HTTPException(
+#             status_code=400,
+#             detail="Can only rollback to the immediately previous model"
+#         )
+#
+#     # 5. Выполнить откат
+#     current.is_active = False
+#     previous.is_active = True
+#
+#     db.commit()
+#
+#     # 6. Обновить runtime state (если используется)
+#     from app.ml.runtime_state import ML_RUNTIME_STATE
+#     ML_RUNTIME_STATE["ml_model_id"] = previous.id
+#     ML_RUNTIME_STATE["model_loaded"] = False  # принудительно перезагрузить
+#
+#     # 7. Записать в lineage
+#     record_lineage_event(
+#         "rollback",
+#         str(model_id),
+#         {
+#             "rolled_back_to": previous.id,
+#             "previous_active": current.id,
+#             "model_name": current.name
+#         }
+#     )
+#
+#     logger.info(f"Rollback completed: model {current.id} -> {previous.id}")
+#
+#     return {
+#         "status": "rolled_back",
+#         "previous_active_model_id": current.id,
+#         "new_active_model_id": previous.id,
+#         "message": f"Rolled back from model {current.id} to {previous.id}"
+#     }
+
 # =========================================
-# LINEAGE
+# MODELS Activation History
+# =========================================
+
+@router.get("/models/activation-history")
+def get_activation_history(
+        limit: int = 10,
+        db: Session = Depends(get_db)
+):
+    """
+    Возвращает историю активаций моделей.
+    """
+    history = db.query(ModelActivationHistory).order_by(
+        ModelActivationHistory.activated_at.desc()
+    ).limit(limit).all()
+
+    return [
+        {
+            "id": h.id,
+            "model_id": h.model_id,
+            "activated_at": h.activated_at.isoformat(),
+            "activated_by": h.activated_by or "system"
+        }
+        for h in history
+    ]
+
+
+# =========================================
+# MODEL LINEAGE
 # =========================================
 
 @router.get("/models/lineage")
@@ -354,6 +601,7 @@ def list_models(db: Session = Depends(get_db)):
             "trained_on_all": m.dataset_version_id is None,  # ← флаг для UI
             "is_active": m.is_active,
             "trained_at": m.trained_at,
+            "created_at": m.created_at,
             "trained_rows_count": m.trained_rows_count,
             "features": m.features,
             "metrics": m.metrics,
@@ -364,18 +612,37 @@ def list_models(db: Session = Depends(get_db)):
 
 
 # =========================================
-# Promote via Registry (DB-driven)
+# MODEL Activate (Promote)
 # =========================================
 
 @router.post("/models/{model_id}/promote")
+@router.post("/models/{model_id}/activate")
 def promote_model(
     model_id: int,
     db: Session = Depends(get_db),
-    ):
+):
     registry = ModelRegistryService(db)
 
     try:
-        model = registry.promote_model(model_id)
+        model = registry.promote_model(model_id)  # ← здесь уже commit
+
+        # ✅ Обновляем runtime state
+        ML_RUNTIME_STATE["ml_model_id"] = model.id
+        ML_RUNTIME_STATE["version"] = model.version
+        ML_RUNTIME_STATE["feature_order"] = model.features
+        ML_RUNTIME_STATE["model_path"] = model.model_path  # ← добавляем путь!
+        ML_RUNTIME_STATE["model_loaded"] = False
+
+        # ✅ Просто добавляем запись, НЕ коммитим
+        history_entry = ModelActivationHistory(
+            model_id=model.id,
+            activated_by="user"
+        )
+        db.add(history_entry)
+
+
+        # Всё закоммитится автоматически при закрытии сессии
+        # или можно сделать ещё один commit, но не обязательно
 
         return {
             "status": "promoted",
@@ -387,8 +654,6 @@ def promote_model(
 
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
 
 
 # ========================================
@@ -757,10 +1022,6 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
         "detected_encoding": detected_encoding
     }
 
-
-# =========================================
-# DATASET DELETE (УЛУЧШЕННАЯ ВЕРСИЯ)
-# =========================================
 
 # =========================================
 # DATASET DELETE (С ИГНОРИРОВАНИЕМ ЛИНТЕРА)
