@@ -407,18 +407,21 @@ grafana/promtail                        2.9.2     3ec78a089e5c   2 years ago    
 ## Узнаем имена сервисов
 `docker compose config --services` 
 `docker compose ps`
->loki
-grafana
+
 postgres
-postgres-exporter
 redis
 backend
+frontend
 nginx
+postgres-exporter
 prometheus
+loki
 promtail
+grafana
 redis-exporter
 
-`docker compose build --no-cache backen`
+
+`docker compose build --no-cache backend`
 
 ## Узнаем имена контейнеров, ID Контейнеров
 
@@ -481,25 +484,39 @@ docker images
 docker images | grep promo-ml   
 
 ### 5. Тегируем latest как stage1
-`docker tag promo-ml:latest asperansky/promo-ml:stage1`  
+`docker tag promo-ml:latest asperansky/promo-ml:stage5`  
 🔹 Важно:  
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
 ### 6. Собрать образ (если еще не собран)
-`docker build -t asperansky/promo-ml:stage2 . ` 
+`docker build -t asperansky/promo-ml:stage5 . ` 
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
 
 ### 7. Отправить образ на Docker Hub
-`docker push asperansky/promo-ml:stage2`
+`docker push asperansky/promo-ml:stage5`
+
+
+# Собрать фронтенд
+docker build -t asperansky/promo-ml-front:stage5 -f Dockerfile.frontend .
+
+# Запушить на Docker Hub
+docker push asperansky/promo-ml-front:stage5
+
+
+
 
 ### 8. Проверка на Docker Hub
-docker inspect asperansky/promo-ml:stage2 | grep Id 
-docker images asperansky/promo-ml:prod2
-docker inspect asperansky/promo-ml:prod2 --format='{{.Id}}'
 
-stage2
+docker inspect asperansky/promo-ml
+docker inspect asperansky/promo-ml:stage5 | grep Id 
+docker images asperansky/promo-ml:prod2
+docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
+docker inspect asperansky/promo-ml-front
+docker inspect asperansky/promo-ml-front:stage5
+
+
 
 ## ПЕРЕЗАГРУЗКА КОНТЕЙНЕРОВ
 
@@ -511,3 +528,5 @@ stage2
 
 `docker compose stop backend`
 `docker compose up -d --build backend`
+
+

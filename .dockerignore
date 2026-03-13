@@ -17,17 +17,38 @@ logs/*
 data/*
 !data/.gitkeep
 
+#Frontend
+frontend/.vscode/
+frontend/node_modules/
+frontend/dist/          # ← добавить (собранный фронт не нужен)
+frontend/.env.local     # ← добавить (секреты)
+
 # Docker
 docker/loki/chunks/*
 docker/loki/index/*
 docker/loki/compactor/*
-INFO/
-offline_wheels/
+docker/grafana/data/    # ← добавить (локальные данные графаны)
+docker/prometheus/data/ # ← добавить (локальные данные прометея)
+
+
+
 # Cache
 *.log
 *.tmp
 *.cache
+.npm/                   # ← добавить (кэш npm)
+.cache/                 # ← добавить (общий кэш)
 
 # модели 1+ GB
 !models/**
 !models/.gitkeep
+
+
+# Environment
+.env
+.env.local
+.env.prod               # ← добавить (секреты продакшена)
+
+
+INFO/
+offline_wheels/

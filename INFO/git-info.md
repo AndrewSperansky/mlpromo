@@ -669,3 +669,16 @@ git cherry-pick --abort
 
 
 git restore frontend/src/components/ModelTable.vue
+
+
+## Удалить ненужную ветку (смерженную)  
+git branch -d stage2
+
+### Если Git вдруг скажет, что есть несмёрженные коммиты
+git branch -D stage2
+
+## Удаляем удалённую ветку (если она уже была пушена)
+git push origin --delete stage2
+
+##  Показать все ветки (локальные и удаленные)
+ git branch -a   
