@@ -519,3 +519,29 @@ curl http://localhost:8000/api/v1/system/status | jq
   "errors": [],
   "warnings": []
 }
+
+
+ curl http://localhost:8000/api/v1/system/runtime-state | jq '.feature_order'
+
+[
+  "RegularPrice",
+  "PromoPrice",
+  "PurchasePriceBefore",
+  "PurchasePricePromo",
+  "PercentPriceDrop",
+  "VolumeRegular",
+  "HistoricalSalesPromo",
+  "SalesQty_PrevModel",
+  "FM_Regular",
+  "FM_Promo",
+  "TurnoverBefore",
+  "TurnoverPromo",
+  "SeasonCoef_Week",
+  "ManualCoefficientFlag",
+  "IsNewSKU",
+  "IsAnalogSKU"
+]
+
+(base) asper@00000-WS2:/mnt/d/PycharmProjects/promo-ml$ curl http://localhost:8000/api/v1/system/runtime-state | jq '.ml_model_id'
+
+42

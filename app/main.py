@@ -26,6 +26,12 @@ from app.ml.contract_check import check_ml_contract
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.ml.self_healing.self_healing_worker import SelfHealingWorker
 
+# ========== ДОБАВЛЕНО: для работы с БД и загрузки активной модели ==========
+from app.db.session import SessionLocal
+from models.ml_model import MLModel
+from app.ml.model_loader import ModelLoader
+# =========================================================================
+
 
 # ------------------------------------------------------
 # Globals
@@ -65,23 +71,75 @@ async def lifespan(_app: FastAPI):
     else:
         logger.warning("ML contract DEGRADED", extra=contract)
 
-    # --- Load ML model ---
+    # ========== 🔥 ВОССТАНАВЛИВАЕМ АКТИВНУЮ МОДЕЛЬ ИЗ БД ==========
+    db = SessionLocal()
     try:
-        model_manager.load()
-        logger.info("ML model loaded successfully")
-    except FileNotFoundError:
-        logger.warning("ML model not found yet, running without ML")
-    except Exception:
-        logger.exception("Unexpected error while loading ML model")
+        # Ищем активную модель в БД
+        active_model = db.query(MLModel).filter(
+            MLModel.is_active == True,
+            MLModel.is_deleted == False
+        ).first()
+
+        if active_model:
+            logger.info(
+                "✅ Active model found in DB",
+                extra={
+                    "model_id": active_model.id,
+                    "version": active_model.version,
+                    "features_count": len(active_model.features) if active_model.features else 0
+                }
+            )
+
+            # Обновляем runtime state данными из БД
+            ML_RUNTIME_STATE["ml_model_id"] = active_model.id
+            ML_RUNTIME_STATE["version"] = active_model.version
+            ML_RUNTIME_STATE["feature_order"] = active_model.features
+            ML_RUNTIME_STATE["model_path"] = active_model.model_path
+            ML_RUNTIME_STATE["model_loaded"] = False
+
+            # Принудительно загружаем модель
+            try:
+                loaded = ModelLoader.reload()
+                if loaded.get("model") is not None:
+                    ML_RUNTIME_STATE["model_loaded"] = True
+                    logger.info(
+                        "✅ Active model loaded successfully",
+                        extra={"model_id": active_model.id}
+                    )
+                else:
+                    logger.error(
+                        "❌ Failed to load active model file",
+                        extra={"model_path": active_model.model_path}
+                    )
+            except Exception as e:
+                logger.error(
+                    "❌ Error loading active model",
+                    extra={"error": str(e), "model_id": active_model.id}
+                )
+        else:
+            logger.warning("⚠️ No active model found in DB, will load default")
+    finally:
+        db.close()
+    # =================================================================
+
+    # --- Load ML model (если не загрузили активную) ---
+    if not ML_RUNTIME_STATE.get("model_loaded", False):
+        try:
+            model_manager.load()
+            logger.info("✅ Default ML model loaded successfully")
+        except FileNotFoundError:
+            logger.warning("⚠️ ML model not found yet, running without ML")
+        except Exception:
+            logger.exception("❌ Unexpected error while loading ML model")
 
     # --- Start model watcher ---
     watcher_task = asyncio.create_task(model_manager.watch())
-    logger.info("ML watcher task started")
+    logger.info("✅ ML watcher task started")
 
 
     # --- Start Self-Healing Worker ---
     self_healing_worker.start()
-    logger.info("SelfHealingWorker started")
+    logger.info("✅ SelfHealingWorker started")
     print("🟢 SelfHealingWorker started")
 
     # ---------- APP RUN ----------

@@ -25,8 +25,7 @@
       {{ error }}
     </div>
 
-    <!-- модальное окно -->
-
+    <!-- Таблица датасетов -->
     <div class="card">
       <div class="card-body p-0">
 
@@ -73,6 +72,7 @@
 
   </div>
 
+  <!-- ===== МОДАЛЬНОЕ ОКНО ДЛЯ ПРОСМОТРА МОДЕЛЕЙ ===== -->
   <div v-if="showModal" class="modal fade show d-block" tabindex="-1">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
@@ -124,34 +124,71 @@
 
   <div v-if="showModal" class="modal-backdrop fade show"></div>
 
+  <!-- ===== МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ ===== -->
+  <div v-if="showDeleteConfirm" class="modal fade show d-block" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            Confirm Deletion
+          </h5>
+          <button type="button" class="btn-close btn-close-white" @click="showDeleteConfirm = false"></button>
+        </div>
+
+        <div class="modal-body">
+          <p class="fs-5">{{ deleteConfirmMessage }}</p>
+          <p class="text-muted small mb-0">Это действие нельзя отменить. Все связанные модели будут помечены как
+            удалённые.</p>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="showDeleteConfirm = false">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-danger" @click="confirmForceDelete">
+            <i class="bi bi-trash3 me-2"></i>
+            Delete with models
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showDeleteConfirm" class="modal-backdrop fade show"></div>
+
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-// import { useRouter } from "vue-router"
 import { fetchDatasetModels } from "../services/api"
 import api, { fetchDatasets, deleteDataset } from "../services/api"
-const selectedDataset = ref<string | null>(null)
-const datasetModels = ref<any[]>([])
-const showModal = ref(false)
 
+// ===== Types =====
 interface Dataset {
   dataset_version_id: string
   created_at: string
   row_count: number
 }
 
-// const router = useRouter()
+// ===== State =====
+const selectedDataset = ref<string | null>(null)
+const datasetModels = ref<any[]>([])
+const showModal = ref(false)
+
 const datasets = ref<Dataset[]>([])
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
 const error = ref("")
 
+// ===== Delete confirmation modal =====
+const showDeleteConfirm = ref(false)
+const deleteConfirmMessage = ref('')
+const pendingDeleteId = ref<string | null>(null)
 
-/* function openDataset(id: string) {
-  router.push(`/datasets/${id}`)
-} */
-
+// ===== Methods =====
 function formatDate(date: string) {
   return new Date(date).toLocaleString()
 }
@@ -171,7 +208,6 @@ async function loadDatasets() {
     const res = await fetchDatasets()
     console.log('Fetch datasets response:', res)
 
-    // Проверяем структуру ответа
     const data = res.data || res
     console.log('Datasets data:', data)
 
@@ -217,31 +253,29 @@ async function uploadDataset() {
   }
 }
 
-
 async function handleDelete(datasetId: string) {
   try {
-    // Сначала пробуем без force
+    console.log('🔍 Trying to delete without force:', datasetId);
     await deleteDataset(datasetId, false);
-    await loadDatasets(); // перезагружаем список
+    await loadDatasets();
   } catch (error: any) {
-    if (error.response?.status === 409) {
-      // Датасет используется моделями, спрашиваем пользователя
-      const modelsCount = error.response?.data?.detail?.models_count || 'несколько';
-      const confirmDelete = confirm(
-        `⚠️ Этот датасет используется ${modelsCount} моделью(ями). 
-Удалить датасет вместе с моделями?`
-      );
+    console.log('🔍 Error caught:', error);
 
-      if (confirmDelete) {
-        try {
-          // Повторяем с force=true
-          await deleteDataset(datasetId, true);
-          await loadDatasets();
-        } catch (forceError) {
-          console.error('Force delete failed:', forceError);
-          alert('Не удалось удалить датасет даже с force=true');
-        }
-      }
+    if (error.response?.status === 409) {
+      console.log('🔍 409 Conflict detected');
+
+      const detail = error.response?.data?.detail;
+      console.log('🔍 detail:', detail);
+
+      const modelsCount = detail?.total_models || 'несколько';
+      console.log('🔍 modelsCount:', modelsCount);
+
+      // Показываем кастомное модальное окно вместо confirm
+      pendingDeleteId.value = datasetId;
+      deleteConfirmMessage.value =
+        `Этот датасет используется ${modelsCount} моделью(ями).`;
+      showDeleteConfirm.value = true;
+
     } else {
       console.error('❌ Delete error:', error);
       alert('Ошибка при удалении датасета');
@@ -249,6 +283,19 @@ async function handleDelete(datasetId: string) {
   }
 }
 
+async function confirmForceDelete() {
+  if (!pendingDeleteId.value) return;
+
+  try {
+    await deleteDataset(pendingDeleteId.value, true);
+    await loadDatasets();
+    showDeleteConfirm.value = false;
+    pendingDeleteId.value = null;
+  } catch (forceError) {
+    console.error('Force delete failed:', forceError);
+    alert('Не удалось удалить датасет даже с force=true');
+  }
+}
 
 async function openDatasetDetails(id: string) {
   selectedDataset.value = id
@@ -265,8 +312,7 @@ async function openDatasetDetails(id: string) {
 onMounted(loadDatasets)
 </script>
 
-
-<style>
+<style scoped>
 .dataset-link {
   text-decoration: none;
   font-weight: 500;
@@ -280,7 +326,31 @@ onMounted(loadDatasets)
 
 .dataset-id {
   color: #198754;
-  /* bootstrap green */
   font-weight: 600;
+}
+
+/* Стили для модальных окон */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+}
+
+.modal.show {
+  display: block;
+  z-index: 1050;
+}
+
+.modal-dialog {
+  z-index: 1060;
+}
+
+.bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.btn-close-white {
+  filter: invert(1) grayscale(100%) brightness(200%);
 }
 </style>
