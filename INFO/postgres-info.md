@@ -492,11 +492,19 @@ FOREIGN KEY (model_id) REFERENCES ml_model(id);
 `docker exec -it promo_postgres psql -h localhost -U postgres -p 5432`
 
 
-## Создание Backup.dump
+
+
+## Выгрузка только схемы БД
+docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-owner --no-privileges > app/db/schema.sql
+
+
+## Создание Backup.dump  
 `docker exec -t promo_postgres pg_dump -U postgres -Fc promo > backup/promo_backup_$(date +%Y%m%d_%H%M).dump`
+
+## Создание Backup.sql  
+`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_$(date +%Y%m%d_%H%M).sql`
+
 
 ## Восстановление < Backup.dump
 docker exec -i promo_postgres pg_restore -U postgres -d promo < dump/promo_backup.dump
 
-## Создание Backup.sql
-`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_$(date +%Y%m%d_%H%M).sql`

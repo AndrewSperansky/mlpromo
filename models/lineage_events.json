@@ -130,5 +130,20 @@
       },
       "rows_evaluated": 4536
     }
+  },
+  {
+    "timestamp": "2026-03-13T09:52:42.248275+00:00",
+    "event_type": "evaluate",
+    "model_id": "42",
+    "metadata": {
+      "dataset_version_id": "38b14bec-6bc4-4fab-8951-13a6d2e65992",
+      "metrics": {
+        "rmse": 0.2013,
+        "mae": 0.074,
+        "r2": 0.9264,
+        "mape": 412837092.55
+      },
+      "rows_evaluated": 4536
+    }
   }
 ]
