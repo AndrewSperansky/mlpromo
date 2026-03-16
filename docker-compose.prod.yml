@@ -21,8 +21,11 @@ services:
       - backend-logs:/app/logs
       - models:/app/models
 
-    ports:
-      # - "8000:8000"
+#    ports:
+#      - "8000:8000"
+      # - "8000"
+
+    expose:
       - "8000"
 
     depends_on:
@@ -41,8 +44,8 @@ services:
     image: asperansky/promo-ml-front:stage5
     restart: unless-stopped
 
-    # ports:
-    #  - "5173:80"
+    ports:
+      - "5173:80"
 
     depends_on:
       - backend
@@ -76,6 +79,22 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       retries: 5
+
+  # ------------ POSTGRES EXPORTER ------------------
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: promo_postgres_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/promo?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - promo_net
+
 
   # -------------------- REDIS --------------------
 
@@ -112,7 +131,7 @@ services:
       - "80:80"
 
     volumes:
-      - ./docker/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx.prod.conf:/etc/nginx/nginx:ro
       - nginx-logs:/var/log/nginx
 
     depends_on:
