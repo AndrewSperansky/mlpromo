@@ -94,6 +94,13 @@ services:
     networks:
       - promo_net
 
+    healthcheck: # ← ДОБАВЬ ЭТОТ БЛОК
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   # -------------------- NGINX --------------------
 
   nginx:
