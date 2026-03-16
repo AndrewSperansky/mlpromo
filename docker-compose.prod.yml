@@ -1,0 +1,210 @@
+# docker-compose.prod.yml
+
+services:
+
+  # -------------------- BACKEND --------------------
+
+  backend:
+    container_name: promo_ml_backend
+    image: asperansky/promo-ml-backend:stage5
+    restart: unless-stopped
+
+
+    environment:
+      ENV: prod
+      LOG_LEVEL: INFO
+      ML_MODEL_DIR: /app/models
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/promo
+      REDIS_URL: redis://redis:6379/0
+
+    volumes:
+      - backend-logs:/app/logs
+      - models:/app/models
+
+    ports:
+      # - "8000:8000"
+      - "8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - promo_net
+
+  # -------------------- FRONTEND --------------------
+
+  frontend:
+    container_name: promo_ml_frontend
+    image: asperansky/promo-ml-front:stage5
+    restart: unless-stopped
+
+    # ports:
+    #  - "5173:80"
+
+    depends_on:
+      - backend
+
+    networks:
+      - promo_net
+
+  # -------------------- POSTGRES --------------------
+
+  postgres:
+    image: postgres:15
+    container_name: promo_postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: promo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-logs:/var/log/postgresql
+
+    ports:
+      - "5432:5432"
+
+    networks:
+      - promo_net
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  # -------------------- REDIS --------------------
+
+  redis:
+    image: redis:7
+    container_name: promo_redis
+    restart: unless-stopped
+
+    volumes:
+      - redis-data:/data
+
+    ports:
+      - "6379"
+      # - "6379:6379"
+
+    networks:
+      - promo_net
+
+  # -------------------- NGINX --------------------
+
+  nginx:
+    image: nginx:1.25
+    container_name: promo_nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+
+    volumes:
+      - ./docker/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+
+    depends_on:
+      - backend
+      - frontend
+
+    networks:
+      - promo_net
+
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # -------------------- LOKI --------------------
+
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: promo_loki
+    restart: unless-stopped
+
+    volumes:
+      - loki-data:/loki
+
+    ports:
+      - "3100:3100"
+
+    networks:
+      - promo_net
+
+  # -------------------- PROMTAIL --------------------
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: promo_promtail
+    restart: unless-stopped
+
+    volumes:
+      - backend-logs:/app/logs
+      - nginx-logs:/var/log/nginx:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    depends_on:
+      - loki
+
+    networks:
+      - promo_net
+
+  # -------------------- GRAFANA --------------------
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: promo_grafana
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+    networks:
+      - promo_net
+
+  # -------------------- PROMETHEUS --------------------
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: promo_prometheus
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - prometheus-data:/prometheus
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+    networks:
+      - promo_net
+
+# -------------------- NETWORK --------------------
+
+networks:
+  promo_net:
+    driver: bridge
+
+# -------------------- VOLUMES --------------------
+
+volumes:
+  postgres-data:
+  postgres-logs:
+  grafana-data:
+  loki-data:
+  redis-data:
+  backend-logs:
+  nginx-logs:
+  prometheus-data:
+  models:
