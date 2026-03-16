@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # ===== ML FILE CONTRACT =====
     ML_MODEL_DIR: str = "/app/models"
-    ML_META_PATH: str = "//app/models/cb_promo_v1.meta.json"
+    ML_META_PATH: str = "/app/models/cb_promo_v1.meta.json"
     # ============================
 
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/promo"

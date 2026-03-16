@@ -27,51 +27,100 @@ class ModelLoader:
         """
         Динамически формирует путь к модели
         на основе текущего ML_RUNTIME_STATE.
+
+        Приоритет:
+        1. Сохранённый путь в runtime state (model_path)
+        2. Путь из БД для модели с ID (число)
+        3. Поиск в стандартных папках (current, archive, _candidate)
+        4. Старая логика (прямой путь)
         """
-        # 1. Проверяем, есть ли сохранённый путь в runtime
+        import logging
+        from pathlib import Path
+        from app.core.settings import settings
+        from app.ml.runtime_state import ML_RUNTIME_STATE
+
+        logger = logging.getLogger("promo_ml")
+
+        # ===== 1. Проверяем сохранённый путь в runtime =====
         saved_path = ML_RUNTIME_STATE.get("model_path")
         if saved_path:
             path = Path(saved_path)
             if path.exists():
+                logger.debug(f"Using saved model path: {path}")
                 return path
+            else:
+                logger.warning(f"Saved model path does not exist: {path}")
 
-        # 2. Получаем model_id
+        # ===== 2. Получаем model_id =====
         model_id = ML_RUNTIME_STATE.get("ml_model_id")
 
-        # 3. Если это число — ищем в БД
+        # ===== 3. Если это число — ищем в БД =====
         if isinstance(model_id, int):
-            db = SessionLocal()
             try:
-                model_record = db.query(MLModel).filter(MLModel.id == model_id).first()
-                if model_record and model_record.model_path:
-                    path = Path(model_record.model_path)
-                    if path.exists():
-                        # Сохраняем для будущих загрузок
-                        ML_RUNTIME_STATE["model_path"] = str(path)
-                        return path
-            except Exception as e:
-                logger.error(f"Error querying model from DB: {e}")
-            finally:
-                db.close()
+                from app.db.session import SessionLocal
+                from models.ml_model import MLModel
 
-        # 4. Для старых моделей (cb_promo_v1) — старая логика
-        model_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
+                db = SessionLocal()
+                try:
+                    model_record = db.query(MLModel).filter(MLModel.id == model_id).first()
+                    if model_record and model_record.model_path:
+                        path = Path(model_record.model_path)
+                        if path.exists():
+                            # Сохраняем для будущих загрузок
+                            ML_RUNTIME_STATE["model_path"] = str(path)
+                            logger.info(f"Found model in DB, path: {path}")
+                            return path
+                        else:
+                            logger.warning(f"Model path from DB does not exist: {path}")
+                    else:
+                        logger.warning(f"Model {model_id} not found in DB or has no path")
+                except Exception as e:
+                    logger.error(f"Error querying model from DB: {e}")
+                finally:
+                    db.close()
+            except ImportError as e:
+                logger.error(f"Failed to import DB modules: {e}")
 
-        # Пробуем также в подпапках
-        if not model_path.exists():
-            alt_path = Path(settings.ML_MODEL_DIR) / "current" / f"{model_id}.cbm"
-            if alt_path.exists():
-                model_path = alt_path
+        # ===== 4. Для старых моделей (строковые ID) — ищем в стандартных папках =====
+        # Пробуем разные варианты
+        possible_paths = [
+            Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm",
+            Path(settings.ML_MODEL_DIR) / "current" / f"{model_id}.cbm",
+            Path(settings.ML_MODEL_DIR) / "archive" / f"{model_id}.cbm",
+            Path(settings.ML_MODEL_DIR) / "_candidate" / f"{model_id}.cbm",
+        ]
 
-        if not model_path.exists():
-            alt_path = Path(settings.ML_MODEL_DIR) / "archive" / f"{model_id}.cbm"
-            if alt_path.exists():
-                model_path = alt_path
+        # Также пробуем найти по дате, если model_id похож на дату
+        if isinstance(model_id, str) and "T" in model_id:
+            # Ищем в _candidate файлы с похожей датой
+            candidate_dir = Path(settings.ML_MODEL_DIR) / "_candidate"
+            if candidate_dir.exists():
+                # Ищем файлы, начинающиеся с даты (первые 10 символов)
+                date_part = model_id[:10] if len(model_id) >= 10 else ""
+                if date_part:
+                    matching = list(candidate_dir.glob(f"{date_part}*.cbm"))
+                    if matching:
+                        possible_paths.append(matching[0])
+
+        for path in possible_paths:
+            if path.exists():
+                logger.info(f"Found model at: {path}")
+                # Сохраняем для будущих загрузок
+                ML_RUNTIME_STATE["model_path"] = str(path)
+                # Также сохраняем в contract для обратной совместимости
+                if "contract" in ML_RUNTIME_STATE:
+                    ML_RUNTIME_STATE["contract"]["model_path"] = str(path)
+                return path
+
+        # ===== 5. Если ничего не нашли — возвращаем путь по умолчанию для ошибки =====
+        default_path = Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm"
+        logger.warning(f"Model not found, returning default path: {default_path}")
 
         # Сохраняем в contract для обратной совместимости
-        ML_RUNTIME_STATE["contract"]["model_path"] = str(model_path)
+        if "contract" in ML_RUNTIME_STATE:
+            ML_RUNTIME_STATE["contract"]["model_path"] = str(default_path)
 
-        return model_path
+        return default_path
 
 
     @classmethod
