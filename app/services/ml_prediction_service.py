@@ -1,9 +1,9 @@
 # app/services/ml_prediction_service.py
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime, timezone
-from app.api.v1.ml.schemas import PredictionRequest
+from schemas.prediction_schema import PredictionRequest
 
 import pandas as pd
 import shap

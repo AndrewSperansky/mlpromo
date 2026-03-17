@@ -20,7 +20,7 @@ from app.ml.train.shap_utils import (
 
 from app.ml.model_registry.lineage import enrich_meta_with_lineage
 from app.ml.model_registry.promotion_policy import decide_promotion
-from app.ml.registry.service import ModelRegistryService
+from services.registry_service import ModelRegistryService
 from app.core.settings import settings
 from app.db.session import SessionLocal
 

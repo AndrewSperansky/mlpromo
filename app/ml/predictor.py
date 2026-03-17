@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 # from typing import Optional
 
 from app.db.session import SessionLocal
-from app.ml.registry.service import ModelRegistryService
+from services.registry_service import ModelRegistryService
 from models.ml_model import MLModelManager, MLModel  # ← добавили импорт MLModel
 from app.ml.monitoring.inference_metrics import collect_inference_metrics
 

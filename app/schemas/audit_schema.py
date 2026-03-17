@@ -9,14 +9,10 @@ from uuid import UUID
 class AuditRecord(BaseModel):
 
     id: int
-
     request_id: UUID
-
     model_id: int
     model_version: str | None
-
     prediction_value: float | None
-
     created_at: datetime
 
     class Config:

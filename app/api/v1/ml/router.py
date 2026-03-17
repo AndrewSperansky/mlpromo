@@ -1,6 +1,6 @@
 # app/api/v1/ml/router.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from pathlib import Path
 import logging
 import shutil
@@ -14,7 +14,7 @@ import pandas as pd
 from typing import Union, Optional
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import text, select, delete, and_
+from sqlalchemy import text, select, and_
 
 from app.db.session import get_db
 from app.ml.train.train_pipeline import load_dataset_by_version
@@ -27,7 +27,7 @@ from app.ml.model_registry.promotion_policy import decide_promotion
 
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
-from app.ml.registry.service import ModelRegistryService
+from services.registry_service import ModelRegistryService
 
 
 from models.dataset_version import DatasetVersion
@@ -47,7 +47,7 @@ from app.schemas.dataset_schema import (
 )
 from app.services.dataset_service import DatasetService
 
-from app.api.v1.ml.schemas import (
+from schemas.prediction_schema import (
     PredictionRequest,
     PredictionResponse,
     OneCPredictRequest,

@@ -1,4 +1,4 @@
-# app/ml/registry/service.py
+# app/services/registry_service.py
 
 from pathlib import Path
 from datetime import datetime, timezone
