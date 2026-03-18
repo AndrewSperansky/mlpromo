@@ -50,7 +50,6 @@ from app.services.dataset_service import DatasetService
 from app.schemas.prediction_schema import (
     PredictionRequest,
     PredictionResponse,
-    ShapValue,
 )
 
 from app.services.audit_service import get_audit_page
@@ -584,6 +583,7 @@ def delete_model(
 ):
     """
     Полностью удаляет модель из БД и файловой системы.
+    Даже если файлы отсутствуют, запись из БД удаляется.
     """
     # Находим модель
     model = db.get(MLModel, model_id)
@@ -597,43 +597,77 @@ def delete_model(
             detail="Cannot delete active model. Deactivate it first."
         )
 
-    try:
-        # ===== ИСПРАВЛЕНО: преобразуем SQLAlchemy attribute в строку =====
-        if model.model_path:
-            # Преобразуем InstrumentedAttribute в строку
+    # ===== 1. УДАЛЯЕМ ФАЙЛЫ (ИГНОРИРУЕМ ОШИБКИ) =====
+    file_deletion_errors = []
+    model_file = None  # ← ИНИЦИАЛИЗИРУЕМ
+
+    if model.model_path:
+        try:
             model_path_str = str(model.model_path)
-            model_file = Path(model_path_str)
+            model_file = Path(model_path_str)  # ← теперь точно определён
+
+            # Удаляем файл модели
             if model_file.exists():
                 model_file.unlink()
                 logger.info(f"Deleted model file: {model_file}")
+        except Exception as e:
+            file_deletion_errors.append(f"Model file: {e}")
+            logger.warning(f"Could not delete model file: {e}")
 
-            # Также удаляем meta.json если есть
-            meta_file = model_file.with_suffix('.meta.json')
-            if meta_file.exists():
-                meta_file.unlink()
-                logger.info(f"Deleted meta file: {meta_file}")
+        # Удаляем meta.json (только если model_file определён)
+        if model_file and model_file.exists():
+            try:
+                meta_file = model_file.with_suffix('.meta.json')
+                if meta_file.exists():
+                    meta_file.unlink()
+                    logger.info(f"Deleted meta file: {meta_file}")
+            except Exception as e:
+                file_deletion_errors.append(f"Meta file: {e}")
+                logger.warning(f"Could not delete meta file: {e}")
 
-        # ===== ИСПРАВЛЕНО: добавляем synchronize_session и type:ignore =====
+        # Удаляем shap-файлы (только если model_file определён)
+        if model_file and model_file.exists():
+            try:
+                model_dir = model_file.parent
+                for shap_file in model_dir.glob("shap_*"):
+                    if shap_file.exists():
+                        shap_file.unlink()
+                        logger.info(f"Deleted shap file: {shap_file}")
+            except Exception as e:
+                file_deletion_errors.append(f"Shap files: {e}")
+                logger.warning(f"Could not delete shap files: {e}")
+
+    # ===== 2. УДАЛЯЕМ ИСТОРИЮ АКТИВАЦИЙ =====
+    try:
         db.query(ModelActivationHistory).filter(
             ModelActivationHistory.model_id == model_id  # type: ignore
         ).delete(synchronize_session=False)
+        logger.info(f"Deleted activation history for model {model_id}")
+    except Exception as e:
+        logger.warning(f"Could not delete activation history: {e}")
 
-        # Удаляем запись из БД
+    # ===== 3. УДАЛЯЕМ ЗАПИСЬ ИЗ БД =====
+    try:
         db.delete(model)
         db.commit()
-
-        logger.info(f"Model {model_id} permanently deleted")
-
-        return {
-            "status": "deleted",
-            "model_id": model_id,
-            "message": "Model permanently removed from database and filesystem"
-        }
-
+        logger.info(f"Model {model_id} permanently deleted from database")
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to delete model {model_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to delete model {model_id} from DB: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete model from database")
+
+    # Формируем сообщение о результате
+    message = "Model removed from database"
+    if file_deletion_errors:
+        message += f". Note: some files could not be deleted: {', '.join(file_deletion_errors)}"
+    else:
+        message += " and filesystem"
+
+    return {
+        "status": "deleted",
+        "model_id": model_id,
+        "message": message
+    }
 
 # =========================================
 # DATASET LIST
