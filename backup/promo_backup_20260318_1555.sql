@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 6lYB2FP7uabC8FGJdUyXgvzoQaobWiCc1c8YgqPo1peKuoe2KF9cvfjkrHcueHn
+\restrict jj5u9EosCkGP4OCewEgcGVywnIM3G88hkupGDHJfJFiEQPKy7c5koPIGQmHQnut
 
 -- Dumped from database version 15.15 (Debian 15.15-1.pgdg13+1)
 -- Dumped by pg_dump version 15.15 (Debian 15.15-1.pgdg13+1)
@@ -9487,8 +9487,7 @@ COPY public.industrial_dataset_raw (id, dataset_version_id, "PromoID", "SKU", "S
 --
 
 COPY public.ml_model (name, algorithm, version, id, created_at, updated_at, trained_at, is_active, model_type, target, features, metrics, model_path, is_deleted, dataset_version_id, trained_rows_count) FROM stdin;
-promo_uplift	catboost	2026-03-11T16:19:11.564532+00:00	41	2026-03-11 16:19:12.182469+00	2026-03-16 12:33:18.234902+00	2026-03-11 16:19:12.182469+00	f	regression	SalesQty_Promo	["RegularPrice", "PromoPrice", "PurchasePriceBefore", "PurchasePricePromo", "PercentPriceDrop", "VolumeRegular", "HistoricalSalesPromo", "SalesQty_PrevModel", "FM_Regular", "FM_Promo", "TurnoverBefore", "TurnoverPromo", "SeasonCoef_Week", "ManualCoefficientFlag", "IsNewSKU", "IsAnalogSKU"]	{"rmse": 0.19974222723503077}	/app/models/_candidate/2026-03-11T16:19:11.564532+00:00.cbm	f	b603fca9-dad1-43dc-b00d-f31b3afd0e08	4522
-promo_uplift	catboost	2026-03-11T16:24:27.006314+00:00	42	2026-03-11 16:24:27.615751+00	2026-03-16 12:33:18.234902+00	2026-03-11 16:24:27.615751+00	t	regression	SalesQty_Promo	["RegularPrice", "PromoPrice", "PurchasePriceBefore", "PurchasePricePromo", "PercentPriceDrop", "VolumeRegular", "HistoricalSalesPromo", "SalesQty_PrevModel", "FM_Regular", "FM_Promo", "TurnoverBefore", "TurnoverPromo", "SeasonCoef_Week", "ManualCoefficientFlag", "IsNewSKU", "IsAnalogSKU"]	{"rmse": 0.20130726896879536}	/app/models/_candidate/2026-03-11T16:24:27.006314+00:00.cbm	f	38b14bec-6bc4-4fab-8951-13a6d2e65992	4536
+promo_uplift	catboost	20260318_072050	43	2026-03-18 07:20:50.633054+00	2026-03-18 08:35:54.524693+00	2026-03-18 07:20:50.636831+00	t	regression	SalesQty_Promo	["RegularPrice", "PromoPrice", "PurchasePriceBefore", "PurchasePricePromo", "PercentPriceDrop", "VolumeRegular", "HistoricalSalesPromo", "SalesQty_PrevModel", "FM_Regular", "FM_Promo", "TurnoverBefore", "TurnoverPromo", "SeasonCoef_Week", "ManualCoefficientFlag", "IsNewSKU", "IsAnalogSKU"]	{"rmse": 0.20130726896879536}	/app/models/current/43.cbm	f	38b14bec-6bc4-4fab-8951-13a6d2e65992	4536
 \.
 
 
@@ -9550,6 +9549,17 @@ COPY public.ml_prediction_audit (id, request_id, model_id, model_version, predic
 51	10b90eb0-e44c-47b9-8c01-c3b4fa7e8b77	42	2026-03-11T16:24:27.006314+00:00	0.7095471017833908	{"sku": "SKU8", "features": {"FM_Promo": 34.56, "IsNewSKU": 0.0, "FM_Regular": 41.23, "PromoPrice": 129.99, "IsAnalogSKU": 0.0, "RegularPrice": 156.8, "TurnoverPromo": 23456.7, "VolumeRegular": 178.34, "TurnoverBefore": 27956.3, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 17.12, "PurchasePricePromo": 52.14, "SalesQty_PrevModel": 0.19, "PurchasePriceBefore": 52.14, "HistoricalSalesPromo": 389.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-16 12:33:37.12965
 52	3c712007-fc02-42ff-b6d0-7fca48e528fd	42	2026-03-11T16:24:27.006314+00:00	1.0394294811073326	{"sku": "SKU9", "features": {"FM_Promo": 54.32, "IsNewSKU": 0.0, "FM_Regular": 67.89, "PromoPrice": 399.99, "IsAnalogSKU": 0.0, "RegularPrice": 478.9, "TurnoverPromo": 156789.4, "VolumeRegular": 389.45, "TurnoverBefore": 186543.2, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 16.48, "PurchasePricePromo": 167.62, "SalesQty_PrevModel": 0.41, "PurchasePriceBefore": 167.62, "HistoricalSalesPromo": 1023.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-16 12:33:37.341354
 53	2c129dc3-af34-4a03-aaa2-91eb17485e06	42	2026-03-11T16:24:27.006314+00:00	0.4485081265173967	{"sku": "SKU10", "features": {"FM_Promo": 23.67, "IsNewSKU": 0.0, "FM_Regular": 28.45, "PromoPrice": 79.99, "IsAnalogSKU": 0.0, "RegularPrice": 89.99, "TurnoverPromo": 5432.1, "VolumeRegular": 67.89, "TurnoverBefore": 6109.8, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 11.11, "PurchasePricePromo": 32.19, "SalesQty_PrevModel": 0.12, "PurchasePriceBefore": 32.19, "HistoricalSalesPromo": 156.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-16 12:33:37.537182
+54	218c5cd6-8113-4220-8dfd-84c125adb7c5	42	2026-03-11T16:24:27.006314+00:00	1.007144038578708	{"sku": "SKU1", "features": {"FM_Promo": 44.18, "IsNewSKU": 0.0, "FM_Regular": 50.62, "PromoPrice": 229.99, "IsAnalogSKU": 0.0, "RegularPrice": 259.99, "TurnoverPromo": 28898.24, "VolumeRegular": 119.86, "TurnoverBefore": 31162.4, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 11.54, "PurchasePricePromo": 116.71, "SalesQty_PrevModel": 0.25, "PurchasePriceBefore": 116.71, "HistoricalSalesPromo": 442.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:15.809748
+55	08d4b080-504d-4b07-92d0-e044861bc455	42	2026-03-11T16:24:27.006314+00:00	1.1636070781758396	{"sku": "SKU2", "features": {"FM_Promo": 55.57, "IsNewSKU": 0.0, "FM_Regular": 62.98, "PromoPrice": 149.99, "IsAnalogSKU": 0.0, "RegularPrice": 179.99, "TurnoverPromo": 29191.05, "VolumeRegular": 296.0, "TurnoverBefore": 53277.04, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 16.67, "PurchasePricePromo": 60.58, "SalesQty_PrevModel": 0.23, "PurchasePriceBefore": 60.58, "HistoricalSalesPromo": 903.84, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:16.158278
+57	088fb6b2-483e-45f3-b2a5-4a2e6b4344ff	42	2026-03-11T16:24:27.006314+00:00	0.9968302143890092	{"sku": "SKU4", "features": {"FM_Promo": 40.2, "IsNewSKU": 0.0, "FM_Regular": 52.9, "PromoPrice": 314.99, "IsAnalogSKU": 0.0, "RegularPrice": 399.99, "TurnoverPromo": 74406.94, "VolumeRegular": 358.67, "TurnoverBefore": 143464.41, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 21.25, "PurchasePricePromo": 171.25, "SalesQty_PrevModel": 0.22, "PurchasePriceBefore": 171.25, "HistoricalSalesPromo": 1019.05, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:16.633755
+59	a8ad5207-999d-496d-9698-58cf95c683fc	42	2026-03-11T16:24:27.006314+00:00	0.49633906751576107	{"sku": "SKU6", "features": {"FM_Promo": 28.34, "IsNewSKU": 0.0, "FM_Regular": 32.18, "PromoPrice": 114.99, "IsAnalogSKU": 0.0, "RegularPrice": 127.4, "TurnoverPromo": 10234.8, "VolumeRegular": 89.45, "TurnoverBefore": 11389.5, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 9.78, "PurchasePricePromo": 45.23, "SalesQty_PrevModel": 0.15, "PurchasePriceBefore": 45.23, "HistoricalSalesPromo": 234.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:17.065052
+61	a68e1ff7-43c4-4364-a68a-a3188a26052f	42	2026-03-11T16:24:27.006314+00:00	0.7095471017833908	{"sku": "SKU8", "features": {"FM_Promo": 34.56, "IsNewSKU": 0.0, "FM_Regular": 41.23, "PromoPrice": 129.99, "IsAnalogSKU": 0.0, "RegularPrice": 156.8, "TurnoverPromo": 23456.7, "VolumeRegular": 178.34, "TurnoverBefore": 27956.3, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 17.12, "PurchasePricePromo": 52.14, "SalesQty_PrevModel": 0.19, "PurchasePriceBefore": 52.14, "HistoricalSalesPromo": 389.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:17.490502
+63	69aed257-ae43-4bad-9a66-f5d8fe6fa7a5	42	2026-03-11T16:24:27.006314+00:00	0.4485081265173967	{"sku": "SKU10", "features": {"FM_Promo": 23.67, "IsNewSKU": 0.0, "FM_Regular": 28.45, "PromoPrice": 79.99, "IsAnalogSKU": 0.0, "RegularPrice": 89.99, "TurnoverPromo": 5432.1, "VolumeRegular": 67.89, "TurnoverBefore": 6109.8, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 11.11, "PurchasePricePromo": 32.19, "SalesQty_PrevModel": 0.12, "PurchasePriceBefore": 32.19, "HistoricalSalesPromo": 156.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:17.944157
+56	323c6867-c431-4a24-80ac-e17d6432186e	42	2026-03-11T16:24:27.006314+00:00	0.9958760699834173	{"sku": "SKU3", "features": {"FM_Promo": 42.51, "IsNewSKU": 0.0, "FM_Regular": 59.47, "PromoPrice": 274.99, "IsAnalogSKU": 0.0, "RegularPrice": 389.99, "TurnoverPromo": 95473.78, "VolumeRegular": 462.16, "TurnoverBefore": 180237.78, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 29.49, "PurchasePricePromo": 143.71, "SalesQty_PrevModel": 0.26, "PurchasePriceBefore": 143.71, "HistoricalSalesPromo": 1191.48, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:16.391332
+58	4f196eea-36ae-440f-ba2d-4e42b5c0e406	42	2026-03-11T16:24:27.006314+00:00	0.42771766688557855	{"sku": "SKU5", "features": {"FM_Promo": 44.4, "IsNewSKU": 0.0, "FM_Regular": 55.37, "PromoPrice": 239.99, "IsAnalogSKU": 0.0, "RegularPrice": 298.99, "TurnoverPromo": 107781.91, "VolumeRegular": 106.64, "TurnoverBefore": 31884.29, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 19.73, "PurchasePricePromo": 121.31, "SalesQty_PrevModel": 0.25, "PurchasePriceBefore": 121.31, "HistoricalSalesPromo": 716.64, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:16.848982
+60	40f1d7ae-3d33-4257-80ca-0450c7c8f7ed	42	2026-03-11T16:24:27.006314+00:00	1.1888937165524027	{"sku": "SKU7", "features": {"FM_Promo": 38.92, "IsNewSKU": 0.0, "FM_Regular": 45.67, "PromoPrice": 289.99, "IsAnalogSKU": 0.0, "RegularPrice": 345.5, "TurnoverPromo": 67834.5, "VolumeRegular": 234.67, "TurnoverBefore": 81034.2, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 16.07, "PurchasePricePromo": 124.38, "SalesQty_PrevModel": 0.31, "PurchasePriceBefore": 124.38, "HistoricalSalesPromo": 567.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:17.281599
+62	c6cafd6b-8f6b-4b1b-b0e1-282011e5fc98	42	2026-03-11T16:24:27.006314+00:00	1.0394294811073326	{"sku": "SKU9", "features": {"FM_Promo": 54.32, "IsNewSKU": 0.0, "FM_Regular": 67.89, "PromoPrice": 399.99, "IsAnalogSKU": 0.0, "RegularPrice": 478.9, "TurnoverPromo": 156789.4, "VolumeRegular": 389.45, "TurnoverBefore": 186543.2, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 16.48, "PurchasePricePromo": 167.62, "SalesQty_PrevModel": 0.41, "PurchasePriceBefore": 167.62, "HistoricalSalesPromo": 1023.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-10"}	2026-03-18 07:30:17.71233
+64	fa39bdd6-11b2-4aa3-984b-2eab2d8bda82	42	2026-03-11T16:24:27.006314+00:00	1.007144038578708	{"sku": "SKU1", "features": {"FM_Promo": 44.18, "IsNewSKU": 0.0, "FM_Regular": 50.62, "PromoPrice": 229.99, "IsAnalogSKU": 0.0, "RegularPrice": 259.99, "TurnoverPromo": 28898.24, "VolumeRegular": 119.86, "TurnoverBefore": 31162.4, "SeasonCoef_Week": 1.0, "PercentPriceDrop": 11.54, "PurchasePricePromo": 116.71, "SalesQty_PrevModel": 0.25, "PurchasePriceBefore": 116.71, "HistoricalSalesPromo": 442.0, "ManualCoefficientFlag": 0.0}, "promo_code": "PROMO10", "prediction_date": "2026-03-18"}	2026-03-18 07:31:12.678359
 \.
 
 
@@ -9606,11 +9616,6 @@ COPY public.ml_prediction_result (id, request_id, model_id, model_version, predi
 --
 
 COPY public.model_activation_history (id, model_id, activated_at, activated_by) FROM stdin;
-3	41	2026-03-12 12:53:59.01345+00	manual
-4	42	2026-03-12 12:53:59.01345+00	manual
-5	42	2026-03-12 12:55:40.444161+00	rollback
-7	41	2026-03-12 13:05:25.459145+00	rollback
-8	42	2026-03-12 13:15:04.454349+00	rollback
 \.
 
 
@@ -9633,14 +9638,14 @@ SELECT pg_catalog.setval('public.industrial_dataset_raw_id_seq', 122246, true);
 -- Name: ml_model_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.ml_model_id_seq', 42, true);
+SELECT pg_catalog.setval('public.ml_model_id_seq', 44, true);
 
 
 --
 -- Name: ml_prediction_audit_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.ml_prediction_audit_id_seq', 53, true);
+SELECT pg_catalog.setval('public.ml_prediction_audit_id_seq', 64, true);
 
 
 --
@@ -9871,5 +9876,5 @@ ALTER TABLE ONLY public.model_activation_history
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 6lYB2FP7uabC8FGJdUyXgvzoQaobWiCc1c8YgqPo1peKuoe2KF9cvfjkrHcueHn
+\unrestrict jj5u9EosCkGP4OCewEgcGVywnIM3G88hkupGDHJfJFiEQPKy7c5koPIGQmHQnut
 

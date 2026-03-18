@@ -509,13 +509,13 @@ docker push asperansky/promo-ml-front:stage5
 
 ### 8. Проверка на Docker Hub
 
-docker inspect asperansky/promo-ml
+docker images asperansky/promo-ml
 docker inspect asperansky/promo-ml:stage5 | grep Id 
 ### Production
 docker images asperansky/promo-ml:prod2
 docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
 ### Frontend
-docker inspect asperansky/promo-ml-front
+docker images asperansky/promo-ml-front
 docker inspect asperansky/promo-ml-front:stage5
 
 
@@ -538,5 +538,18 @@ docker-compose -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.prod.yml down  
 docker-compose -f docker-compose.prod.yml restart backend  
 docker-compose -f docker-compose.prod.yml restart frontend  
+
+
+## НА СЕРВЕРЕ
+ssh user@192.168.18.73
+cd /srv/promo-ml
+
+### Скачать новые образы
+git  pull
+docker compose -f docker-compose.prod.yml pull
+
+### Перезапустить
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
 
 
