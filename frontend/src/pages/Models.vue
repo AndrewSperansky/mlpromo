@@ -224,7 +224,7 @@ async function loadModels() {
   const response = await getModels()
 
   models.value = response.data.map((m: any) => ({
-    ml_model_id: m.ml_model_id,
+    ml_model_id: m.id,
     version: m.version,
     active: m.is_active,
     created_at: m.trained_at || m.created_at

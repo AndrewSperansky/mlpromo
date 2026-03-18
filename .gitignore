@@ -19,7 +19,10 @@ INFO/
 lib/
 lib64/
 logs/
-models/cb_promo_v1.cbm
+models/_candidate/
+models/archive/
+models/current/
+models/_smoke/
 parts/
 sdist/
 var/

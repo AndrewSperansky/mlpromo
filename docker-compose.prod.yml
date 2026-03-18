@@ -19,7 +19,7 @@ services:
 
     volumes:
       - backend-logs:/app/logs
-      - models:/app/models
+      - models:/app/models/current
 
 #    ports:
 #      - "8000:8000"

@@ -20,7 +20,7 @@ from app.ml.train.shap_utils import (
 
 from app.ml.model_registry.lineage import enrich_meta_with_lineage
 from app.ml.model_registry.promotion_policy import decide_promotion
-from services.registry_service import ModelRegistryService
+from app.services.registry_service import ModelRegistryService
 from app.core.settings import settings
 from app.db.session import SessionLocal
 
@@ -99,9 +99,6 @@ def train_pipeline(
     rows_used = cleaned_count
     # ======================================================================
 
-
-    rows_used = len(df)
-
     exclude_cols = {"id", "dataset_version_id", TARGET}
 
     # Получаем все числовые колонки
@@ -135,77 +132,78 @@ def train_pipeline(
     preds = model.predict(X)
     rmse_value = float(mean_squared_error(y, preds, squared=False))
 
-    model_id = datetime.now(timezone.utc).isoformat()
-
-    model_path = candidate_dir / f"{model_id}.cbm"
-    model.save_model(str(model_path))
-
     # =========================
-    # SHAP
+    # REGISTRATION (ПОЛУЧАЕМ ID)
     # =========================
-
-    shap_values, expected_value = compute_shap_catboost(
-        model=model,
-        X=X,
-    )
-
-    save_shap_artifacts(
-        shap_values=shap_values,
-        expected_value=expected_value,
-        feature_names=FEATURES,
-        models_dir=candidate_dir,
-    )
-
-    # =========================
-    # META + LINEAGE
-    # =========================
-
-    meta = {
-        "model_id": model_id,
-        "model_name": "promo_uplift",
-        "dataset_version_id": str(dataset_version_id),
-        "trained_at": model_id,
-        "features": FEATURES,
-        "stage": "candidate",
-        "metrics": {
-            "rmse": rmse_value,
-        },
-    }
-
-    meta = enrich_meta_with_lineage(meta=meta, trigger=trigger)
-
-    meta_path = candidate_dir / f"{model_id}.meta.json"
-
-    with open(meta_path, "w") as f:
-        json.dump(meta, f, indent=2)
-
-    promoted = False
-    promotion_decision = None
-
-    # =========================
-    # REGISTRATION-METRICS-GATED PROMOTION
-    # =========================
-
     db = SessionLocal()
     try:
         registry = ModelRegistryService(db)
 
+        # Сначала регистрируем модель (без model_path)
         db_model = registry.register_model(
             name="promo_uplift",
-            version=model_id,
+            version=datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'),  # читаемая версия
             algorithm="catboost",
             model_type="regression",
             target=TARGET,
             features=FEATURES,
-            metrics=meta["metrics"],
-            model_path=model_path,
+            metrics={"rmse": rmse_value},
             dataset_version_id=dataset_version_id,
             trained_rows_count=rows_used,
         )
 
+        # =========================
+        # СОХРАНЯЕМ МОДЕЛЬ С ИМЕНЕМ = ID
+        # =========================
+        model_filename = f"{db_model.id}.cbm"
+        model_path = candidate_dir / model_filename
+        model.save_model(str(model_path))
+
+        # Обновляем путь в БД
+        db_model.model_path = str(model_path)
+        db.commit()
+
+        # =========================
+        # SHAP
+        # =========================
+        shap_values, expected_value = compute_shap_catboost(
+            model=model,
+            X=X,
+        )
+
+        save_shap_artifacts(
+            shap_values=shap_values,
+            expected_value=expected_value,
+            feature_names=FEATURES,
+            models_dir=candidate_dir,
+        )
+
+        # =========================
+        # META + LINEAGE
+        # =========================
+        meta = {
+            "model_id": db_model.id,
+            "model_name": "promo_uplift",
+            "dataset_version_id": str(dataset_version_id),
+            "trained_at": datetime.now(timezone.utc).isoformat(),
+            "features": FEATURES,
+            "stage": "candidate",
+            "metrics": {
+                "rmse": rmse_value,
+            },
+        }
+
+        meta = enrich_meta_with_lineage(meta=meta, trigger=trigger)
+
+        meta_path = candidate_dir / f"{db_model.id}.meta.json"
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+
+        promoted = False
+        promotion_decision = None
+
         if promote:
             current_active_model = registry.get_active_model("promo_uplift")
-
             current_metrics = (
                 current_active_model.metrics if current_active_model else None
             )
@@ -240,7 +238,7 @@ def train_pipeline(
 
     return {
         "status": "trained",
-        "model_id": db_model.id,  # ← ЭТО INT! (раньше была строка)
+        "model_id": db_model.id,
         "metrics": meta["metrics"],
         "promoted": promoted,
         "stage": meta["stage"],
@@ -250,4 +248,3 @@ def train_pipeline(
         "rows_removed": original_count - rows_used,
         "model_name": "promo_uplift",
     }
-

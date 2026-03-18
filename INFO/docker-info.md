@@ -511,8 +511,10 @@ docker push asperansky/promo-ml-front:stage5
 
 docker inspect asperansky/promo-ml
 docker inspect asperansky/promo-ml:stage5 | grep Id 
+### Production
 docker images asperansky/promo-ml:prod2
 docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
+### Frontend
 docker inspect asperansky/promo-ml-front
 docker inspect asperansky/promo-ml-front:stage5
 
@@ -528,5 +530,13 @@ docker inspect asperansky/promo-ml-front:stage5
 
 `docker compose stop backend`
 `docker compose up -d --build backend`
+
+
+## Команды PRODUCTION
+
+docker-compose -f docker-compose.prod.yml up -d    
+docker-compose -f docker-compose.prod.yml down  
+docker-compose -f docker-compose.prod.yml restart backend  
+docker-compose -f docker-compose.prod.yml restart frontend  
 
 

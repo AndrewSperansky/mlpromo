@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, List, Any
 from datetime import datetime, timezone
-from schemas.prediction_schema import PredictionRequest
+from app.schemas.prediction_schema import PredictionRequest
 
 import pandas as pd
 import shap

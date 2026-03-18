@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 from datetime import date, datetime
 from typing import Optional, Dict, Any, List
-from uuid import UUID
+# from uuid import UUID
 
 
 class PredictionRequest(BaseModel):
@@ -39,13 +39,13 @@ class PredictionResponse(BaseModel):
     reason: Optional[str] = None
 
 
-class OneCPredictRequest(BaseModel):
-    request_id: UUID
-    data: Dict[str, Any]
-
-
-class OneCPredictResponse(BaseModel):
-    request_id: UUID
-    prediction: float
-    ml_model_id: str
-    version: str
+# class OneCPredictRequest(BaseModel):
+#     request_id: UUID
+#     data: Dict[str, Any]
+#
+#
+# class OneCPredictResponse(BaseModel):
+#     request_id: UUID
+#     prediction: float
+#     ml_model_id: str
+#     version: str

@@ -39,9 +39,11 @@ docker/prometheus/data/ # ← добавить (локальные данные 
 .npm/                   # ← добавить (кэш npm)
 .cache/                 # ← добавить (общий кэш)
 
-# модели 1+ GB
-!models/**
-!models/.gitkeep
+# модели
+models/_candidate/
+models/archive/
+models/current/
+models/_smoke/
 
 
 # Environment

@@ -12,7 +12,7 @@ from io import BytesIO
 from uuid import UUID, uuid4
 import pandas as pd
 from typing import Union, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text, select, and_
 
@@ -27,7 +27,7 @@ from app.ml.model_registry.promotion_policy import decide_promotion
 
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
-from services.registry_service import ModelRegistryService
+from app.services.registry_service import ModelRegistryService
 
 
 from models.dataset_version import DatasetVersion
@@ -47,15 +47,16 @@ from app.schemas.dataset_schema import (
 )
 from app.services.dataset_service import DatasetService
 
-from schemas.prediction_schema import (
+from app.schemas.prediction_schema import (
     PredictionRequest,
     PredictionResponse,
-    OneCPredictRequest,
-    OneCPredictResponse,
     ShapValue,
 )
 
 from app.services.audit_service import get_audit_page
+
+
+from app.controllers.model_activation_controller import ModelActivationController
 
 
 logger = logging.getLogger(__name__)
@@ -450,88 +451,7 @@ def rollback_model(
     }
 
 
-# @router.post("/models/rollback/{model_id}")
-# def rollback_model(
-#     model_id: int,
-#     db: Session = Depends(get_db)
-# ):
-#     """
-#     Откатывает production-модель на предыдущую активную версию.
-#     Работает через БД, без копирования файлов.
-#     """
-#     # 1. Найти модель для отката
-#     target_model = db.get(MLModel, model_id)
-#     if not target_model or target_model.is_deleted:
-#         raise HTTPException(status_code=404, detail="Model not found")
-#
-#     # 2. Найти текущую активную модель
-#     current_active = db.query(MLModel).filter(
-#         MLModel.name == target_model.name,
-#         MLModel.is_active == True,
-#         MLModel.is_deleted == False
-#     ).first()
-#
-#     if not current_active:
-#         raise HTTPException(status_code=400, detail="No active model found")
-#
-#     # 3. Найти предыдущую активную модель
-#     # Берём две последние модели (по trained_at)
-#     recent_models = (
-#         db.query(MLModel)
-#         .filter(
-#             MLModel.name == target_model.name,
-#             MLModel.is_deleted == False
-#         )
-#         .order_by(MLModel.trained_at.desc())
-#         .limit(2)
-#         .all()
-#     )
-#
-#     if len(recent_models) < 2:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Not enough models in history for rollback"
-#         )
-#
-#     current, previous = recent_models[0], recent_models[1]
-#
-#     # 4. Если запрошен не тот откат — проверим
-#     if target_model.id != current.id and target_model.id != previous.id:
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Can only rollback to the immediately previous model"
-#         )
-#
-#     # 5. Выполнить откат
-#     current.is_active = False
-#     previous.is_active = True
-#
-#     db.commit()
-#
-#     # 6. Обновить runtime state (если используется)
-#     from app.ml.runtime_state import ML_RUNTIME_STATE
-#     ML_RUNTIME_STATE["ml_model_id"] = previous.id
-#     ML_RUNTIME_STATE["model_loaded"] = False  # принудительно перезагрузить
-#
-#     # 7. Записать в lineage
-#     record_lineage_event(
-#         "rollback",
-#         str(model_id),
-#         {
-#             "rolled_back_to": previous.id,
-#             "previous_active": current.id,
-#             "model_name": current.name
-#         }
-#     )
-#
-#     logger.info(f"Rollback completed: model {current.id} -> {previous.id}")
-#
-#     return {
-#         "status": "rolled_back",
-#         "previous_active_model_id": current.id,
-#         "new_active_model_id": previous.id,
-#         "message": f"Rolled back from model {current.id} to {previous.id}"
-#     }
+
 
 # =========================================
 # MODELS Activation History
@@ -593,6 +513,7 @@ def list_models(db: Session = Depends(get_db)):
 
     return [
         {
+            "id": m.id,
             "ml_model_id": m.id,
             "name": m.name,
             "algorithm": m.algorithm,
@@ -621,40 +542,10 @@ def promote_model(
     model_id: int,
     db: Session = Depends(get_db),
 ):
-    registry = ModelRegistryService(db)
+    controller = ModelActivationController()
 
     try:
-        model = registry.promote_model(model_id)  # ← здесь уже commit
-
-        # ✅ Обновляем runtime state
-        ML_RUNTIME_STATE["ml_model_id"] = model.id
-        ML_RUNTIME_STATE["version"] = model.version
-        ML_RUNTIME_STATE["feature_order"] = list(model.features) if model.features else []
-        ML_RUNTIME_STATE["model_path"] = model.model_path  # ← добавляем путь!
-        ML_RUNTIME_STATE["model_loaded"] = False
-
-        # ✅ Очищаем старый contract
-        ML_RUNTIME_STATE["contract"]["model_path"] = model.model_path
-
-        # ✅ Просто добавляем запись, НЕ коммитим
-        history_entry = ModelActivationHistory(
-            model_id=model.id,
-            activated_by="user"
-        )
-        db.add(history_entry)
-
-        logger.info(f"✅ Model {model_id} promoted. Features: {ML_RUNTIME_STATE['feature_order']}")
-
-        # Всё закоммитится автоматически при закрытии сессии
-        # или можно сделать ещё один commit, но не обязательно
-
-        return {
-            "status": "promoted",
-            "model_id": model.id,
-            "name": model.name,
-            "version": model.version,
-            "dataset_version_id": str(model.dataset_version_id),
-        }
+        return controller.promote_model(model_id, db)
 
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -663,6 +554,9 @@ def promote_model(
 # ========================================
 # PREDICT (FastAPI)
 # =======================================
+
+from app.controllers.prediction_controller import PredictionController
+
 
 @router.post(
     "/predict",
@@ -674,200 +568,9 @@ def predict(
     svc: MLPredictionService = Depends(get_prediction_service),
     db: Session = Depends(get_db),
 ):
-    """
-    Выполняет ML-предсказание.
-    """
-    logger.info(f"🔥 Predict request payload: {payload}")
-    logger.info(f"🔥 Payload dict: {payload.model_dump()}")
+    controller = PredictionController(svc)
+    return controller.predict(payload, db)
 
-    # 🔥 СОБИРАЕМ ВСЕ ФИЧИ В ОДИН СЛОВАРЬ
-    all_data = {
-        **payload.features,
-        "promo_code": payload.promo_code,
-        "sku": payload.sku,
-        "prediction_date": payload.prediction_date.isoformat()  # ← дату в строку
-    }
-
-    logger.info(f"🔥 all_data: {all_data}")
-
-    # Получаем прогноз и shap от сервиса
-    prediction_result, shap_list = svc.predict_raw(payload.features)
-
-    # Если ML сервис вернул float, оборачиваем в dict
-    if isinstance(prediction_result, float):
-        prediction_result = {
-            "prediction": prediction_result,
-            "baseline": None,
-            "uplift": None,
-            "fallback_used": False,
-            "reason": None,
-        }
-
-    # Преобразуем shap в Pydantic объекты
-    shap_objs = [ShapValue(feature=s["feature"], effect=s["effect"]) for s in shap_list]
-
-    # 🔥 ВАЖНО: получаем model_id и model_version из runtime state
-    model_id = ML_RUNTIME_STATE.get("ml_model_id")
-    model_version = ML_RUNTIME_STATE.get("version")
-
-    # Формируем response
-    response = PredictionResponse(
-        promo_code=payload.promo_code,
-        sku=payload.sku,
-        date=payload.prediction_date,
-        prediction=prediction_result["prediction"],
-        baseline=prediction_result["baseline"],
-        uplift=prediction_result["uplift"],
-        shap_values=shap_objs,
-        ml_model_id=str(ML_RUNTIME_STATE["ml_model_id"]),
-        version=ML_RUNTIME_STATE["version"],
-        trained_at=ML_RUNTIME_STATE.get("trained_at"),
-        features=all_data,
-        fallback_used=prediction_result["fallback_used"],
-        reason=prediction_result["reason"],
-    )
-
-    # Сохраняем в аудит
-    request_id = uuid4()
-
-    # 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: используем model_dump() с default=str
-    features_json = json.dumps(payload.model_dump(), default=str)
-
-    db.execute(
-        text("""
-            INSERT INTO ml_prediction_audit
-            (
-                request_id,
-                model_id,
-                model_version,
-                prediction_value,
-                features
-            )
-            VALUES
-            (
-                :request_id,
-                :model_id,
-                :model_version,
-                :prediction_value,
-                CAST(:features AS JSONB)
-            )
-        """),
-        {
-            "request_id": request_id,
-            "model_id": model_id,
-            "model_version": model_version,
-            "prediction_value": prediction_result["prediction"],
-            "features": features_json,  # ← используем подготовленный JSON
-        }
-    )
-
-    db.commit()
-
-    return response
-
-# =========================================
-# 1C PREDICT
-# =========================================
-
-
-@router.post("/1c/predict", response_model=OneCPredictResponse)
-def predict_from_1c(
-    payload: OneCPredictRequest,
-    db: Session = Depends(get_db),
-    svc: MLPredictionService = Depends(),
-):
-    if not ML_RUNTIME_STATE.get("model_loaded"):
-        raise HTTPException(status_code=503, detail="ML model not ready")
-
-    # idempotency
-    exists = db.execute(
-        text("SELECT 1 FROM ml_prediction_request WHERE id = :id"),
-        {"id": payload.request_id},
-    ).first()
-
-    if exists:
-        raise HTTPException(status_code=409, detail="Request already processed")
-
-    # ✅ НОРМАЛИЗАЦИЯ ДО PREDICT
-    normalized_features = svc.normalize_external_features(payload.data)
-
-    # store request (сохраняем уже нормализованные данные!)
-    db.execute(
-        text("""
-        INSERT INTO ml_prediction_request (id, source, payload)
-        VALUES (:id, '1C', CAST(:payload AS JSONB))
-        """),
-        {
-            "id": str(payload.request_id),
-            "payload": json.dumps(normalized_features)
-        },
-    )
-
-    # predict (strict validation теперь не упадёт)
-    prediction, shap = svc.predict_raw(normalized_features)
-
-    # store result
-    db.execute(
-        text("""
-        INSERT INTO ml_prediction_result
-        (request_id, model_id, model_version, prediction_value, shap_values)
-        VALUES (:rid, :mid, :ver, :pred, CAST(:shap AS JSONB))
-        """),
-        {
-            "rid": str(payload.request_id),
-            "mid": ML_RUNTIME_STATE["ml_model_id"],
-            "ver": ML_RUNTIME_STATE["version"],
-            "pred": prediction,
-            "shap": json.dumps(shap),
-        },
-    )
-
-    db.commit()
-
-    return OneCPredictResponse(
-        request_id=payload.request_id,
-        prediction=prediction,
-        ml_model_id=ML_RUNTIME_STATE["ml_model_id"],
-        version=ML_RUNTIME_STATE["version"],
-    )
-
-# =========================================
-# MODEL ACTIVATE
-# =========================================
-# Параметр ml_model_id - это строка, имя файла модели (без .cbm)
-# Например: "cb_promo_v1", "model_20260306_123456"
-
-@router.post("/models/{ml_model_id}/activate")
-def activate_model(ml_model_id: str):
-    archive_model = ARCHIVE_DIR / f"{ml_model_id}.cbm"
-
-    if not archive_model.exists():
-        raise HTTPException(status_code=404, detail="Model not found")
-
-    # Ensure current dir exists
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Remove current model(s)
-    for file in MODELS_DIR.glob("*.cbm"):
-        file.unlink()
-
-    # Copy archive model to current
-    shutil.copy(
-        archive_model,
-        MODELS_DIR / archive_model.name
-    )
-
-    # 🔥 Обновляем runtime state
-    ML_RUNTIME_STATE["ml_model_id"] = ml_model_id
-    ML_RUNTIME_STATE["version"] = "manual-activation"
-    ML_RUNTIME_STATE["model_loaded"] = False  # форс reload при следующем predict
-
-    logger.info(f"Model {ml_model_id} activated")
-
-    return {
-        "status": "activated",
-        "ml_model_id": ml_model_id
-    }
 
 
 # =========================================
@@ -880,29 +583,57 @@ def delete_model(
         db: Session = Depends(get_db)
 ):
     """
-    Удаляет модель (soft delete или hard delete).
+    Полностью удаляет модель из БД и файловой системы.
     """
+    # Находим модель
     model = db.get(MLModel, model_id)
-
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Вариант 1: Hard delete (полное удаление)
-    # db.delete(model)
+    # Если модель активна — ошибка (нельзя удалить активную)
+    if model.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete active model. Deactivate it first."
+        )
 
-    # Вариант 2: Soft delete (рекомендуется)
-    model.is_deleted = True
-    model.is_active = False
+    try:
+        # ===== ИСПРАВЛЕНО: преобразуем SQLAlchemy attribute в строку =====
+        if model.model_path:
+            # Преобразуем InstrumentedAttribute в строку
+            model_path_str = str(model.model_path)
+            model_file = Path(model_path_str)
+            if model_file.exists():
+                model_file.unlink()
+                logger.info(f"Deleted model file: {model_file}")
 
-    db.commit()
+            # Также удаляем meta.json если есть
+            meta_file = model_file.with_suffix('.meta.json')
+            if meta_file.exists():
+                meta_file.unlink()
+                logger.info(f"Deleted meta file: {meta_file}")
 
-    logger.info(f"Model {model_id} deleted")
+        # ===== ИСПРАВЛЕНО: добавляем synchronize_session и type:ignore =====
+        db.query(ModelActivationHistory).filter(
+            ModelActivationHistory.model_id == model_id  # type: ignore
+        ).delete(synchronize_session=False)
 
-    return {
-        "status": "deleted",
-        "model_id": model_id
-    }
+        # Удаляем запись из БД
+        db.delete(model)
+        db.commit()
 
+        logger.info(f"Model {model_id} permanently deleted")
+
+        return {
+            "status": "deleted",
+            "model_id": model_id,
+            "message": "Model permanently removed from database and filesystem"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete model {model_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================
 # DATASET LIST
@@ -1249,3 +980,50 @@ def get_models_by_dataset(
         for m in models
     ]
 
+
+# =========================================
+# CLEANUP OLD MODELS
+# =========================================
+
+
+@router.post("/cleanup")
+def cleanup_old_models(
+        days: int = 2,
+        db: Session = Depends(get_db)
+):
+    """
+    Удаляет модели, помеченные как удалённые более N дней назад
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy import and_
+
+    cutoff = datetime.now() - timedelta(days=days)
+
+    old_deleted = db.query(MLModel).filter(
+        and_(
+            MLModel.is_deleted == True,  # type: ignore
+            MLModel.updated_at < cutoff  # type: ignore
+        )
+    ).all()
+
+    count = 0
+    for model in old_deleted:
+        try:
+            # Удаляем файлы
+            if model.model_path:
+                model_path_str = str(model.model_path)
+                model_file = Path(model_path_str)
+                if model_file.exists():
+                    model_file.unlink()
+            # Удаляем из БД
+            db.delete(model)
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to cleanup model {model.id}: {e}")
+
+    db.commit()
+
+    return {
+        "status": "cleaned",
+        "deleted_count": count
+    }

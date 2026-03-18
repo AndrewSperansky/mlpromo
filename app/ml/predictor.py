@@ -1,14 +1,17 @@
 # app/ml/predictor.py
 
+import logging
 import time
 from pathlib import Path
 from sqlalchemy.orm import Session
 # from typing import Optional
 
 from app.db.session import SessionLocal
-from services.registry_service import ModelRegistryService
+from app.services.registry_service import ModelRegistryService
 from models.ml_model import MLModelManager, MLModel  # ← добавили импорт MLModel
 from app.ml.monitoring.inference_metrics import collect_inference_metrics
+
+logger = logging.getLogger(__name__)
 
 
 class Predictor:
@@ -17,8 +20,9 @@ class Predictor:
         self.model_name = model_name
         self.model = None
         self.meta = None
+        self.model_record = None
 
-        self._load_active_model()
+        # self._load_active_model()  # НЕ вызываем _load_active_model() здесь!
 
     def _load_active_model(self):
         """Загружает активную модель (для production)"""
@@ -31,19 +35,29 @@ class Predictor:
             if not active_model:
                 raise RuntimeError("No active model found in registry")
 
-            manager = MLModelManager(Path(active_model.model_path))
-
-            if not manager.load():
-                raise RuntimeError("Failed to load model file")
-
-            self.model = manager.model
-            self.meta = {
-                "ml_model_id": active_model.id,
-                "version": active_model.version,
-            }
+            self._load_model_from_record(active_model)
 
         finally:
             db.close()
+
+    # ===== НОВЫЙ МЕТОД ======
+
+    def _load_model_from_record(self, model_record: MLModel):
+        """Загружает модель по записи из БД"""
+        manager = MLModelManager(Path(model_record.model_path))
+        if not manager.load():
+            raise RuntimeError(f"Failed to load model file: {model_record.model_path}")
+
+        self.model = manager.model
+        self.model_record = model_record
+        self.meta = {
+            "ml_model_id": model_record.id,
+            "version": model_record.version,
+            "features": model_record.features,
+            "target": model_record.target
+        }
+
+
 
     # ===== НОВЫЙ МЕТОД для Evaluate =====
     def load_by_id(self, model_record: MLModel) -> bool:
@@ -53,17 +67,12 @@ class Predictor:
         """
         manager = MLModelManager(Path(model_record.model_path))
 
-        if not manager.load():
+        try:
+            self._load_model_from_record(model_record)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}")
             return False
-
-        self.model = manager.model
-        self.meta = {
-            "ml_model_id": model_record.id,
-            "version": model_record.version,
-            "features": model_record.features,
-            "target": model_record.target
-        }
-        return True
 
     def predict(self, X, collect_metrics: bool = True):
         """
