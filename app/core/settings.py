@@ -9,7 +9,7 @@ from pydantic import Field
 
 
 class Settings(BaseSettings):
-    ENV: str = "dev"  # dev / test / prod
+    ENV: str = "prod"  # dev / test / prod
     DEBUG: bool = True
     API_CONTRACT_VERSION: str = Field(
         default="ml-predict.v1",
@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     SQLALCHEMY_ECHO: bool = Field(default=False, alias="SQLALCHEMY_ECHO")
 
     class Config:
-        env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
 

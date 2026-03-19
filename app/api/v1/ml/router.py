@@ -56,6 +56,7 @@ from app.services.audit_service import get_audit_page
 
 
 from app.controllers.model_activation_controller import ModelActivationController
+from app.controllers.models_compare_controller import ModelsCompareController
 
 
 logger = logging.getLogger(__name__)
@@ -1061,3 +1062,22 @@ def cleanup_old_models(
         "status": "cleaned",
         "deleted_count": count
     }
+
+
+#===================================
+# Models Compare
+#===================================
+
+@router.get("/models/compare")
+def compare_models(
+    model_a: int,
+    model_b: int,
+    db: Session = Depends(get_db),
+):
+    controller = ModelsCompareController
+
+    try:
+        return controller.compare_models(model_a, model_b, db)
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

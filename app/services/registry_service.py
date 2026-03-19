@@ -146,6 +146,25 @@ class ModelRegistryService:
         return model
 
     # =========================================
+    # GET ANY MODEL
+    # =========================================
+    def get_model(self, model_id: int) -> MLModel | None:
+
+        model = select(MLModel).where(
+            and_(
+                MLModel.name == model_id,
+                MLModel.is_deleted.is_(False),
+            )
+        )
+
+        if not model:
+            raise ValueError(f"Model {model_id} not found")
+
+        return self.db.execute(model).scalar_one_or_none()
+
+
+
+    # =========================================
     # GET ACTIVE MODEL
     # =========================================
     def get_active_model(self, name: str) -> MLModel | None:

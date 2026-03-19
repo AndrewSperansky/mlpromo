@@ -22,7 +22,7 @@ class Predictor:
         self.meta = None
         self.model_record = None
 
-        # self._load_active_model()  # НЕ вызываем _load_active_model() здесь!
+
 
     def _load_active_model(self):
         """Загружает активную модель (для production)"""

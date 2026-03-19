@@ -29,7 +29,7 @@ def get_audit_page(
 
     if model_id:
         query += " WHERE model_id = :model_id "
-        params["model_id"] = model_id
+        params["model_id"] = str(model_id)
 
     query += """
         ORDER BY created_at DESC

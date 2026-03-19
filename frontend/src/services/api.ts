@@ -231,6 +231,8 @@ export function getAuditPage(page: number, modelId?: string) {
         params.model_id = modelId
     }
 
+    console.log('📊 Audit request:', { page, modelId, params })
+
     return api.get("/ml/audit", { params })
 }
 
