@@ -16,7 +16,6 @@ services:
       ML_MODEL_DIR: /app/models
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/promo
       REDIS_URL: redis://redis:6379/0
-      VITE_GRAFANA_URL: http://192:168:18:73:3000
 
     volumes:
       - backend-logs:/app/logs
@@ -47,6 +46,9 @@ services:
 
     ports:
       - "5173:80"
+
+    environment:
+      VITE_GRAFANA_URL: http://192:168:18:73:3000
 
     depends_on:
       - backend

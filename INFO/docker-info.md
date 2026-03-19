@@ -544,8 +544,9 @@ docker-compose -f docker-compose.prod.yml restart frontend
 ssh user@192.168.18.73
 cd /srv/promo-ml
 
-### Скачать новые образы
+### Скачать изменения с Git
 git  pull
+### Скачать новые образы
 docker compose -f docker-compose.prod.yml pull
 
 ### Перезапустить
