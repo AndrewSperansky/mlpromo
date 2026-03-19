@@ -34,6 +34,7 @@ class ModelActivationController:
             activated_by="user"
         )
         db.add(history_entry)
+        db.commit()
 
         logger.info(
             f"✅ Model {model_id} promoted. Features: {ML_RUNTIME_STATE['feature_order']}"
