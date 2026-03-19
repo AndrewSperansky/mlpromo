@@ -51,7 +51,7 @@
           </li>
 
           <li class="nav-item">
-            <a href="http://localhost:3000" target="_blank" class="nav-link">
+            <a :href="grafanaUrl" target="_blank" class="nav-link">
               Grafana
             </a>
           </li>
@@ -62,5 +62,9 @@
   </nav>
 </template>
 
+
 <script setup lang="ts">
+
+const grafanaUrl = import.meta.env.VITE_GRAFANA_URL || 'http://192.168.18.73:3000'
+
 </script>
