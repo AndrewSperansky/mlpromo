@@ -47,9 +47,6 @@ services:
     ports:
       - "5173:80"
 
-    environment:
-      VITE_GRAFANA_URL: http://192:168:18:73:3000
-
     depends_on:
       - backend
 
@@ -203,6 +200,13 @@ services:
 
     ports:
       - "3000:3000"
+
+    environment:
+      - GF_SERVER_ROOT_URL=http://192.168.18.73:3000
+      - GF_SERVER_DOMAIN=192.168.18.73
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SAMESITE=none
+      - GF_SECURITY_COOKIE_SECURE=false
 
     volumes:
       - grafana-data:/var/lib/grafana
