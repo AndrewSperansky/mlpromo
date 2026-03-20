@@ -18,6 +18,12 @@ class ShapValue(BaseModel):
     effect: float
 
 
+class FinanceMetrics(BaseModel):
+    """Финансовые метрики для промо"""
+    SKU: str
+    NewSales: float
+
+
 class PredictionResponse(BaseModel):
     promo_code: str
     sku: str
@@ -27,7 +33,7 @@ class PredictionResponse(BaseModel):
     baseline: Optional[float] = None
     uplift: Optional[float] = None
 
-    # ✅ исправлено: feature как str, effect как float
+    # feature как str, effect как float
     shap_values: List[ShapValue] = Field(default_factory=list)
 
     ml_model_id: str
@@ -38,14 +44,4 @@ class PredictionResponse(BaseModel):
     fallback_used: bool
     reason: Optional[str] = None
 
-
-# class OneCPredictRequest(BaseModel):
-#     request_id: UUID
-#     data: Dict[str, Any]
-#
-#
-# class OneCPredictResponse(BaseModel):
-#     request_id: UUID
-#     prediction: float
-#     ml_model_id: str
-#     version: str
+    finance_metrics: Optional[FinanceMetrics] = Field(default=None, description="Финансовые метрики")

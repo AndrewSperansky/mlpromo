@@ -12,7 +12,10 @@ from app.schemas.prediction_schema import (
     PredictionRequest,
     PredictionResponse,
     ShapValue,
+    FinanceMetrics,
 )
+
+from app.services.promo_calculator_service import PromoCalculatorService
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +59,7 @@ class PredictionController:
             promo_code=payload.promo_code,
             sku=payload.sku,
             date=payload.prediction_date,
-            prediction=prediction_result["prediction"],
+            prediction=round(prediction_result["prediction"]),
             baseline=prediction_result["baseline"],
             uplift=prediction_result["uplift"],
             shap_values=shap_objs,
@@ -100,6 +103,32 @@ class PredictionController:
                 "features": features_json,
             }
         )
+
+        # 5. Добавляем финансовые метрики (опционально)
+        try:
+            # Подготавливаем данные для калькулятора
+            calculator_data = {
+                "SKU": payload.sku,
+                "BasePrice": payload.features.get("RegularPrice", 0),
+                "PromoPrice": payload.features.get("PromoPrice", 0),
+                "BaseSales": prediction_result["baseline"] or payload.features.get("VolumeRegular", 0),
+                "Elasticity": 0.5,  # можно вынести в настройки
+                "CostPerUnit": 0,  # можно добавить в features
+            }
+
+            finance_result = PromoCalculatorService.compute_item(calculator_data)
+
+            # 🔥 СОЗДАЁМ ОБЪЕКТ FinanceMetrics ИЗ СЛОВАРЯ
+            response.finance_metrics = FinanceMetrics(
+                SKU=finance_result["SKU"],
+                NewSales=round(finance_result["NewSales"]),
+            )
+
+            logger.info(f"💰 Finance metrics calculated: {response.finance_metrics}")
+
+        except Exception as e:
+            logger.warning(f"Financial calculation failed: {e}")
+            response.finance_metrics = None
 
         db.commit()
 
