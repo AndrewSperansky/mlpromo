@@ -682,3 +682,6 @@ git push origin --delete stage2
 
 ##  Показать все ветки (локальные и удаленные)
  git branch -a   
+ 
+## Посмотреть историю коммитов:
+git log --oneline --graph --all
