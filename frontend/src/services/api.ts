@@ -176,6 +176,16 @@ export const deleteModel = (modelId: number) => {
 
 
 // ============================
+// MODELS COMPARE
+// ============================ 
+
+export const compareModels = (modelA: number, modelB: number) =>
+    api.get('/ml/models/compare', {
+        params: { model_a: modelA, model_b: modelB }
+    })
+
+
+// ============================
 // MODEL DETAILS
 // ============================
 

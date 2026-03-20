@@ -909,6 +909,25 @@ def deactivate_model(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+#===================================
+# Models Compare
+#===================================
+
+@router.get("/models/compare")
+def compare_models(
+    model_a: int,
+    model_b: int,
+    db: Session = Depends(get_db),
+):
+    controller = ModelsCompareController()
+
+    try:
+        return controller.compare_models(model_a, model_b, db)
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 
 # =========================================
 # MODEL DETAILS
@@ -1064,20 +1083,4 @@ def cleanup_old_models(
     }
 
 
-#===================================
-# Models Compare
-#===================================
 
-@router.get("/models/compare")
-def compare_models(
-    model_a: int,
-    model_b: int,
-    db: Session = Depends(get_db),
-):
-    controller = ModelsCompareController
-
-    try:
-        return controller.compare_models(model_a, model_b, db)
-
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))

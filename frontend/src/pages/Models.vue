@@ -34,11 +34,17 @@
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
-        <!-- UPLOAD MODEL -->
+        <!-- UPLOAD MODEL BUTTON -->
         <input type="file" ref="fileInput" accept=".zip" class="d-none" @change="handleFileSelect" />
         <button class="btn btn-success" :disabled="uploading" @click="triggerFileInput">
           {{ uploading ? 'Uploading...' : 'Upload Model' }}
         </button>
+
+        <!-- COMPARE MODELS BUTTON -->
+        <button class="btn btn-info" @click="openCompareModal">
+          Compare Models
+        </button>
+
       </div>
     </div>
   </div>
@@ -144,6 +150,86 @@
     </div>
   </div>
 
+  <!-- Модальное окно для сравнения моделей -->
+  <div v-if="showCompareModal" class="modal-backdrop" @click.self="showCompareModal = false">
+    <div class="modal-box" style="width: 800px;">
+      <h5>Compare Models</h5>
+
+      <div class="row mb-3">
+        <div class="col">
+          <label>Model A</label>
+          <select v-model="compareModelA" class="form-select">
+            <option v-for="m in models" :key="m.ml_model_id" :value="m.ml_model_id">
+              {{ m.version }} (ID: {{ m.ml_model_id }}) {{ m.active ? '🔥' : '' }}
+            </option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Model B</label>
+          <select v-model="compareModelB" class="form-select">
+            <option v-for="m in models" :key="m.ml_model_id" :value="m.ml_model_id">
+              {{ m.version }} (ID: {{ m.ml_model_id }}) {{ m.active ? '🔥' : '' }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-primary" @click="fetchCompare" :disabled="comparing">
+          {{ comparing ? 'Comparing...' : 'Compare' }}
+        </button>
+      </div>
+
+      <div v-if="compareResult" class="mt-3">
+        <h6>Metrics</h6>
+        <table class="table table-sm">
+          <tr v-for="(value, key) in compareResult.diff.metric_diff" :key="key">
+            <td><strong>{{ key }}</strong></td>
+            <td>{{ compareResult.model_a.metrics[key]?.toFixed(6) }}</td>
+            <td>→</td>
+            <td>{{ compareResult.model_b.metrics[key]?.toFixed(6) }}</td>
+            <td :class="value >= 0 ? 'text-success' : 'text-danger'">
+              {{ value >= 0 ? '+' : '' }}{{ value.toFixed(6) }}
+            </td>
+          </tr>
+        </table>
+
+        <h6>Features</h6>
+        <div class="row">
+          <div class="col">
+            <strong>Only in A:</strong>
+            <ul>
+              <li v-for="f in compareResult.diff.features_diff.only_in_a" :key="f">{{ f }}</li>
+              <li v-if="compareResult.diff.features_diff.only_in_a?.length === 0" class="text-muted">—</li>
+            </ul>
+          </div>
+          <div class="col">
+            <strong>Only in B:</strong>
+            <ul>
+              <li v-for="f in compareResult.diff.features_diff.only_in_b" :key="f">{{ f }}</li>
+              <li v-if="compareResult.diff.features_diff.only_in_b?.length === 0" class="text-muted">—</li>
+            </ul>
+          </div>
+          <div class="col">
+            <strong>Common Features:</strong>
+            <ul>
+              <li v-for="f in compareResult.diff.features_diff.common" :key="f">{{ f }}</li>
+            </ul>
+          </div>
+        </div>
+
+        <p><strong>Dataset equal:</strong> {{ compareResult.diff.dataset_equal ? 'Yes' : 'No' }}</p>
+      </div>
+
+      <!-- Кнопка Close внизу -->
+      <div class="d-flex justify-content-end mt-3 pt-3 border-top">
+        <button class="btn btn-secondary" @click="showCompareModal = false">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
 
 </template>
 
@@ -166,6 +252,7 @@ import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 import { type Dataset } from '../services/api'
 import { getActivationHistory } from '../services/api'
+import { compareModels } from '../services/api'
 
 
 interface ActivationHistoryItem {
@@ -204,6 +291,13 @@ const modelToDelete = ref<number | null>(null)
 // ===== MODELS ACTIVATION HISTORY MODAL =====
 const showHistory = ref(false)
 const history = ref<ActivationHistoryItem[]>([])
+
+// ===== MODELS COMPARE MODAL =====
+const showCompareModal = ref(false)
+const compareModelA = ref<number | null>(null)
+const compareModelB = ref<number | null>(null)
+const compareResult = ref<any>(null)
+const comparing = ref(false)
 
 
 
@@ -342,12 +436,51 @@ async function loadHistory() {
   history.value = response.data
 }
 
+
+async function fetchCompare() {
+  if (!compareModelA.value || !compareModelB.value) {
+    console.warn('Both models must be selected')
+    return
+  }
+
+  comparing.value = true
+  compareResult.value = null  // сбрасываем старый результат
+
+  try {
+    const response = await compareModels(compareModelA.value, compareModelB.value)
+    compareResult.value = response.data
+
+    console.log('Compare result:', compareResult.value)
+    console.log('features_diff:', compareResult.value?.features_diff)
+    console.log('diff:', compareResult.value?.diff)
+
+
+  } catch (error) {
+    console.error('Compare failed:', error)
+    alert('Failed to compare models')
+  } finally {
+    comparing.value = false
+  }
+}
+
+function openCompareModal() {
+  showCompareModal.value = true
+  // По умолчанию выбираем активную и последнюю
+  const activeModel = models.value.find(m => m.active)
+  const lastModel = models.value[models.value.length - 1]
+  if (activeModel) compareModelA.value = activeModel.ml_model_id
+  if (lastModel) compareModelB.value = lastModel.ml_model_id
+}
+
+
+
 // При открытии модального окна
 watch(showHistory, async (newVal) => {
   if (newVal) {
     await loadHistory()
   }
 })
+
 
 onMounted(() => {
   loadModels()

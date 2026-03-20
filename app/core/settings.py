@@ -9,7 +9,7 @@ from pydantic import Field
 
 
 class Settings(BaseSettings):
-    ENV: str = "prod"  # dev / test / prod
+    ENV: str = "dev"  # dev / test / prod
     DEBUG: bool = True
     API_CONTRACT_VERSION: str = Field(
         default="ml-predict.v1",
@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/promo"
     REDIS_URL: str = "redis://localhost:6379/0"
     SQLALCHEMY_ECHO: bool = Field(default=False, alias="SQLALCHEMY_ECHO")
+
+    # === Promote Governance ===
+    PROMOTE_METRIC: str = "accuracy"  # или "rmse"
+    PROMOTE_MIN_IMPROVEMENT_PERCENT: float = 0.0  # минимальное улучшение в %
+    PROMOTE_REQUIRE_METRICS: bool = True  # требовать ли метрики
 
     class Config:
         env_file_encoding = "utf-8"
