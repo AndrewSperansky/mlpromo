@@ -685,3 +685,16 @@ git push origin --delete stage2
  
 ## Посмотреть историю коммитов:
 git log --oneline --graph --all
+git log --graph --decorate --oneline --all   	Граф с метками веток/тегов   
+git log --graph -p --all	                    Граф + полный diff изменений
+gitk --all	                                    Графический просмотр истории (window graphics)
+git log --graph --oneline -10	                Последние 10 коммитов текущей ветки
+tig	                                            Интерактивный терминал‑просмотр (сторонняя)
+
+## Сравнить содержимое веток
+git diff prod main
+
+
+## Только коммиты текущей ветки (исключая коммиты из merged‑веток):
+git log <родитель_ветки>..<текущая_ветка>
+git log main..v_1_1
