@@ -698,3 +698,15 @@ git diff prod main
 ## Только коммиты текущей ветки (исключая коммиты из merged‑веток):
 git log <родитель_ветки>..<текущая_ветка>
 git log main..v_1_1
+
+
+## Отмена всех незакоммиченных изменений:
+
+git restore .
+
+## Отмена изменений незакоммиченных изменений в конкретном файле:  
+Git restore frontend/src/components/ModelTable.vue
+
+## Отмена последнего коммита (не push):
+
+git reset --soft HEAD~

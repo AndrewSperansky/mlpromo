@@ -1,4 +1,4 @@
-# Scripts/validate_dataset.py
+# scripts/validate_dataset.py
 # запуск: python scripts/validate_dataset.py "D:/promo_dataset_real.csv"
 
 

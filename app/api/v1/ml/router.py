@@ -1,6 +1,7 @@
 # app/api/v1/ml/router.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
 from pathlib import Path
 import logging
 import shutil
@@ -39,7 +40,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import numpy as np
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
-from app.schemas.dataset_schema import (
+from app.schemas.dataset_schema_csv import (
     DatasetVersionResponse,
     TrainRequest,
     TrainOnAllResponse,
@@ -57,9 +58,10 @@ from app.services.audit_service import get_audit_page
 
 from app.controllers.model_activation_controller import ModelActivationController
 from app.controllers.models_compare_controller import ModelsCompareController
+from app.services.dataset_streaming_service import DatasetStreamingService
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("promo_ml")
 
 router = APIRouter(tags=["ml"])
 
@@ -1083,4 +1085,21 @@ def cleanup_old_models(
     }
 
 
+@router.post("/dataset/stream")
+async def stream_dataset(
+        request: Request,
+        ml_service: MLPredictionService = Depends()
+):
+    """
+    Streaming endpoint for dataset upload from 1C
+    Accepts NDJSON (Newline Delimited JSON) stream
+    Returns predictions after processing all data
+    """
+    logger.info("🔴 STREAM ENDPOINT CALLED")
 
+    service = DatasetStreamingService(ml_service)
+
+    # Читаем весь поток, обрабатываем, возвращаем результат
+    result = await service.process_stream(request.stream())
+
+    return result

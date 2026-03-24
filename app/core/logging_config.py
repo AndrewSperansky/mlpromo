@@ -71,6 +71,10 @@ def get_logging_config() -> dict:
                 "level": "INFO",
                 "propagate": False,
             },
+            "": {  # root logger
+                "handlers": ["console", "file"],
+                "level": "INFO",
+            },
         },
     }
 
