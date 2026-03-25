@@ -1,10 +1,8 @@
 # models/industrial_dataset.py
 
 
-from sqlalchemy import Column, BigInteger, Text, Integer, Numeric, Boolean, Date, ForeignKey
+from sqlalchemy import Column, BigInteger, Text, Integer, Numeric, Boolean, Date
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-
 from app.db.base import Base
 
 
@@ -12,7 +10,6 @@ class IndustrialDatasetRaw(Base):
     __tablename__ = "industrial_dataset_raw"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    dataset_version_id = Column(UUID(as_uuid=True), ForeignKey("dataset_versions.id", ondelete="CASCADE"), nullable=False)
 
     PromoID = Column(Text)
     SKU = Column(Text)
@@ -63,4 +60,3 @@ class IndustrialDatasetRaw(Base):
     MarketingMaterial = Column(Text)
     FormatAssortment = Column(Text)
 
-    dataset_version = relationship("DatasetVersion")

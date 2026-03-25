@@ -3,30 +3,25 @@
 import json
 import logging
 import pandas as pd
-from uuid import UUID
 from pathlib import Path
 from datetime import datetime, timezone
 
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_squared_error
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-
 
 from app.ml.train.shap_utils import (
     compute_shap_catboost,
     save_shap_artifacts,
 )
-
 from app.ml.model_registry.lineage import enrich_meta_with_lineage
 from app.ml.model_registry.promotion_policy import decide_promotion
 from app.services.registry_service import ModelRegistryService
 from app.core.settings import settings
 from app.db.session import SessionLocal
-
+from models.industrial_dataset import IndustrialDatasetRaw
 
 logger = logging.getLogger(__name__)
-
 
 TARGET = "SalesQty_Promo"
 
@@ -35,35 +30,45 @@ def _get_models_dir() -> Path:
     return Path(settings.ML_MODEL_DIR)
 
 
-def load_dataset_by_version(
-        db: Session,
-        dataset_version_id: UUID
-) -> pd.DataFrame:
+def load_full_dataset(db: Session) -> pd.DataFrame:
+    """
+    Загружает ВСЕ данные из industrial_dataset_raw
+    """
+    logger.info("📊 Loading full dataset from industrial_dataset_raw")
 
+    # Получаем все строки
+    rows = db.query(IndustrialDatasetRaw).all()
 
-    # 🔧 ИСПРАВЛЕНО: используем text() для безопасного запроса
-    query = text("""
-        SELECT * FROM industrial_dataset_raw 
-        WHERE dataset_version_id = :version_id
-    """)
+    if not rows:
+        raise ValueError("No data in industrial_dataset_raw")
 
-    df = pd.read_sql(
-        query,
-        db.bind,
-        params={"version_id": dataset_version_id}
-    )
+    # Преобразуем в DataFrame — самый простой способ
+    data = []
+    for row in rows:
+        # Берём все атрибуты объекта
+        row_dict = row.__dict__.copy()
+        # Удаляем служебные поля
+        row_dict.pop('_sa_instance_state', None)
+        row_dict.pop('id', None)
+        row_dict.pop('dataset_version_id', None)
+        data.append(row_dict)
+
+    df = pd.DataFrame(data)
+    logger.info(f"✅ Loaded {len(df)} rows from dataset")
 
     return df
 
 
 def train_pipeline(
-    dataset_version_id: UUID,
-    promote: bool = False,
-    trigger: str = "manual",
+        promote: bool = False,
+        trigger: str = "manual",
 ) -> dict:
+    """
+    Обучает модель на ВСЁМ датасете из industrial_dataset_raw
+    """
+    logger.info(f"🚀 Starting training pipeline (promote={promote}, trigger={trigger})")
 
     MODELS_DIR = _get_models_dir()
-
     candidate_dir = MODELS_DIR / "_candidate"
     current_dir = MODELS_DIR / "current"
     archive_dir = MODELS_DIR / "archive"
@@ -75,17 +80,16 @@ def train_pipeline(
     # =========================
     # LOAD DATASET
     # =========================
-
     db: Session = SessionLocal()
     try:
-        df = load_dataset_by_version(db, dataset_version_id)
+        df = load_full_dataset(db)
     finally:
         db.close()
 
     if df.empty:
         raise RuntimeError("Dataset is empty.")
 
-    # ========== ВАЖНО: УДАЛЯЕМ СТРОКИ С NULL В ЦЕЛЕВОЙ ПЕРЕМЕННОЙ ==========
+    # ========== УДАЛЯЕМ СТРОКИ С NULL В ЦЕЛЕВОЙ ПЕРЕМЕННОЙ ==========
     original_count = len(df)
     df = df.dropna(subset=[TARGET])
     cleaned_count = len(df)
@@ -97,11 +101,10 @@ def train_pipeline(
         logger.warning(f"Removed {original_count - cleaned_count} rows with NULL target values")
 
     rows_used = cleaned_count
-    # ======================================================================
 
+    # ========== ОПРЕДЕЛЯЕМ ПРИЗНАКИ ==========
     exclude_cols = {"id", "dataset_version_id", TARGET}
 
-    # Получаем все числовые колонки
     numeric_columns = []
     for col in df.columns:
         if col in exclude_cols:
@@ -114,10 +117,11 @@ def train_pipeline(
     X = df[FEATURES]
     y = df[TARGET]
 
+    logger.info(f"📊 Features ({len(FEATURES)}): {FEATURES}")
+
     # =========================
     # TRAIN
     # =========================
-
     model = CatBoostRegressor(
         iterations=300,
         depth=6,
@@ -131,29 +135,32 @@ def train_pipeline(
 
     preds = model.predict(X)
     rmse_value = float(mean_squared_error(y, preds, squared=False))
+    logger.info(f"📈 Training RMSE: {rmse_value:.6f}")
 
     # =========================
-    # REGISTRATION (ПОЛУЧАЕМ ID)
+    # REGISTRATION
     # =========================
     db = SessionLocal()
     try:
         registry = ModelRegistryService(db)
 
-        # Сначала регистрируем модель (без model_path)
+        # Регистрируем модель
         db_model = registry.register_model(
             name="promo_uplift",
-            version=datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'),  # читаемая версия
+            version=datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'),
             algorithm="catboost",
             model_type="regression",
             target=TARGET,
             features=FEATURES,
             metrics={"rmse": rmse_value},
-            dataset_version_id=dataset_version_id,
+            dataset_version_id=None,  # больше не используем версии
             trained_rows_count=rows_used,
         )
 
+        logger.info(f"✅ Model registered with id={db_model.id}")
+
         # =========================
-        # СОХРАНЯЕМ МОДЕЛЬ С ИМЕНЕМ = ID
+        # СОХРАНЯЕМ МОДЕЛЬ
         # =========================
         model_filename = f"{db_model.id}.cbm"
         model_path = candidate_dir / model_filename
@@ -184,13 +191,13 @@ def train_pipeline(
         meta = {
             "model_id": db_model.id,
             "model_name": "promo_uplift",
-            "dataset_version_id": str(dataset_version_id),
             "trained_at": datetime.now(timezone.utc).isoformat(),
             "features": FEATURES,
             "stage": "candidate",
             "metrics": {
                 "rmse": rmse_value,
             },
+            "total_rows": rows_used,
         }
 
         meta = enrich_meta_with_lineage(meta=meta, trigger=trigger)
@@ -199,6 +206,9 @@ def train_pipeline(
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
 
+        # =========================
+        # PROMOTION
+        # =========================
         promoted = False
         promotion_decision = None
 
@@ -217,24 +227,12 @@ def train_pipeline(
                 registry.promote_model(db_model.id)
                 promoted = True
                 meta["stage"] = "current"
+                logger.info(f"🎉 Model {db_model.id} promoted to champion")
 
     finally:
         db.close()
 
-    logger.info(f"🔥 TRAIN PIPELINE RESULT: model_id={db_model.id} (type={type(db_model.id)})")
-    result_dict = {
-        'status': 'trained',
-        'model_id': db_model.id,
-        'metrics': meta['metrics'],
-        'promoted': promoted,
-        'stage': meta['stage'],
-        'promotion_decision': promotion_decision,
-        'rows_original': original_count,
-        'rows_used': rows_used,
-        'rows_removed': original_count - rows_used,
-        'model_name': 'promo_uplift'
-    }
-    logger.info(f"🔥 TRAIN PIPELINE RESULT: {result_dict}")
+    logger.info(f"✅ Training pipeline completed: model_id={db_model.id}, promoted={promoted}")
 
     return {
         "status": "trained",

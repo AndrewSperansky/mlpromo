@@ -9,16 +9,14 @@ import tempfile
 import zipfile
 import json
 import uuid
-from io import BytesIO
+
 from uuid import UUID, uuid4
-import pandas as pd
-from typing import Union, Optional
+
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text, select, and_
 
 from app.db.session import get_db
-from app.ml.train.train_pipeline import load_dataset_by_version
 from models.activation_history import ModelActivationHistory
 from models.ml_model import MLModel
 
@@ -29,36 +27,32 @@ from app.ml.model_registry.promotion_policy import decide_promotion
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
 from app.services.registry_service import ModelRegistryService
+from app.services.dataset_service import DatasetService
+from app.services.dataset_streaming_service import DatasetStreamingService
+from app.services.audit_service import get_audit_page
 
-
-from models.dataset_version import DatasetVersion
+from models.dataset_upload_history import DatasetUploadHistory
 from models.industrial_dataset import IndustrialDatasetRaw
-from app.ml.contract_check import validate_industrial_contract
 
-from app.ml.predictor import Predictor
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-import numpy as np
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.schemas.dataset_schema_csv import (
-    DatasetVersionResponse,
     TrainRequest,
-    TrainOnAllResponse,
     TrainSingleResponse,
 )
-from app.services.dataset_service import DatasetService
 
 from app.schemas.prediction_schema import (
     PredictionRequest,
     PredictionResponse,
 )
 
-from app.services.audit_service import get_audit_page
-
-
 from app.controllers.model_activation_controller import ModelActivationController
 from app.controllers.models_compare_controller import ModelsCompareController
-from app.services.dataset_streaming_service import DatasetStreamingService
+from app.controllers.model_evaluation_controller import ModelEvaluationController
+from app.controllers.dataset_upload_controller import DatasetUploadController
+
+
+
 
 
 logger = logging.getLogger("promo_ml")
@@ -212,7 +206,6 @@ def upload_model_bundle(file: UploadFile = File(...)):
         }
 
 
-
 # ========================================
 # TRAIN TRIGGER
 # ========================================
@@ -220,43 +213,25 @@ def upload_model_bundle(file: UploadFile = File(...)):
 training_service = MLTrainingService()
 
 
-
-
-@router.post("/train", response_model=Union[TrainOnAllResponse, TrainSingleResponse])
+@router.post("/train", response_model=TrainSingleResponse)
 def train_model(
         request: TrainRequest,
-        # db: Session = Depends(get_db)
 ):
     """
-    Обучает модель на одном или всех датасетах.
+    Обучает модель на ВСЁМ датасете (industrial_dataset_raw).
 
-    - Если train_on_all=True: обучает на всех доступных датасетах
-    - Если train_on_all=False: обучает на конкретном dataset_version_id
+    Параметры:
+    - promote: bool — автоматически активировать модель после обучения
     """
-
-    logger.info(f"🔥 RAW TRAIN REQUEST: {request}")
-    logger.info(f"🔥 REQUEST DICT: {request.model_dump()}")
-    logger.info(f"🔥 train_on_all: {request.train_on_all}")
-    logger.info(f"🔥 dataset_version_id: {request.dataset_version_id}")
+    logger.info(f"🔥 TRAIN REQUEST: {request}")
     logger.info(f"🔥 promote: {request.promote}")
 
-    if request.train_on_all:
-        result = training_service.train_on_all_datasets(
-            promote=request.promote,
-            trigger="api"
-        )
-        return TrainOnAllResponse(**result)
-    else:
-        if not request.dataset_version_id:
-            raise HTTPException(400, "dataset_version_id required")
+    result = training_service.train(
+        promote=request.promote,
+        trigger="api",
+    )
 
-        result = training_service.train(
-            dataset_version_id=request.dataset_version_id,
-            promote=request.promote,
-            trigger="api",
-        )
-
-        return TrainSingleResponse(**result)
+    return TrainSingleResponse(**result)
 
 
 
@@ -267,123 +242,16 @@ def train_model(
 @router.post("/models/evaluate/{model_id}")
 def evaluate_model(
         model_id: int,
-        dataset_version_id: Optional[UUID] = None,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
 ):
-    """
-    Оценивает качество модели на указанном датасете.
-    Если dataset_version_id не указан, использует датасет, на котором модель обучалась.
-    """
+    controller = ModelEvaluationController()
 
-
-    # 1. Найти модель в БД
-    model_record = db.get(MLModel, model_id)
-    if not model_record or model_record.is_deleted:
-        raise HTTPException(status_code=404, detail="Model not found")
-
-    # 2. Определить датасет для оценки
-    eval_dataset_id = dataset_version_id or model_record.dataset_version_id
-    if not eval_dataset_id:
-        raise HTTPException(
-            status_code=400,
-            detail="No dataset specified for evaluation and model has no training dataset"
-        )
-
-    # 3. Загрузить данные
     try:
-        df = load_dataset_by_version(db, eval_dataset_id)
+        return controller.evaluate_model(model_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load dataset: {str(e)}")
-
-    if df.empty:
-        raise HTTPException(status_code=400, detail="Dataset is empty")
-
-    # 4. Проверить наличие целевой колонки
-    target = model_record.target
-    if target not in df.columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Target column '{target}' not found in dataset"
-        )
-
-    # 5. Проверить наличие всех фич
-    features = [f for f in model_record.features]  # ← явное преобразование
-    missing = set(features) - set(df.columns)
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing features in evaluation dataset: {missing}"
-        )
-
-    # 6. Подготовить данные
-    X = df[features]
-    y_true = df[target]
-
-    # 7. Проверить на NaN
-    if X.isnull().any().any():
-        null_counts = X.isnull().sum()
-        null_cols = [col for col in features if null_counts[col] > 0]
-        logger.warning(f"NaN values found in evaluation data: {null_counts}")
-
-        # Удаляем строки с NaN (или можно выдать ошибку)
-        X_clean = X.dropna()
-        y_clean = y_true[X_clean.index]
-
-        if len(X_clean) == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="All rows contain NaN values after cleaning"
-            )
-
-        logger.info(f"Removed {len(X) - len(X_clean)} rows with NaN values")
-        X, y_true = X_clean, y_clean
-
-    # 8. Загрузить модель через Predictor
-    predictor = Predictor()
-    # noinspection PyTypeChecker
-    if not predictor.load_by_id(model_record):  # type: ignore
-        raise HTTPException(status_code=500, detail="Failed to load model file")
-
-    # 9. Сделать предсказания
-    try:
-        y_pred = predictor.predict(X, collect_metrics=False)  # ← вызываем метод predict у predictor
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
-    # 10. Рассчитать метрики
-    rmse = float(mean_squared_error(y_true, y_pred, squared=False))
-    mae = float(mean_absolute_error(y_true, y_pred))
-    r2 = float(r2_score(y_true, y_pred))
-
-    # Дополнительные метрики
-    mape = float(np.mean(np.abs((y_true - y_pred) / (y_true + 1e-10))) * 100)
-
-    metrics = {
-        "rmse": round(rmse, 4),
-        "mae": round(mae, 4),
-        "r2": round(r2, 4),
-        "mape": round(mape, 2)
-    }
-
-    # 11. Записать в lineage
-    record_lineage_event(
-        "evaluate",
-        str(model_id),
-        {
-            "dataset_version_id": str(eval_dataset_id),
-            "metrics": metrics,
-            "rows_evaluated": len(y_true)
-        }
-    )
-
-    logger.info(f"Model {model_id} evaluated on dataset {eval_dataset_id}: {metrics}")
-
-    return {
-        "model_id": model_id,
-        "dataset_version_id": str(eval_dataset_id),
-        "rows_evaluated": len(y_true),
-        "metrics": metrics
-    }
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =========================================
@@ -520,11 +388,9 @@ def list_models(db: Session = Depends(get_db)):
             "name": m.name,
             "algorithm": m.algorithm,
             "version": m.version,
-            "dataset_version_id": str(m.dataset_version_id) if m.dataset_version_id else None,  # ← может быть null
-            "trained_on_all": m.dataset_version_id is None,  # ← флаг для UI
             "is_active": m.is_active,
-            "trained_at": m.trained_at,
-            "created_at": m.created_at,
+            "trained_at": m.created_at,
+            "created_at": m.created_at,  # ← для отладки
             "trained_rows_count": m.trained_rows_count,
             "features": m.features,
             "metrics": m.metrics,
@@ -673,14 +539,18 @@ def delete_model(
     }
 
 # =========================================
-# DATASET LIST
+# DATASET STAT
 # =========================================
 
-@router.get("/datasets", response_model=list[DatasetVersionResponse])
-def list_datasets():
-
+@router.get("/dataset/stats")
+def get_dataset_stats():
+    """
+    Возвращает статистику по единому датасету:
+    - общее количество строк
+    - история загрузок
+    """
     service = DatasetService()
-    return service.list_versions()
+    return service.get_stats()
 
 
 # =========================================
@@ -689,119 +559,23 @@ def list_datasets():
 
 
 @router.post("/dataset/upload")
-def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # Читаем файл в байты
-    content = file.file.read()
+def upload_dataset(
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db)
+):
+    """
+    Загружает CSV файл и добавляет данные в industrial_dataset_raw
+    """
+    logger.info(f"📤 Uploading dataset: {file.filename}")
 
-    df: pd.DataFrame | None = None
-    detected_encoding: str | None = None
+    controller = DatasetUploadController(db)
 
-    # Пробуем сначала utf-8, потом cp1251
-    for encoding in ("utf-8", "cp1251"):
-        try:
-            df = pd.read_csv(BytesIO(content), encoding=encoding)
-            detected_encoding = encoding
-            break
-        except UnicodeDecodeError:
-            continue
-
-    if df is None:
-        raise ValueError("Не удалось прочитать CSV: поддерживаются только utf-8 или cp1251")
-
-    # Преобразуем булевы поля
-    BOOL_MAP = {"Да": True, "Нет": False, "да": True, "нет": False}
-    for col in ["ManualCoefficientFlag", "IsNewSKU", "IsAnalogSKU"]:
-        if col in df.columns:
-            df[col] = df[col].map(BOOL_MAP).fillna(False)  # type: ignore
-
-    # ========== ВАЖНО: КОНВЕРТИРУЕМ NaN В None ==========
-
-    # Создаем новый DataFrame без NaN
-    data_for_db = []
-    for _, row in df.iterrows():
-        clean_row = {}
-        for col_name, value in row.items():
-            if pd.isna(value):
-                clean_row[col_name] = None
-            elif isinstance(value, float) and str(value).lower() == 'nan':
-                clean_row[col_name] = None
-            else:
-                clean_row[col_name] = value
-        data_for_db.append(clean_row)
-
-    # Преобразуем обратно в DataFrame для валидации
-    df_clean = pd.DataFrame(data_for_db)
-
-    # ========== ТЕКСТОВЫЕ ПОЛЯ: NULL -> "" ==========
-    text_columns = [
-        "PromoID", "SKU", "SKU_Level2", "SKU_Level3", "SKU_Level4", "SKU_Level5",
-        "Category", "Supplier", "Region", "StoreID", "Store_Location_Type",
-        "PromoMechanics", "PreviousPromoID", "PromoStatus", "MarketingCarrier",
-        "MarketingMaterial", "FormatAssortment"
-    ]
-
-    for col in text_columns:
-        if col in df_clean.columns:
-            df_clean[col] = df_clean[col].fillna("")
-    # =================================================
-
-    # ==========  Числовые поля: NULL -> 0  ==========
-    numeric_columns = [
-        "RegularPrice", "PromoPrice", "PurchasePriceBefore", "PurchasePricePromo",
-        "PercentPriceDrop", "VolumeRegular", "HistoricalSalesPromo",
-        "SalesQty_Promo", "SalesQty_PrevModel", "FM_Regular", "FM_Promo",
-        "TurnoverBefore", "TurnoverPromo", "SeasonCoef_Week"
-    ]
-
-    for col in numeric_columns:
-        if col in df_clean.columns:
-            # Конвертируем в числа
-            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
-            # Заменяем NaN на None (который станет NULL в БД)
-            df_clean[col] = df_clean[col].where(pd.notnull(df_clean[col]), None)
-
-
-
-    # ====================================================
-
-    # Валидация датасета
-    validate_industrial_contract(df_clean)
-
-    # Создаём версию датасета
-    dataset_version = DatasetVersion(
-        id=uuid.uuid4(),
-        row_count=len(df),
-        status="READY"
-    )
-    db.add(dataset_version)
-    db.flush()
-
-    # Запись всех строк в raw таблицу
-    records = df_clean.to_dict(orient="records")
-
-    for row in records:
-        # Создаем чистую копию строки без NaN
-        clean_row = {}
-        for key, value in row.items():
-            # Если это float и это NaN - заменяем на None
-            if isinstance(value, float) and value != value:  # NaN != NaN
-                clean_row[key] = None
-            else:
-                clean_row[key] = value
-
-        db_row = IndustrialDatasetRaw(
-            dataset_version_id=dataset_version.id,
-            **clean_row
-        )
-        db.add(db_row)
-
-    db.commit()
-
-    return {
-        "dataset_version": str(dataset_version.id),
-        "rows_loaded": len(df_clean),
-        "detected_encoding": detected_encoding
-    }
+    try:
+        result = controller.upload_csv(file)
+        return result
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =========================================
@@ -959,13 +733,12 @@ def get_model_details(
         "algorithm": model.algorithm,
         "model_type": model.model_type,
         "target": model.target,
-        "dataset_version_id": str(model.dataset_version_id),
         "features": model.features,
         "metrics": model.metrics,
         "trained_rows_count": model.trained_rows_count,
         "model_path": model.model_path,
         "is_active": model.is_active,
-        "trained_at": model.trained_at,
+        "trained_at": model.created_at,  # ← используем created_at
     }
 
 # =========================================
@@ -995,46 +768,6 @@ def get_model_metrics(
     }
 
 
-# =========================================
-# WHICH DATASET TEACHES MODEL
-# =========================================
-
-
-@router.get("/datasets/{dataset_version_id}/models")
-def get_models_by_dataset(
-        dataset_version_id: UUID,
-        db: Session = Depends(get_db),
-):
-    """
-    Возвращает модели, обученные на конкретном датасете.
-    Для моделей, обученных на всех датасетах, dataset_version_id = null
-    """
-
-    stmt = (
-        select(MLModel)
-        .where(
-            and_(
-                MLModel.dataset_version_id == dataset_version_id,
-                MLModel.is_deleted.is_(False),
-            )
-        )
-        .order_by(MLModel.created_at.desc())
-    )
-
-    models = db.execute(stmt).scalars().all()
-
-    return [
-        {
-            "id": m.id,
-            "name": m.name,
-            "version": m.version,
-            "is_active": m.is_active,
-            "trained_rows_count": m.trained_rows_count,
-            "trained_at": m.trained_at,
-            "trained_on_all": m.dataset_version_id is None,  # ← флаг для UI
-        }
-        for m in models
-    ]
 
 
 # =========================================
@@ -1084,22 +817,59 @@ def cleanup_old_models(
         "deleted_count": count
     }
 
+# =========================================
+# Dataset Upload Stream NDJSON
+# =========================================
 
 @router.post("/dataset/stream")
 async def stream_dataset(
-        request: Request,
-        ml_service: MLPredictionService = Depends()
+    request: Request,
+    ml_service: MLPredictionService = Depends(),
+    db: Session = Depends(get_db),
 ):
     """
     Streaming endpoint for dataset upload from 1C
     Accepts NDJSON (Newline Delimited JSON) stream
-    Returns predictions after processing all data
+    Returns upload statistics after processing all data
     """
     logger.info("🔴 STREAM ENDPOINT CALLED")
 
     service = DatasetStreamingService(ml_service)
 
-    # Читаем весь поток, обрабатываем, возвращаем результат
-    result = await service.process_stream(request.stream())
+    # 🔥 Передаём db
+    result = await service.process_stream(request.stream(), db)
 
     return result
+
+
+@router.get("/dataset/info")
+def get_dataset_info(db: Session = Depends(get_db)):
+    """
+    Возвращает информацию о текущем датасете:
+    - общее количество строк
+    - история загрузок
+    """
+    total_rows = db.query(IndustrialDatasetRaw).count()
+
+    uploads = db.query(DatasetUploadHistory).order_by(
+        DatasetUploadHistory.uploaded_at.desc()
+    ).limit(50).all()
+
+    return {
+        "total_rows": total_rows,
+        "last_updated": uploads[0].uploaded_at if uploads else None,
+        "total_uploads": len(uploads),
+        "upload_history": [
+            {
+                "id": h.id,
+                "batch_id": str(h.batch_id),
+                "uploaded_at": h.uploaded_at.isoformat(),
+                "records_added": h.records_added,
+                "total_records_after": h.total_records_after,
+                "status": h.status,
+                "error_message": h.error_message,
+                "duration_ms": h.duration_ms
+            }
+            for h in uploads
+        ]
+    }

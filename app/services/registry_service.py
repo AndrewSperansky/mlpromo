@@ -35,9 +35,13 @@ class ModelRegistryService:
             features: list[str],
             metrics: dict | None,
             model_path: Optional[Path] = None,
-            dataset_version_id: UUID,
+            dataset_version_id: Optional[UUID] = None,  # ← меняем на Optional
             trained_rows_count: int,
     ) -> MLModel:
+        """
+        Регистрирует новую модель в БД.
+        dataset_version_id может быть None (если модель обучена на полном датасете)
+        """
 
         stmt = select(MLModel).where(
             and_(
@@ -50,7 +54,6 @@ class ModelRegistryService:
         existing = self.db.execute(stmt).scalar_one_or_none()
 
         if existing:
-            logger.info(f"Model {name}:{version} already exists, returning existing")
             return existing
 
         model = MLModel(
@@ -63,8 +66,6 @@ class ModelRegistryService:
             metrics=metrics,
             model_path=str(model_path) if model_path else None,
             is_active=False,
-            trained_at=datetime.now(timezone.utc),
-            dataset_version_id=dataset_version_id,
             trained_rows_count=trained_rows_count,
         )
 
@@ -72,7 +73,6 @@ class ModelRegistryService:
         self.db.commit()
         self.db.refresh(model)
 
-        logger.info(f"✅ Registered new model: {name}:{version} (id={model.id})")
         return model
 
     # =========================================

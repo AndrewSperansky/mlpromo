@@ -7,10 +7,53 @@ from typing import Optional, Dict, Any, List
 
 
 class PredictionRequest(BaseModel):
-    prediction_date: date = Field(..., description="Дата прогноза")
-    features: Dict[str, float]
-    promo_code: str = Field(..., description="Код промо")
-    sku: str = Field(..., description="SKU товара")
+    prediction_date: date = Field(
+        ...,
+        description="Дата прогноза"
+    )
+
+    features: Dict[str, float] = Field(
+        ...,
+        description="Словарь признаков модели. Должен содержать все 16 признаков."
+    )
+
+    promo_code: str = Field(
+        ...,
+        description="Код промо-акции"
+    )
+
+    sku: str = Field(
+        ...,
+        description="SKU товара"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "prediction_date": "2026-03-24",
+                "promo_code": "PROMO10",
+                "sku": "РН229840",
+                "features": {
+                    "RegularPrice": 259.99,
+                    "PromoPrice": 229.99,
+                    "PurchasePriceBefore": 116.71,
+                    "PurchasePricePromo": 116.71,
+                    "PercentPriceDrop": 11.54,
+                    "VolumeRegular": 119.86,
+                    "HistoricalSalesPromo": 442.0,
+                    "SalesQty_PrevModel": 0.25,
+                    "FM_Regular": 50.62,
+                    "FM_Promo": 44.18,
+                    "TurnoverBefore": 31162.4,
+                    "TurnoverPromo": 28898.24,
+                    "SeasonCoef_Week": 1.0,
+                    "ManualCoefficientFlag": 0.0,
+                    "IsNewSKU": 0.0,
+                    "IsAnalogSKU": 0.0
+                }
+            }
+        }
+
 
 
 class ShapValue(BaseModel):

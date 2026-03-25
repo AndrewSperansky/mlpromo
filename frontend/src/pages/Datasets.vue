@@ -1,23 +1,55 @@
-<!-- frontend\src\pages\Datasets.vue -->
+<!-- frontend/src/pages/Datasets.vue -->
 
 <template>
   <div class="container-fluid mt-4">
-    <h2 class="mb-4">Datasets</h2>
+    <h2 class="mb-4">Dataset Management</h2>
 
+    <!-- Статистика датасета -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="card bg-primary text-white h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">Total Rows</h5>
+            <h2 class="display-4 mt-auto mb-0">{{ stats.total_rows || 0 }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-success text-white h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">Last Upload</h5>
+            <h6 class="mt-auto mb-1">{{ formatDate(stats.last_updated) || '—' }}</h6>
+            <small class="mt-0">{{ stats.last_upload_records || 0 }} rows added</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-info text-white h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">Total Uploads</h5>
+            <h2 class="display-4 mt-auto mb-0">{{ stats.total_uploads || 0 }}</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Загрузка нового файла -->
     <div class="card mb-4">
       <div class="card-body">
         <div class="d-flex gap-2">
           <div class="flex-grow-1">
             <input type="file" class="form-control" accept=".csv" @change="handleFileSelect" />
           </div>
-
           <div class="flex-shrink-0">
             <button class="btn btn-primary" @click="uploadDataset" :disabled="!selectedFile || uploading">
               <span v-if="uploading" class="spinner-border spinner-border-sm"></span>
-              Upload Dataset
+              Upload & Append
             </button>
           </div>
         </div>
+        <small class="text-muted mt-2 d-block">
+          New data will be appended to the existing dataset. After upload, retrain the model.
+        </small>
       </div>
     </div>
 
@@ -25,172 +57,86 @@
       {{ error }}
     </div>
 
-    <!-- Таблица датасетов -->
+    <!-- История загрузок -->
     <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Upload History</h5>
+      </div>
       <div class="card-body p-0">
-
-        <table class="table table-striped table-hover table-bordered mb-0">
+        <table class="table table-striped table-hover mb-0">
           <thead class="table-dark">
             <tr>
-              <th style="width:40%">Dataset Version</th>
-              <th style="width:25%">Created</th>
-              <th style="width:15%">Rows</th>
-              <th style="width:20%">Actions</th>
+              <th>Batch ID</th>
+              <th>Uploaded At</th>
+              <th>Records Added</th>
+              <th>Total After</th>
+              <th>Duration (ms)</th>
+              <th>Status</th>
             </tr>
           </thead>
-
           <tbody>
-
-            <tr v-for="ds in datasets" :key="ds.dataset_version_id">
+            <tr v-for="upload in stats.upload_history" :key="upload.id">
+              <td><code>{{ upload.batch_id.slice(0, 8) }}...</code></td>
+              <td>{{ formatDate(upload.uploaded_at) }}</td>
+              <td class="text-success fw-bold">{{ upload.records_added }}</td>
+              <td>{{ upload.total_records_after }}</td>
+              <td>{{ upload.duration_ms }}</td>
               <td>
-                <a href="#" @click.prevent="openDatasetDetails(ds.dataset_version_id)" class="dataset-link">
-                  {{ ds.dataset_version_id }}
-                </a>
-              </td>
-              <td>{{ formatDate(ds.created_at) }}</td>
-              <td>{{ ds.row_count }}</td>
-
-              <td>
-                <button class="btn btn-danger btn-sm" @click="handleDelete(ds.dataset_version_id)">
-                  Delete
-                </button>
-              </td>
-
-            </tr>
-
-            <tr v-if="datasets.length === 0">
-              <td colspan="4" class="text-center text-muted p-4">
-                No datasets uploaded yet
+                <span :class="upload.status === 'success' ? 'badge bg-success' : 'badge bg-danger'">
+                  {{ upload.status }}
+                </span>
               </td>
             </tr>
-
+            <tr v-if="!stats.upload_history?.length">
+              <td colspan="6" class="text-center text-muted p-4">
+                No uploads yet
+              </td>
+            </tr>
           </tbody>
         </table>
-
       </div>
     </div>
 
   </div>
-
-  <!-- ===== МОДАЛЬНОЕ ОКНО ДЛЯ ПРОСМОТРА МОДЕЛЕЙ ===== -->
-  <div v-if="showModal" class="modal fade show d-block" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-
-        <div class="modal-header">
-          <h5 class="modal-title">
-            Models trained on dataset
-            <span class="dataset-id">{{ selectedDataset }}</span>
-          </h5>
-
-          <button type="button" class="btn-close" @click="showModal = false"></button>
-        </div>
-
-        <div class="modal-body">
-
-          <table class="table table-striped">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Version</th>
-                <th>Rows</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              <tr v-for="m in datasetModels" :key="m.id">
-                <td>{{ m.name }}</td>
-                <td>{{ m.version }}</td>
-                <td>{{ m.trained_rows_count }}</td>
-                <td>{{ m.is_active ? "Yes" : "No" }}</td>
-              </tr>
-
-              <tr v-if="datasetModels.length === 0">
-                <td colspan="4" class="text-center text-muted">
-                  No models trained on this dataset
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
-
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <div v-if="showModal" class="modal-backdrop fade show"></div>
-
-  <!-- ===== МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ ===== -->
-  <div v-if="showDeleteConfirm" class="modal fade show d-block" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-
-        <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            Confirm Deletion
-          </h5>
-          <button type="button" class="btn-close btn-close-white" @click="showDeleteConfirm = false"></button>
-        </div>
-
-        <div class="modal-body">
-          <p class="fs-5">{{ deleteConfirmMessage }}</p>
-          <p class="text-muted small mb-0">Это действие нельзя отменить. Все связанные модели будут помечены как
-            удалённые.</p>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" @click="showDeleteConfirm = false">
-            Cancel
-          </button>
-          <button type="button" class="btn btn-danger" @click="confirmForceDelete">
-            <i class="bi bi-trash3 me-2"></i>
-            Delete with models
-          </button>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <div v-if="showDeleteConfirm" class="modal-backdrop fade show"></div>
-
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { fetchDatasetModels } from "../services/api"
-import api, { fetchDatasets, deleteDataset } from "../services/api"
+import api from "../services/api"
 
-// ===== Types =====
-interface Dataset {
-  dataset_version_id: string
-  created_at: string
-  row_count: number
+interface UploadHistory {
+  id: number
+  batch_id: string
+  uploaded_at: string
+  records_added: number
+  total_records_after: number
+  status: string
+  error_message: string | null
+  duration_ms: number
 }
 
-// ===== State =====
-const selectedDataset = ref<string | null>(null)
-const datasetModels = ref<any[]>([])
-const showModal = ref(false)
+interface DatasetStats {
+  total_rows: number
+  last_updated: string | null
+  last_upload_records: number
+  total_uploads: number
+  upload_history: UploadHistory[]
+}
 
-const datasets = ref<Dataset[]>([])
+const stats = ref<DatasetStats>({
+  total_rows: 0,
+  last_updated: null,
+  last_upload_records: 0,
+  total_uploads: 0,
+  upload_history: []
+})
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
 const error = ref("")
 
-// ===== Delete confirmation modal =====
-const showDeleteConfirm = ref(false)
-const deleteConfirmMessage = ref('')
-const pendingDeleteId = ref<string | null>(null)
-
-// ===== Methods =====
-function formatDate(date: string) {
-  return new Date(date).toLocaleString()
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return '-'
+  return new Date(dateStr).toLocaleString()
 }
 
 function handleFileSelect(event: Event) {
@@ -202,31 +148,13 @@ function handleFileSelect(event: Event) {
   selectedFile.value = input.files.item(0)
 }
 
-async function loadDatasets() {
+async function loadStats() {
   try {
-    console.log('Loading datasets...')
-    const res = await fetchDatasets()
-    console.log('Fetch datasets response:', res)
-
-    const data = res.data || res
-    console.log('Datasets data:', data)
-
-    if (!Array.isArray(data)) {
-      console.error('Data is not an array:', data)
-      datasets.value = []
-      return
-    }
-
-    datasets.value = data.map((ds: any) => ({
-      dataset_version_id: ds.dataset_version_id || ds.id,
-      created_at: ds.created_at,
-      row_count: ds.row_count
-    }))
-
-    console.log('Processed datasets:', datasets.value)
+    const response = await api.get('/ml/dataset/stats')
+    stats.value = response.data
   } catch (e) {
-    console.error('Load datasets error:', e)
-    error.value = "Failed to load datasets"
+    console.error('Failed to load stats:', e)
+    error.value = "Failed to load dataset statistics"
   }
 }
 
@@ -239,118 +167,27 @@ async function uploadDataset() {
   formData.append("file", selectedFile.value)
 
   try {
-    console.log('Uploading file:', selectedFile.value.name)
-    await api.post("/ml/dataset/upload", formData, {
+    const response = await api.post("/ml/dataset/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" }
     })
+    
+    console.log('Upload response:', response.data)
+    await loadStats()
     selectedFile.value = null
-    await loadDatasets()
-  } catch (e) {
+    
+    // Сбрасываем input
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    if (input) input.value = ''
+    
+  } catch (e: any) {
     console.error('Upload error:', e)
-    error.value = "Dataset upload failed"
+    error.value = e.response?.data?.detail || "Dataset upload failed"
   } finally {
     uploading.value = false
   }
 }
 
-async function handleDelete(datasetId: string) {
-  try {
-    console.log('🔍 Trying to delete without force:', datasetId);
-    await deleteDataset(datasetId, false);
-    await loadDatasets();
-  } catch (error: any) {
-    console.log('🔍 Error caught:', error);
-
-    if (error.response?.status === 409) {
-      console.log('🔍 409 Conflict detected');
-
-      const detail = error.response?.data?.detail;
-      console.log('🔍 detail:', detail);
-
-      const modelsCount = detail?.total_models || 'несколько';
-      console.log('🔍 modelsCount:', modelsCount);
-
-      // Показываем кастомное модальное окно вместо confirm
-      pendingDeleteId.value = datasetId;
-      deleteConfirmMessage.value =
-        `Этот датасет используется ${modelsCount} моделью(ями).`;
-      showDeleteConfirm.value = true;
-
-    } else {
-      console.error('❌ Delete error:', error);
-      alert('Ошибка при удалении датасета');
-    }
-  }
-}
-
-async function confirmForceDelete() {
-  if (!pendingDeleteId.value) return;
-
-  try {
-    await deleteDataset(pendingDeleteId.value, true);
-    await loadDatasets();
-    showDeleteConfirm.value = false;
-    pendingDeleteId.value = null;
-  } catch (forceError) {
-    console.error('Force delete failed:', forceError);
-    alert('Не удалось удалить датасет даже с force=true');
-  }
-}
-
-async function openDatasetDetails(id: string) {
-  selectedDataset.value = id
-  showModal.value = true
-
-  try {
-    const res = await fetchDatasetModels(id)
-    datasetModels.value = res.data
-  } catch (e) {
-    console.error("Failed to load models", e)
-  }
-}
-
-onMounted(loadDatasets)
+onMounted(() => {
+  loadStats()
+})
 </script>
-
-<style scoped>
-.dataset-link {
-  text-decoration: none;
-  font-weight: 500;
-  color: #0d6efd;
-  cursor: pointer;
-}
-
-.dataset-link:hover {
-  text-decoration: underline;
-}
-
-.dataset-id {
-  color: #198754;
-  font-weight: 600;
-}
-
-/* Стили для модальных окон */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1040;
-}
-
-.modal.show {
-  display: block;
-  z-index: 1050;
-}
-
-.modal-dialog {
-  z-index: 1060;
-}
-
-.bg-danger {
-  background-color: #dc3545 !important;
-}
-
-.btn-close-white {
-  filter: invert(1) grayscale(100%) brightness(200%);
-}
-</style>

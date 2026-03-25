@@ -394,51 +394,6 @@ curl http://localhost:8000/api/v1/ml/dataset | jq '.count'
 }
 
 
-=========================================================================
-✅ 1c/predict Version2
-=========================================================================
-  curl -X POST http://localhost:8000/api/v1/ml/1c/predict \
-  -H "Content-Type: application/json" \
-  -d '{
-    "request_id": "33333333-3333-3333-3333-333333336667",
-    "data": {
-      "price": 120,
-      "discount": 15,
-      "avg_sales_7d": 95,
-      "avg_discount_7d": 10,
-      "promo_days_left": 7,
-      "promo_code": "PROMO123",
-      "sku": "SKU001"
-    }
-  }'
-{"request_id":"33333333-3333-3333-3333-333333336666","prediction":151.81549452722453,"ml_model_id":"cb_promo_v1","version":"stage5"}(base)
-===========================================================================
-✅ 1c/predict Version5
-===========================================================================
-
- curl -X POST http://localhost:8000/api/v1/ml/1c/predict   -H "Content-Type: application/json"   -d '{
-    "request_id": "33333333-3333-3333-3333-333333333557",
-    "data": {
-      "price": 120,
-      "discount": 15,
-      "avg_sales_7d": 95,
-      "avg_discount_7d": 12.5,
-      "promo_days_left": 7,
-      "promo_code": 25,      
-      "sku": 12345              
-    }
-  }'
-
-
-Ответ:
-
-
-{
-  "request_id": "33333333-3333-3333-3333-333333333558",
-  "prediction": 166.80743649272588,
-  "ml_model_id": "cb_promo_v1",
-  "version": "stage5"
-}
 
 =============================================================================
 ✅ Runtime State
@@ -497,6 +452,7 @@ curl http://localhost:8000/routes
 
 
 curl http://localhost:8000/api/v1/system/metrics
+
 curl -s http://127.0.0.1:8000/api/v1/system/metrics | jq                                                                                                                                                
 вывод:
 {
@@ -545,3 +501,9 @@ curl http://localhost:8000/api/v1/system/status | jq
 (base) asper@00000-WS2:/mnt/d/PycharmProjects/promo-ml$ curl http://localhost:8000/api/v1/system/runtime-state | jq '.ml_model_id'
 
 42
+
+
+curl -N -X POST "http://localhost:8000/api/v1/ml/dataset/stream"   -H "Content-Type: application/x-ndjson"   --data-binary @data/test_real_record.ndjson | jq .
+ 
+
+curl http://localhost:8000/api/v1/ml/dataset/stats | jq
