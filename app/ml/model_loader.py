@@ -9,6 +9,8 @@ from catboost import CatBoostRegressor
 from app.db.session import SessionLocal
 from models.ml_model import MLModel
 
+
+
 logger = logging.getLogger("promo_ml")
 
 
@@ -34,12 +36,7 @@ class ModelLoader:
         3. Поиск в стандартных папках (current, archive, _candidate)
         4. Старая логика (прямой путь)
         """
-        import logging
-        from pathlib import Path
-        from app.core.settings import settings
-        from app.ml.runtime_state import ML_RUNTIME_STATE
 
-        logger = logging.getLogger("promo_ml")
 
         # ===== 1. Проверяем сохранённый путь в runtime =====
         saved_path = ML_RUNTIME_STATE.get("model_path")
@@ -122,7 +119,6 @@ class ModelLoader:
 
         return default_path
 
-
     @classmethod
     def load(cls):
         """
@@ -167,18 +163,36 @@ class ModelLoader:
         feature_order = ML_RUNTIME_STATE.get("feature_order", [])
         version = ML_RUNTIME_STATE.get("version")
 
+        # также пытаемся загрузить из файла метаданных
+        meta_path = model_path.with_suffix('.meta.json')
+        if meta_path.exists():
+            try:
+                with open(meta_path) as f:
+                    file_meta = json.load(f)
+                    if not feature_order:
+                        feature_order = file_meta.get("feature_order", [])
+                    if not version:
+                        version = file_meta.get("version")
+            except Exception as e:
+                logger.warning(f"Failed to load meta file: {e}")
+
+        #  создаём метаданные
         cls._meta = {
             "feature_order": feature_order,
             "version": version,
-            "ml_model_id": current_model_id
+            "ml_model_id": current_model_id,
+            "model_path": str(model_path),
         }
 
         # Обновляем runtime
         ML_RUNTIME_STATE["model_loaded"] = True
         if version:
             ML_RUNTIME_STATE["version"] = version
+        if feature_order:
+            ML_RUNTIME_STATE["feature_order"] = feature_order
+            ML_RUNTIME_STATE["feature_count"] = len(feature_order)
 
-        logger.info(f"Model loaded: {current_model_id}, features: {feature_order}")
+        logger.info(f"Model loaded: {current_model_id}, features count: {len(feature_order)}")
 
         return {"model": cls._model, "meta": cls._meta}
 

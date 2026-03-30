@@ -1,3 +1,6 @@
+<!-- frontend\src\pages\Predict.vue -->
+
+
 <template>
   <div>
     <h2 class="mb-4">Predictions Test Page</h2>
@@ -30,7 +33,7 @@
 
     <!-- Карточка с результатами -->
     <div v-if="predictions.length" class="row mb-4">
-      <div class="col-md-6">
+      <div class="col-md-12">
         <div class="card shadow-sm">
           <div class="card-header bg-primary text-white">
             <i class="bi bi-graph-up me-2"></i>Прогноз продаж
@@ -40,11 +43,11 @@
           </div>
         </div>
       </div>
-
-      <div class="col-md-6">
+      
+      <div class="col-md-12 mt-4">
         <div class="card shadow-sm">
           <div class="card-header bg-info text-white">
-            <i class="bi bi-table me-2"></i>Детализация
+            <i class="bi bi-table me-2"></i>Детализация прогнозов
           </div>
           <div class="card-body p-0">
             <table class="table table-striped table-hover mb-0">
@@ -52,18 +55,18 @@
                 <tr>
                   <th>#</th>
                   <th>Прогноз (шт)</th>
-                  <th>Без промо (база)</th>
-                  <th>Прирост</th>
+                  <th>Дата</th>
+                  <th>SKU</th>
+                  <th>Промо-код</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(pred, idx) in predictions" :key="idx">
-                  <td>{{ idx + 1 }}</td>
-                  <td class="fw-bold text-success">{{ Math.round(pred) }}</td>
-                  <td>{{ baselineValues[idx]?.toFixed(0) ?? '-' }}</td>
-                  <td :class="(upliftValues[idx] ?? 0) >= 0 ? 'text-success' : 'text-danger'">
-                    {{ upliftValues[idx] !== undefined ? (upliftValues[idx] * 100).toFixed(1) + '%' : '-' }}
-                  </td>
+                <tr v-for="(item, idx) in tableData" :key="idx">
+                  <td class="fw-bold">{{ item.index }}</td>
+                  <td class="text-primary fw-bold">{{ item.prediction }}</td>
+                  <td>{{ item.date }}</td>
+                  <td>{{ item.sku }}</td>
+                  <td>{{ item.promoCode }}</td>
                 </tr>
               </tbody>
             </table>
@@ -79,8 +82,7 @@
       </div>
       <div class="card-body">
         <ul class="list-group">
-          <li v-for="item in topShap" :key="item.feature"
-            class="list-group-item d-flex justify-content-between align-items-center">
+          <li v-for="item in topShap" :key="item.feature" class="list-group-item d-flex justify-content-between align-items-center">
             {{ item.feature }}
             <span class="badge bg-primary rounded-pill">{{ item.value.toFixed(4) }}</span>
           </li>
@@ -101,9 +103,7 @@ interface CsvRow {
 }
 
 const rows = ref<CsvRow[]>([])
-const predictions = ref<number[]>([])
-const baselineValues = ref<number[]>([])
-const upliftValues = ref<number[]>([])
+const predictions = ref<{ value: number; date: string; sku: string; promoCode: string }[]>([])
 const loading = ref(false)
 const chartRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: Chart | null = null
@@ -112,6 +112,16 @@ const topShap = ref<{ feature: string; value: number }[]>([])
 const statusText = computed(() => {
   if (!rows.value.length) return 'No data loaded'
   return `Ready to predict (${rows.value.length} samples)`
+})
+
+const tableData = computed(() => {
+  return predictions.value.map((pred, idx) => ({
+    index: idx + 1,
+    prediction: pred.value.toFixed(2),
+    date: pred.date,
+    sku: pred.sku,
+    promoCode: pred.promoCode
+  }))
 })
 
 function handleCSVUpload(event: Event) {
@@ -165,8 +175,6 @@ function parseCSV(text: string) {
 async function runBatchPredict() {
   loading.value = true
   predictions.value = []
-  baselineValues.value = []
-  upliftValues.value = []
   topShap.value = []
 
   try {
@@ -174,22 +182,15 @@ async function runBatchPredict() {
       const payload = {
         promo_code: String(row.promo_code || row.PromoID || 'TEST'),
         sku: String(row.sku || row.SKU || 'SKU'),
-        prediction_date: String(row.prediction_date || row.Date || '2026-03-20'),
+        prediction_date: String(row.prediction_date || row.Date || new Date().toISOString().split('T')[0]),
         features: {
           RegularPrice: Number(row.RegularPrice || 0),
           PromoPrice: Number(row.PromoPrice || 0),
-          PurchasePriceBefore: Number(row.PurchasePriceBefore || 0),
-          PurchasePricePromo: Number(row.PurchasePricePromo || 0),
-          PercentPriceDrop: Number(row.PercentPriceDrop || 0),
           VolumeRegular: Number(row.VolumeRegular || 0),
           HistoricalSalesPromo: Number(row.HistoricalSalesPromo || 0),
           SalesQty_PrevModel: Number(row.SalesQty_PrevModel || 0),
-          FM_Regular: Number(row.FM_Regular || 0),
-          FM_Promo: Number(row.FM_Promo || 0),
           TurnoverBefore: Number(row.TurnoverBefore || 0),
           TurnoverPromo: Number(row.TurnoverPromo || 0),
-          SeasonCoef_Week: Number(row.SeasonCoef_Week || 1),
-          ManualCoefficientFlag: Number(row.ManualCoefficientFlag || 0),
           IsNewSKU: Number(row.IsNewSKU || 0),
           IsAnalogSKU: Number(row.IsAnalogSKU || 0)
         }
@@ -197,20 +198,14 @@ async function runBatchPredict() {
 
       const response = await predictBatch(payload)
       const data = response.data
-
+      
       if (data.prediction !== undefined) {
-        predictions.value.push(data.prediction)
-
-        // Вычисляем baseline и uplift
-        const volumeRegular = Number(row.VolumeRegular || 0)
-        baselineValues.value.push(volumeRegular)
-
-        if (volumeRegular > 0) {
-          const uplift = (data.prediction - volumeRegular) / volumeRegular
-          upliftValues.value.push(uplift)
-        } else {
-          upliftValues.value.push(0)
-        }
+        predictions.value.push({
+          value: data.prediction,
+          date: payload.prediction_date,
+          sku: payload.sku,
+          promoCode: payload.promo_code
+        })
       }
 
       // SHAP для первой строки
@@ -253,16 +248,9 @@ function renderChart() {
       datasets: [
         {
           label: 'Прогноз продаж (шт)',
-          data: predictions.value.map(p => Math.round(p)),
+          data: predictions.value.map(p => p.value),
           backgroundColor: 'rgba(54, 162, 235, 0.7)',
           borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 1
-        },
-        {
-          label: 'Базовые продажи (без промо)',
-          data: baselineValues.value.map(b => Math.round(b)),
-          backgroundColor: 'rgba(255, 99, 132, 0.5)',
-          borderColor: 'rgba(255, 99, 132, 1)',
           borderWidth: 1
         }
       ]
@@ -275,8 +263,8 @@ function renderChart() {
         },
         tooltip: {
           callbacks: {
-            label: (context) => {
-              return `${context.dataset.label}: ${context.raw} шт`
+            label: (context: any) => {
+              return `${context.dataset.label}: ${context.raw.toFixed(2)} шт`
             }
           }
         }

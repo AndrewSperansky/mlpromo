@@ -1,69 +1,94 @@
 # app/schemas/dataset_schema.py
 
 from pydantic import BaseModel, Field
-from typing import Optional, Any, Union
-from datetime import datetime
+from typing import Optional
+from datetime import date
 
 
 class DatasetRecord(BaseModel):
-    """Flat dataset record matching CSV structure"""
+    """Схема одной записи датасета (соответствует таблице industrial_dataset_raw)"""
 
-    # Обязательные поля — без default
-    SKU: str = Field(..., description="SKU code")
-    Store_Location_Type: str = Field(..., description="Store location type")
-    StoreID: str = Field(..., description="Store identifier")
-    RegularPrice: float = Field(..., description="Regular price")
-    PromoPrice: float = Field(..., description="Promo price")
-    PercentPriceDrop: float = Field(..., description="Percent price drop")
-    VolumeRegular: float = Field(..., description="Regular weekly volume")
-    HistoricalSalesPromo: float = Field(..., description="Historical promo sales")
-    SalesQty_PrevModel: float = Field(..., description="Previous model sales")
+    # Инференс-поля (11)
+    promo_id: str = Field(..., description="Код промо-акции")
+    sku: str = Field(..., description="SKU товара")
+    store_id: str = Field(..., description="Код магазина")
+    promo_week1: int = Field(..., description="Номер первой недели промо")
+    promo_week2: int = Field(..., description="Номер второй недели промо")
+    regular_price: float = Field(..., description="Обычная цена")
+    promo_price: float = Field(..., description="Промо-цена")
+    prev_promo_id: Optional[str] = Field(None, description="ID предыдущей промо-акции")
+    adv_carrier: Optional[str] = Field(None, description="Рекламный носитель")
+    adv_material: Optional[str] = Field(None, description="Рекламный материал")
+    promo_mechanics: Optional[str] = Field(None, description="Механика промо")
 
-    # Опциональные поля — с default
-    PromoID: Optional[str] = Field(default="", description="Promo ID")
-    Category: Optional[str] = Field(default="", description="Category")
-    Supplier: Optional[str] = Field(default="", description="Supplier")
-    Region: Optional[str] = Field(default="", description="Region")
-    Date: Optional[str] = Field(default="", description="Date")
-    PurchasePriceBefore: Optional[float] = Field(default=0.0, description="Purchase price before promo")
-    PurchasePricePromo: Optional[float] = Field(default=0.0, description="Purchase price during promo")
-    SalesQty_Promo: Optional[float] = Field(default=0.0, description="Sales quantity during promo")
-    FM_Regular: Optional[float] = Field(default=0.0, description="FM regular")
-    FM_Promo: Optional[float] = Field(default=0.0, description="FM promo")
-    TurnoverBefore: Optional[float] = Field(default=0.0, description="Turnover before promo")
-    TurnoverPromo: Optional[float] = Field(default=0.0, description="Turnover during promo")
-    SeasonCoef_Week: Optional[float] = Field(default=0.0, description="Season coefficient")
-    ManualCoefficientFlag: Optional[int] = Field(default=0, description="Manual coefficient flag")
-    IsNewSKU: Optional[int] = Field(default=0, description="Is new SKU")
-    IsAnalogSKU: Optional[int] = Field(default=0, description="Is analog SKU")
-    SKU_Level2: Optional[str] = Field(default="", description="SKU level 2")
-    SKU_Level3: Optional[str] = Field(default="", description="SKU level 3")
-    SKU_Level4: Optional[str] = Field(default="", description="SKU level 4")
-    SKU_Level5: Optional[str] = Field(default="", description="SKU level 5")
+    # Категориальные поля (10)
+    store_location_type: Optional[str] = Field(None, description="Тип локации магазина")
+    region: Optional[str] = Field(None, description="Регион")
+    format_assortment: Optional[str] = Field(None, description="Формат ассортимента")
+    sku_level_2: Optional[str] = Field(None, description="Уровень иерархии SKU 2")
+    sku_level_3: Optional[str] = Field(None, description="Уровень иерархии SKU 3")
+    sku_level_4: Optional[str] = Field(None, description="Уровень иерархии SKU 4")
+    sku_level_5: Optional[str] = Field(None, description="Уровень иерархии SKU 5")
+    category: Optional[str] = Field(None, description="Категория (температурный режим)")
+    is_new_sku: int = Field(0, description="Новый SKU (0/1)")
+    analog_sku: Optional[str] = Field(None, description="SKU аналога")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "SKU": "РН229840",
-                "Store_Location_Type": "Трассовый",
-                "Date": "12.01.2026 00:00:00",
-                "StoreID": "МГЗ №247",
-                "RegularPrice": 259.99,
-                "PromoPrice": 229.99,
-                "PercentPriceDrop": 11.54,
-                "VolumeRegular": 119.86,
-                "HistoricalSalesPromo": 442,
-                "SalesQty_PrevModel": 0.25
-            }
-        }
+    # Целевые переменные
+    promo_week1_sales_qty: float = Field(..., description="Продажи в первую неделю промо")
+    promo_week2_sales_qty: float = Field(..., description="Продажи во вторую неделю промо")
 
-
-class StreamMessage(BaseModel):
-    """Stream message for dataset upload"""
-    operation: str = Field(..., description="batch_start, record, batch_end, heartbeat, complete, error")
-    batch_id: Optional[str] = None
-    sequence: Optional[int] = None
-    total_count: Optional[int] = None
-    data: Optional[Any] = None  # ← Changed: accepts any JSON-serializable data
-    error: Optional[str] = None
-    timestamp: Optional[str] = None
+    # Исторические продажи (52 недели) — можно генерировать через дополнительные поля
+    # Но для CSV удобнее иметь их отдельными колонками. Добавим все 52.
+    # Для краткости показаны первые и последние:
+    reg_sales_qty_week_1: float = Field(0.0, description="Регулярные продажи неделя 1")
+    reg_sales_qty_week_2: float = Field(0.0, description="Регулярные продажи неделя 2")
+    reg_sales_qty_week_3: float = Field(0.0, description="Регулярные продажи неделя 3")
+    reg_sales_qty_week_4: float = Field(0.0, description="Регулярные продажи неделя 4")
+    reg_sales_qty_week_5: float = Field(0.0, description="Регулярные продажи неделя 5")
+    reg_sales_qty_week_6: float = Field(0.0, description="Регулярные продажи неделя 6")
+    reg_sales_qty_week_7: float = Field(0.0, description="Регулярные продажи неделя 7")
+    reg_sales_qty_week_8: float = Field(0.0, description="Регулярные продажи неделя 8")
+    reg_sales_qty_week_9: float = Field(0.0, description="Регулярные продажи неделя 9")
+    reg_sales_qty_week_10: float = Field(0.0, description="Регулярные продажи неделя 10")
+    reg_sales_qty_week_11: float = Field(0.0, description="Регулярные продажи неделя 11")
+    reg_sales_qty_week_12: float = Field(0.0, description="Регулярные продажи неделя 12")
+    reg_sales_qty_week_13: float = Field(0.0, description="Регулярные продажи неделя 13")
+    reg_sales_qty_week_14: float = Field(0.0, description="Регулярные продажи неделя 14")
+    reg_sales_qty_week_15: float = Field(0.0, description="Регулярные продажи неделя 15")
+    reg_sales_qty_week_16: float = Field(0.0, description="Регулярные продажи неделя 16")
+    reg_sales_qty_week_17: float = Field(0.0, description="Регулярные продажи неделя 17")
+    reg_sales_qty_week_18: float = Field(0.0, description="Регулярные продажи неделя 18")
+    reg_sales_qty_week_19: float = Field(0.0, description="Регулярные продажи неделя 19")
+    reg_sales_qty_week_20: float = Field(0.0, description="Регулярные продажи неделя 20")
+    reg_sales_qty_week_21: float = Field(0.0, description="Регулярные продажи неделя 21")
+    reg_sales_qty_week_22: float = Field(0.0, description="Регулярные продажи неделя 22")
+    reg_sales_qty_week_23: float = Field(0.0, description="Регулярные продажи неделя 23")
+    reg_sales_qty_week_24: float = Field(0.0, description="Регулярные продажи неделя 24")
+    reg_sales_qty_week_25: float = Field(0.0, description="Регулярные продажи неделя 25")
+    reg_sales_qty_week_26: float = Field(0.0, description="Регулярные продажи неделя 26")
+    reg_sales_qty_week_27: float = Field(0.0, description="Регулярные продажи неделя 27")
+    reg_sales_qty_week_28: float = Field(0.0, description="Регулярные продажи неделя 28")
+    reg_sales_qty_week_29: float = Field(0.0, description="Регулярные продажи неделя 29")
+    reg_sales_qty_week_30: float = Field(0.0, description="Регулярные продажи неделя 30")
+    reg_sales_qty_week_31: float = Field(0.0, description="Регулярные продажи неделя 31")
+    reg_sales_qty_week_32: float = Field(0.0, description="Регулярные продажи неделя 32")
+    reg_sales_qty_week_33: float = Field(0.0, description="Регулярные продажи неделя 33")
+    reg_sales_qty_week_34: float = Field(0.0, description="Регулярные продажи неделя 34")
+    reg_sales_qty_week_35: float = Field(0.0, description="Регулярные продажи неделя 35")
+    reg_sales_qty_week_36: float = Field(0.0, description="Регулярные продажи неделя 36")
+    reg_sales_qty_week_37: float = Field(0.0, description="Регулярные продажи неделя 37")
+    reg_sales_qty_week_38: float = Field(0.0, description="Регулярные продажи неделя 38")
+    reg_sales_qty_week_39: float = Field(0.0, description="Регулярные продажи неделя 39")
+    reg_sales_qty_week_40: float = Field(0.0, description="Регулярные продажи неделя 40")
+    reg_sales_qty_week_41: float = Field(0.0, description="Регулярные продажи неделя 41")
+    reg_sales_qty_week_42: float = Field(0.0, description="Регулярные продажи неделя 42")
+    reg_sales_qty_week_43: float = Field(0.0, description="Регулярные продажи неделя 43")
+    reg_sales_qty_week_44: float = Field(0.0, description="Регулярные продажи неделя 44")
+    reg_sales_qty_week_45: float = Field(0.0, description="Регулярные продажи неделя 45")
+    reg_sales_qty_week_46: float = Field(0.0, description="Регулярные продажи неделя 46")
+    reg_sales_qty_week_47: float = Field(0.0, description="Регулярные продажи неделя 47")
+    reg_sales_qty_week_48: float = Field(0.0, description="Регулярные продажи неделя 48")
+    reg_sales_qty_week_49: float = Field(0.0, description="Регулярные продажи неделя 49")
+    reg_sales_qty_week_50: float = Field(0.0, description="Регулярные продажи неделя 50")
+    reg_sales_qty_week_51: float = Field(0.0, description="Регулярные продажи неделя 51")
+    reg_sales_qty_week_52: float = Field(0.0, description="Регулярные продажи неделя 52")

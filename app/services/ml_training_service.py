@@ -1,8 +1,6 @@
 # app/services/ml_training_service.py
 
 """
-ML Training Service — orchestration layer над train_pipeline.
-Industrial version (dataset-version based).
 ML Training Service — обучение на едином потоковом датасете.
 """
 
@@ -51,7 +49,7 @@ class MLTrainingService:
         if total_rows == 0:
             raise ValueError("No data in industrial_dataset_raw")
 
-        # 🔥 Запускаем обучение — убрали лишние параметры
+        # 🔥 Запускаем обучение (вся логика в train_pipeline)
         result = train_pipeline(
             promote=promote,
             trigger=trigger,
@@ -71,11 +69,11 @@ class MLTrainingService:
             "model_id": result.get("model_id", 0),
             "model_name": result.get("model_name", "promo_uplift"),
             "total_rows": total_rows,
+            "rows_removed": result.get("rows_removed", 0),
             "metrics": result.get("metrics", {}),
             "promoted": result.get("promoted", False),
-            "trigger": trigger,
-            "rows_used": result.get("rows_used", 0),
-            "rows_removed": result.get("rows_removed", 0),
+            "stage": result.get("stage", "completed"),
+            "note": result.get("note", f"Trained on {total_rows} rows")
         }
 
     def get_dataset_stats(self) -> Dict[str, Any]:

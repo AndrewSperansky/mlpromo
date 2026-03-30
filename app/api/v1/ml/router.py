@@ -38,7 +38,7 @@ from models.industrial_dataset import IndustrialDatasetRaw
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.schemas.dataset_schema_csv import (
     TrainRequest,
-    TrainSingleResponse,
+    TrainResponse,
 )
 
 from app.schemas.prediction_schema import (
@@ -213,7 +213,7 @@ def upload_model_bundle(file: UploadFile = File(...)):
 training_service = MLTrainingService()
 
 
-@router.post("/train", response_model=TrainSingleResponse)
+@router.post("/train", response_model=TrainResponse)  # ← меняем response_model
 def train_model(
         request: TrainRequest,
 ):
@@ -231,7 +231,7 @@ def train_model(
         trigger="api",
     )
 
-    return TrainSingleResponse(**result)
+    return TrainResponse(**result)  # ← меняем на TrainResponse
 
 
 

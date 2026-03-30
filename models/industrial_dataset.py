@@ -1,8 +1,7 @@
 # models/industrial_dataset.py
 
-
-from sqlalchemy import Column, BigInteger, Text, Integer, Numeric, Boolean, Date
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, BigInteger, Text, Integer, Numeric, DateTime, JSON
+from sqlalchemy.sql import func
 from app.db.base import Base
 
 
@@ -11,52 +10,40 @@ class IndustrialDatasetRaw(Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
 
-    PromoID = Column(Text)
-    SKU = Column(Text)
-    SKU_Level2 = Column(Text)
-    SKU_Level3 = Column(Text)
-    SKU_Level4 = Column(Text)
-    SKU_Level5 = Column(Text)
-    Category = Column(Text)
-    Supplier = Column(Text)
-    Region = Column(Text)
-    StoreID = Column(Text)
-    Store_Location_Type = Column(Text)
-    Store_ABC = Column(Text)
+    # Инференс-поля
+    promo_id = Column(Text)
+    sku = Column(Text)
+    store_id = Column(Text)
+    promo_week1 = Column(Integer)
+    promo_week2 = Column(Integer)
+    regular_price = Column(Numeric)
+    promo_price = Column(Numeric)
+    prev_promo_id = Column(Text)
+    adv_carrier = Column(Text)
+    adv_material = Column(Text)
+    promo_mechanics = Column(Text)
 
-    Date = Column(Date)
-    WeekNumber = Column(Integer)
-    DayOfWeek = Column(Integer)
+    # Категориальные поля
+    store_location_type = Column(Text)
+    region = Column(Text)
+    format_assortment = Column(Text)
+    sku_level_2 = Column(Text)
+    sku_level_3 = Column(Text)
+    sku_level_4 = Column(Text)
+    sku_level_5 = Column(Text)
+    category = Column(Text)
+    is_new_sku = Column(Integer)
+    analog_sku = Column(Text)
 
-    RegularPrice = Column(Numeric)
-    PromoPrice = Column(Numeric)
-    PurchasePriceBefore = Column(Numeric)
-    PurchasePricePromo = Column(Numeric)
+    # Целевые переменные
+    promo_week1_sales_qty = Column(Numeric)
+    promo_week2_sales_qty = Column(Numeric)
 
-    PromoMechanics = Column(Text)
-    PercentPriceDrop = Column(Numeric)
+    # Исторические данные (52 недели) — можно сгенерировать динамически
+    # Либо оставить как есть
 
-    VolumeRegular = Column(Numeric)
-    HistoricalSalesPromo = Column(Numeric)
-    SalesQty_Fact = Column(Numeric)
-    SalesQty_PrevModel = Column(Numeric)
-    SalesQty_Promo = Column(Numeric)
+    # JSONB
+    extra_features = Column(JSON, default={})
 
-    FM_Regular = Column(Numeric)
-    FM_Promo = Column(Numeric)
-    TurnoverBefore = Column(Numeric)
-    TurnoverPromo = Column(Numeric)
-
-    SeasonCoef_Week = Column(Numeric)
-    SeasonCoef_Day = Column(Numeric)
-
-    ManualCoefficientFlag = Column(Boolean)
-    IsNewSKU = Column(Boolean)
-    IsAnalogSKU = Column(Boolean)
-
-    PreviousPromoID = Column(Text)
-    PromoStatus = Column(Text)
-    MarketingCarrier = Column(Text)
-    MarketingMaterial = Column(Text)
-    FormatAssortment = Column(Text)
-
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
