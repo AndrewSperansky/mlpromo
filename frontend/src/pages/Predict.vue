@@ -5,6 +5,10 @@
     <h2 class="mb-4">Predictions Test Page</h2>
 
     <div class="input-group mb-3">
+      <!-- Кнопки управления -->
+      <button class="btn btn-primary" @click="showManualForm = true">
+        <i class="bi bi-pencil-square me-2"></i>Manual Input
+      </button>
       <label class="btn btn-primary" for="csvUpload">
         <i class="bi bi-cloud-upload me-2"></i>Load CSV
         <input type="file" id="csvUpload" class="d-none" accept=".csv" @change="handleCSVUpload" />
@@ -53,6 +57,7 @@
               <thead class="table-dark">
                  <tr>
                   <th>#</th>
+                  <th>Промо-цена</th>
                   <th>k_uplift</th>
                   <th>Прогноз (шт)</th>
                   <th>Baseline</th>
@@ -62,6 +67,7 @@
               <tbody>
                 <tr v-for="(item, idx) in predictions" :key="idx">
                   <td class="fw-bold">{{ idx + 1 }}</td>
+                  <td class="fw-bold text-primary">{{ item.promo_price.toFixed(2) }} ₽</td>
                   <td class="text-primary fw-bold">{{ item.k_uplift.toFixed(3) }}x</td>
                   <td class="text-success fw-bold">{{ item.prediction_absolute.toFixed(2) }}</td>
                   <td class="text-secondary">{{ item.baseline.toFixed(2) }}</td>
@@ -92,12 +98,21 @@
     </div>
 
   </div>
+  <!-- Модальное окно для ручного ввода -->
+  <ManualPredictModal 
+    v-if="showManualForm" 
+    :predictions="predictions"
+    @close="showManualForm = false"
+    @predict="handleManualPredict"
+  />
+
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue'
 import { predictBatch } from '../services/api'
 import Chart from 'chart.js/auto'
+import ManualPredictModal from '../components/ManualPredictModal.vue'
 
 interface CsvRow {
   [key: string]: any
@@ -108,7 +123,8 @@ interface PredictionResult {
   baseline: number
   prediction_absolute: number
   uplift_percent: number
-  store_id?: string  // 🔥 добавляем store_id
+  store_id?: string  
+  promo_price: number
 }
 
 const rows = ref<CsvRow[]>([])
@@ -117,11 +133,28 @@ const loading = ref(false)
 const chartRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: Chart | null = null
 const topShap = ref<{ feature: string; value: number }[]>([])
+const showManualForm = ref(false)
 
 const statusText = computed(() => {
   if (!rows.value.length) return 'No data loaded'
   return `Ready to predict (${rows.value.length} samples)`
 })
+
+function handleManualPredict(newPredictions: any[]) {
+  predictions.value = newPredictions.map((p: any) => ({
+    k_uplift: p.k_uplift,
+    baseline: p.baseline,
+    prediction_absolute: p.prediction_absolute,
+    uplift_percent: p.uplift_percent,
+    store_id: p.store_id,
+    promo_price: p.promo_price
+  }))
+  
+  nextTick(() => {
+    renderChart()
+  })
+}
+
 
 function handleCSVUpload(event: Event) {
   const input = event.target as HTMLInputElement | null
@@ -198,7 +231,8 @@ async function runBatchPredict() {
         baseline: row.baseline ? Number(row.baseline) : undefined
       }
 
-      const response = await predictBatch(payload)
+      const response = await predictBatch([payload])
+
       const data = response.data
       
       if (data.k_uplift !== undefined) {
@@ -207,7 +241,8 @@ async function runBatchPredict() {
           baseline: data.baseline,
           prediction_absolute: data.prediction_absolute,
           uplift_percent: data.uplift_percent,
-          store_id: payload.store_id  // 🔥 сохраняем store_id
+          store_id: payload.store_id,  
+          promo_price: payload.promo_price
         })
       }
 

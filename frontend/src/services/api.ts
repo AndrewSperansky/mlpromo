@@ -221,11 +221,18 @@ export const getActivationHistory = (limit: number = 10) =>
 
 
 // ============================
-// PREDICT BATCH (ИСПРАВЛЕНО!)
+// PREDICT 
 // ============================ 
 
-export const predictBatch = (payload: any) =>
-    api.post('/ml/predict', payload)  // ← УБРАЛИ ЛИШНЮЮ ОБЕРТКУ!
+// Для одиночного прогноза
+export const predict = (payload: any) =>
+    api.post('/ml/predict', payload)  
+
+// Для batch прогноза — отправляем массив в эндпоинт /predict/batch
+export const predictBatch = (requests: any[]) => {
+  console.log('📤 Sending batch request with', requests.length, 'items')
+  return api.post('/ml/predict/batch', { requests })
+}
 
 // ============================
 // AUDIT
