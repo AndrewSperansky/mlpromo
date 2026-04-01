@@ -1,297 +1,92 @@
 # app/ml/feature_config.yaml
 
-# Фичи, которые приходят в запросе (инференс) — 11 полей
 inference_features:
-  # Идентификаторы
+  # 🔥 Промо-акция
   - name: promo_id
-    type: string
-    required: true
-    default: ""
-  - name: sku
-    type: string
-    required: true
-    default: ""
-  - name: store_id
     type: string
     required: true
     default: ""
 
   # Временные параметры
-  - name: promo_week1
-    type: int
+  - name: week
+    type: integer
     required: true
-    default: 0
-  - name: promo_week2
-    type: int
-    required: true
-    default: 0
+    default: "1"
 
-  # Ценовые параметры
-  - name: regular_price
-    type: float
+  - name: month
+    type: integer
     required: true
-    default: 0.0
-  - name: promo_price
-    type: float
-    required: true
-    default: 0.0
+    default: "1"
 
-  # Контекстные параметры
-  - name: prev_promo_id
+  # Товар и категория
+  - name: sku
     type: string
-    required: false
+    required: true
     default: ""
+
+  - name: category
+    type: string
+    required: true
+    default: ""
+
+  # Цены
+  - name: regular_price
+    type: number
+    required: true
+    default: "0.0"
+
+  - name: promo_price
+    type: number
+    required: true
+    default: "0.0"
+
+  # Магазин и локация
+  - name: store_id
+    type: string
+    required: true
+    default: ""
+
+  - name: region
+    type: string
+    required: true
+    default: ""
+
+  - name: store_location_type
+    type: string
+    required: true
+    default: ""
+
+  - name: format_assortment
+    type: string
+    required: true
+    default: ""
+
+  # Маркетинг и механики
   - name: adv_carrier
     type: string
     required: false
     default: ""
+
   - name: adv_material
     type: string
     required: false
     default: ""
+
   - name: promo_mechanics
     type: string
     required: false
     default: ""
 
 
-# Фичи, которые вычисляются из запроса
+  # Справочные поля
+  - name: analog_sku
+    type: array
+    required: false
+    default: []
+
+
 computed_features:
-  - name: percent_price_drop
-    type: float
+  - name: price_drop_percent
+    type: number
     formula: |
       ((regular_price - promo_price) / regular_price) * 100 if regular_price > 0 else 0
-
-
-# Фичи, которые подтягиваются из БД (из industrial_dataset_raw)
-lookup_features:
-  # Категориальные поля
-  - name: store_location_type
-    type: string
-    source: industrial_dataset
-    key: store_id
-    field: store_location_type
-    cache_ttl: 3600
-
-  - name: region
-    type: string
-    source: industrial_dataset
-    key: store_id
-    field: region
-    cache_ttl: 3600
-
-  - name: format_assortment
-    type: string
-    source: industrial_dataset
-    key: store_id
-    field: format_assortment
-    cache_ttl: 3600
-
-  - name: sku_level_2
-    type: string
-    source: industrial_dataset
-    key: sku
-    field: sku_level_2
-    cache_ttl: 3600
-
-  - name: sku_level_3
-    type: string
-    source: industrial_dataset
-    key: sku
-    field: sku_level_3
-    cache_ttl: 3600
-
-  - name: sku_level_4
-    type: string
-    source: industrial_dataset
-    key: sku
-    field: sku_level_4
-    cache_ttl: 3600
-
-  - name: sku_level_5
-    type: string
-    source: industrial_dataset
-    key: sku
-    field: sku_level_5
-    cache_ttl: 3600
-
-  - name: category
-    type: string
-    source: industrial_dataset
-    key: sku
-    field: category
-    cache_ttl: 3600
-
-  - name: is_new_sku
-    type: int
-    source: industrial_dataset
-    key: sku
-    field: is_new_sku
-    cache_ttl: 3600
-
-  - name: analog_sku
-    type: string
-    source: industrial_dataset
-    key: sku
-    field: analog_sku
-    cache_ttl: 3600
-
-
-# Исторические продажи (52 недели)
-weekly_features:
-  - name: reg_sales_qty_week_1
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_2
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_3
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_4
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_5
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_6
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_7
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_8
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_9
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_10
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_11
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_12
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_13
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_14
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_15
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_16
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_17
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_18
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_19
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_20
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_21
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_22
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_23
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_24
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_25
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_26
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_27
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_28
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_29
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_30
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_31
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_32
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_33
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_34
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_35
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_36
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_37
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_38
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_39
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_40
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_41
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_42
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_43
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_44
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_45
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_46
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_47
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_48
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_49
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_50
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_51
-    type: float
-    default: 0
-  - name: reg_sales_qty_week_52
-    type: float
-    default: 0

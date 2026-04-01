@@ -12,9 +12,8 @@ from sqlalchemy.orm import Session
 from models.industrial_dataset import IndustrialDatasetRaw
 from models.dataset_upload_history import DatasetUploadHistory
 
-from app.schemas.dataset_schema import DatasetRecord, StreamMessage
+from app.schemas.dataset_schema import DatasetRecord
 from app.services.ml_prediction_service import MLPredictionService
-
 
 logger = logging.getLogger("promo_ml")
 
@@ -71,54 +70,61 @@ class DatasetStreamingService:
                     logger.info(f"📨 NDJSON LINE: {line[:200]}")
 
                     data = json.loads(line)
-                    message = StreamMessage(**data)
+                    operation = data.get("operation")
+                    payload = data.get("data", {})
 
-                    logger.info(f"Received: {message.operation}")
+                    logger.info(f"Received: {operation}")
 
-                    if message.operation == "batch_start":
-                        total_expected = message.total_count
+                    if operation == "batch_start":
+                        total_expected = data.get("total_count")
                         logger.info(f"🎬 BATCH START: total_count={total_expected}")
 
-                    elif message.operation == "record":
-                        if message.data:
-                            record = message.data
-                            if isinstance(record, dict):
-                                record = DatasetRecord(**record)
+                    elif operation == "record":
+                        if payload:
+                            # Создаём DatasetRecord из payload
+                            record = DatasetRecord(
+                                promo_id=payload.get("promo_id", ""),
+                                week=payload.get("week", 1),
+                                month=payload.get("month", 1),
+                                sku=payload.get("sku", ""),
+                                category=payload.get("category", ""),
+                                regular_price=payload.get("regular_price", 0),
+                                promo_price=payload.get("promo_price", 0),
+                                store_id=payload.get("store_id", ""),
+                                region=payload.get("region", ""),
+                                store_location_type=payload.get("store_location_type", ""),
+                                format_assortment=payload.get("format_assortment", ""),
+                                adv_carrier=payload.get("adv_carrier"),
+                                adv_material=payload.get("adv_material"),
+                                marketing_type=payload.get("marketing_type"),
+                                promo_mechanics=payload.get("promo_mechanics"),
+                                analog_sku=payload.get("analog_sku"),
+                                k_uplift=payload.get("k_uplift", 1.0),
+                                extra_features=payload.get("extra_features")
+                            )
 
                             records.append(record)
 
                             # Сохраняем в industrial_dataset_raw
                             db_record = IndustrialDatasetRaw(
-                                dataset_version_id=None,
-                                PromoID=record.PromoID,
-                                SKU=record.SKU,
-                                SKU_Level2=record.SKU_Level2,
-                                SKU_Level3=record.SKU_Level3,
-                                SKU_Level4=record.SKU_Level4,
-                                SKU_Level5=record.SKU_Level5,
-                                Category=record.Category,
-                                Supplier=record.Supplier,
-                                Region=record.Region,
-                                StoreID=record.StoreID,
-                                Store_Location_Type=record.Store_Location_Type,
-                                Date=record.Date,
-                                RegularPrice=record.RegularPrice,
-                                PromoPrice=record.PromoPrice,
-                                PurchasePriceBefore=record.PurchasePriceBefore or 0.0,
-                                PurchasePricePromo=record.PurchasePricePromo or 0.0,
-                                PercentPriceDrop=record.PercentPriceDrop,
-                                VolumeRegular=record.VolumeRegular,
-                                HistoricalSalesPromo=record.HistoricalSalesPromo,
-                                SalesQty_Promo=record.SalesQty_Promo or 0.0,
-                                SalesQty_PrevModel=record.SalesQty_PrevModel,
-                                FM_Regular=record.FM_Regular or 0.0,
-                                FM_Promo=record.FM_Promo or 0.0,
-                                TurnoverBefore=record.TurnoverBefore or 0.0,
-                                TurnoverPromo=record.TurnoverPromo or 0.0,
-                                SeasonCoef_Week=record.SeasonCoef_Week or 0.0,
-                                ManualCoefficientFlag=record.ManualCoefficientFlag or 0,
-                                IsNewSKU=record.IsNewSKU or 0,
-                                IsAnalogSKU=record.IsAnalogSKU or 0
+                                promo_id=record.promo_id,
+                                week=record.week,
+                                month=record.month,
+                                sku=record.sku,
+                                category=record.category,
+                                regular_price=record.regular_price,
+                                promo_price=record.promo_price,
+                                store_id=record.store_id,
+                                region=record.region,
+                                store_location_type=record.store_location_type,
+                                format_assortment=record.format_assortment,
+                                adv_carrier=record.adv_carrier,
+                                adv_material=record.adv_material,
+                                marketing_type=record.marketing_type,
+                                promo_mechanics=record.promo_mechanics,
+                                analog_sku=record.analog_sku,
+                                k_uplift=record.k_uplift,
+                                extra_features=record.extra_features or {},
                             )
                             db.add(db_record)
                             records_saved += 1
@@ -128,14 +134,14 @@ class DatasetStreamingService:
                                 db.commit()
                                 logger.info(f"💾 Committed {records_saved} records to DB")
 
-                    elif message.operation == "batch_end":
+                    elif operation == "batch_end":
                         logger.info(f"🏁 BATCH END received")
                         break
 
-                    elif message.operation == "error":
-                        logger.error(f"Client error: {message.error}")
+                    elif operation == "error":
+                        error_msg = payload.get("message", "Unknown error")
+                        logger.error(f"Client error: {error_msg}")
                         status = "error"
-                        error_msg = f"Client error: {message.error}"
                         break
 
             # Финализируем commit

@@ -97,9 +97,8 @@ promo_ml_training_daily
 | hist_sales_promo       | 	numeric |
 | current_regular_volume | 	numeric |
 | previous_promo_effect  | 	numeric |
-| is_new_sku             | 	boolean |
 | sku_analog             | 	string  |     
-| prev_promo_id          | 	string  |   
+
 
 🌦 Сезонность
 

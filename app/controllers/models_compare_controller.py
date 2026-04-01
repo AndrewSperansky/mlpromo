@@ -22,7 +22,6 @@ class ModelsCompareController:
                 "id": model_a.id,
                 "version": model_a.version,
                 "is_active": model_a.is_active,
-                "dataset": str(model_a.dataset_version_id),
                 "metrics": model_a.metrics,
                 "features_count": len(model_a.features or []),
             },
@@ -30,14 +29,12 @@ class ModelsCompareController:
                 "id": model_b.id,
                 "version": model_b.version,
                 "is_active": model_b.is_active,
-                "dataset": str(model_b.dataset_version_id),
                 "metrics": model_b.metrics,
                 "features_count": len(model_b.features or []),
             },
             "diff": {
                 "metric_diff": self._compare_metrics(model_a.metrics or {}, model_b.metrics or {}),
                 "features_diff": self._compare_features(model_a.features, model_b.features),
-                "dataset_equal": model_a.dataset_version_id == model_b.dataset_version_id,
             }
         }
 

@@ -84,9 +84,6 @@ async function deactivate() {
                         </div>
 
                         <div class="row mb-3">
-                            <div class="col-md-6">
-                                <b>Dataset:</b> {{ model.dataset_version_id }}
-                            </div>
 
                             <div class="col-md-6">
                                 <b>Rows:</b> {{ model.trained_rows_count }}

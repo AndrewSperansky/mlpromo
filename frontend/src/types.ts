@@ -13,7 +13,6 @@ export interface Model {
     algorithm?: string
     model_type?: string
     target?: string
-    dataset_version_id: string
     trained_rows_count: number
     is_active: boolean
     trained_at?: string

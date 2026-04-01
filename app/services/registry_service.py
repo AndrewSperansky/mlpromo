@@ -35,12 +35,11 @@ class ModelRegistryService:
             features: list[str],
             metrics: dict | None,
             model_path: Optional[Path] = None,
-            dataset_version_id: Optional[UUID] = None,  # ← меняем на Optional
             trained_rows_count: int,
     ) -> MLModel:
         """
         Регистрирует новую модель в БД.
-        dataset_version_id может быть None (если модель обучена на полном датасете)
+
         """
 
         stmt = select(MLModel).where(

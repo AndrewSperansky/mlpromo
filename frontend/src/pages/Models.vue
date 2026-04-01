@@ -4,33 +4,14 @@
   <div>
     <!-- ===== HEADER ===== -->
     <div class="mb-4">
-      <!-- ROW 1 -->
       <div class="mb-6">
         <h2>Model Registry</h2>
       </div>
 
       <!-- ROW 2 -->
       <div class="d-flex mt-4 gap-2 align-items-center">
-        <!-- DATASET SELECT -->
-        <select v-model="selectedDataset" class="form-select w-auto">
-          <option disabled value="">Select Dataset</option>
-          <option v-for="d in datasets" :key="d.id" :value="d.id">
-            {{ d.id }}
-          </option>
-        </select>
-
-        <!-- CHECKBOX TRAIN ON ALL -->
-        <div class="form-check">
-          <input type="checkbox" class="form-check-input" id="trainAllCheckbox" v-model="trainOnAll"
-            :disabled="training">
-          <label class="form-check-label" for="trainAllCheckbox">
-            Train on all datasets
-          </label>
-        </div>
-
         <!-- TRAIN BUTTON -->
-        <button class="btn btn-primary" :disabled="training || (!selectedDataset && !trainOnAll)"
-          @click="openTrainModal">
+        <button class="btn btn-primary" :disabled="training" @click="openTrainModal">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
@@ -44,7 +25,6 @@
         <button class="btn btn-info" @click="openCompareModal">
           Compare Models
         </button>
-
       </div>
     </div>
   </div>
@@ -56,8 +36,16 @@
   </div>
 
   <!-- ===== TABLE ===== -->
-  <ModelTable class="mt-4" :models="models" @activate="openActivateModal" @rollback="handleRollback"
-    @evaluate="handleEvaluate" @row-click="goToModel" @delete="openDeleteModal" />
+  <ModelTable 
+    class="mt-4" 
+    :models="models" 
+    @activate="openActivateModal" 
+    @deactivate="handleDeactivate"
+    @rollback="handleRollback"
+    @evaluate="handleEvaluate" 
+    @row-click="goToModel" 
+    @delete="openDeleteModal" 
+  />
 
   <button class="btn btn-sm btn-outline-info" @click="showHistory = true">
     Show Activation History
@@ -67,8 +55,8 @@
   <div v-if="showTrainModal" class="modal-backdrop">
     <div class="modal-box">
       <h5>Confirm Training</h5>
-      <p>Train model using dataset:</p>
-      <strong>{{ selectedDataset }}</strong>
+      <p>Train model on the entire dataset?</p>
+      <p class="text-muted small">Model will be trained on all available data</p>
 
       <div class="mt-3 d-flex justify-content-end gap-2">
         <button class="btn btn-secondary" @click="showTrainModal = false">
@@ -94,6 +82,25 @@
         </button>
         <button class="btn btn-success" @click="confirmActivate">
           Activate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DEACTIVATE MODAL ===== -->
+  <div v-if="showDeactivateModal" class="modal-backdrop">
+    <div class="modal-box">
+      <h5>Deactivate Model</h5>
+      <p>Deactivate model:</p>
+      <strong>{{ selectedModelForDeactivation }}</strong>
+      <p class="text-warning mt-2">⚠️ This model will no longer be used for predictions!</p>
+
+      <div class="mt-3 d-flex justify-content-end gap-2">
+        <button class="btn btn-secondary" @click="showDeactivateModal = false">
+          Cancel
+        </button>
+        <button class="btn btn-warning" @click="confirmDeactivate">
+          Deactivate
         </button>
       </div>
     </div>
@@ -221,7 +228,6 @@
         <p><strong>Dataset equal:</strong> {{ compareResult.diff.dataset_equal ? 'Yes' : 'No' }}</p>
       </div>
 
-      <!-- Кнопка Close внизу -->
       <div class="d-flex justify-content-end mt-3 pt-3 border-top">
         <button class="btn btn-secondary" @click="showCompareModal = false">
           Close
@@ -230,27 +236,23 @@
     </div>
   </div>
 
-
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-// import { useRouter } from 'vue-router'
 import {
   getModels,
   activateModel,
+  deactivateModel,
   uploadModel,
   evaluateModel,
   rollbackModel,
   trainModel,
-  fetchDatasets,
   deleteModel,
   type ModelItem,
-  type TrainModelParams  // ← ИМПОРТИРОВАНО!
 } from '../services/api'
 import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
-import { type Dataset } from '../services/api'
 import { getActivationHistory } from '../services/api'
 import { compareModels } from '../services/api'
 
@@ -262,14 +264,7 @@ interface ActivationHistoryItem {
   activated_by: string
 }
 
-
-
-
 const models = ref<ModelItem[]>([])
-const datasets = ref<Dataset[]>([])
-const selectedDataset = ref<string>('')
-const trainOnAll = ref(false)
-
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const uploading = ref(false)
@@ -281,8 +276,9 @@ const selectedModelId = ref<number | null>(null)
 
 const showTrainModal = ref(false)
 const showActivateModal = ref(false)
+const showDeactivateModal = ref(false)
 const selectedModelForActivation = ref<string>('')
-
+const selectedModelForDeactivation = ref<string>('')
 
 // ===== DELETE MODAL =====
 const showDeleteModal = ref(false)
@@ -298,8 +294,6 @@ const compareModelA = ref<number | null>(null)
 const compareModelB = ref<number | null>(null)
 const compareResult = ref<any>(null)
 const comparing = ref(false)
-
-
 
 
 function formatDate(dateStr: string) {
@@ -325,14 +319,8 @@ async function loadModels() {
   }))
 }
 
-async function loadDatasets() {
-  const response = await fetchDatasets()
-  console.log('📊 Datasets loaded:', response.data)
-  datasets.value = response.data
-}
 
 function openTrainModal() {
-  if (!selectedDataset.value && !trainOnAll.value) return
   showTrainModal.value = true
 }
 
@@ -340,37 +328,40 @@ async function handleTrain() {
   try {
     training.value = true
 
-    const params: TrainModelParams = {
-      promote: false
-    }
-
-    if (trainOnAll.value) {
-      params.train_on_all = true
-    } else {
-      params.dataset_version_id = selectedDataset.value
-    }
-
-    const response = await trainModel(params)
+    const response = await trainModel({ promote: false })
     uploadResult.value = response.data
     await loadModels()
 
   } finally {
     training.value = false
     showTrainModal.value = false
-    trainOnAll.value = false
-    selectedDataset.value = ''
   }
 }
 
-function openActivateModal(modelId: number) {  // ← ИСПРАВЛЕНО: string → number
-  selectedModelForActivation.value = modelId.toString()  // ← конвертируем для отображения
+function openActivateModal(modelId: number) {
+  selectedModelForActivation.value = modelId.toString()
   showActivateModal.value = true
+}
+
+function openDeactivateModal(modelId: number) {
+  selectedModelForDeactivation.value = modelId.toString()
+  showDeactivateModal.value = true
 }
 
 async function confirmActivate() {
   await activateModel(selectedModelForActivation.value)
   showActivateModal.value = false
   await loadModels()
+}
+
+async function confirmDeactivate() {
+  await deactivateModel(Number(selectedModelForDeactivation.value))
+  showDeactivateModal.value = false
+  await loadModels()
+}
+
+async function handleDeactivate(modelId: number) {
+  openDeactivateModal(modelId)
 }
 
 async function handleEvaluate(modelId: number) {
@@ -380,8 +371,7 @@ async function handleEvaluate(modelId: number) {
 
 async function handleRollback() {
   try {
-    // modelId больше не нужен! rollback сам определит
-    await rollbackModel()  // ← без параметров
+    await rollbackModel()
     await loadModels()
   } catch (error) {
     console.error('Rollback failed:', error)
@@ -444,7 +434,7 @@ async function fetchCompare() {
   }
 
   comparing.value = true
-  compareResult.value = null  // сбрасываем старый результат
+  compareResult.value = null
 
   try {
     const response = await compareModels(compareModelA.value, compareModelB.value)
@@ -453,7 +443,6 @@ async function fetchCompare() {
     console.log('Compare result:', compareResult.value)
     console.log('features_diff:', compareResult.value?.features_diff)
     console.log('diff:', compareResult.value?.diff)
-
 
   } catch (error) {
     console.error('Compare failed:', error)
@@ -465,7 +454,6 @@ async function fetchCompare() {
 
 function openCompareModal() {
   showCompareModal.value = true
-  // По умолчанию выбираем активную и последнюю
   const activeModel = models.value.find(m => m.active)
   const lastModel = models.value[models.value.length - 1]
   if (activeModel) compareModelA.value = activeModel.ml_model_id
@@ -473,8 +461,6 @@ function openCompareModal() {
 }
 
 
-
-// При открытии модального окна
 watch(showHistory, async (newVal) => {
   if (newVal) {
     await loadHistory()
@@ -484,7 +470,6 @@ watch(showHistory, async (newVal) => {
 
 onMounted(() => {
   loadModels()
-  loadDatasets()
 })
 </script>
 
@@ -503,5 +488,17 @@ onMounted(() => {
   padding: 24px;
   border-radius: 8px;
   width: 400px;
+}
+
+.text-success {
+  color: #198754 !important;
+}
+
+.text-danger {
+  color: #dc3545 !important;
+}
+
+.text-warning {
+  color: #ffc107 !important;
 }
 </style>

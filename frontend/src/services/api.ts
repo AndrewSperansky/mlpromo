@@ -59,8 +59,6 @@ export interface Dataset {
 
 // Тип для параметров обучения 
 export interface TrainModelParams {
-    dataset_version_id?: string
-    train_on_all?: boolean
     promote?: boolean
 }
 

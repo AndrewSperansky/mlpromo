@@ -10,7 +10,6 @@ class ModelResponse(BaseModel):
     id: int
     name: str
     version: str
-    dataset_version_id: UUID
     is_active: bool
     metrics: dict | None
     trained_rows_count: int

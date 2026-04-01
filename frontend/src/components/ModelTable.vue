@@ -1,6 +1,5 @@
 <!-- frontend/src/components/ModelTable.vue -->
 
-
 <template>
   <table class="table table-bordered table-striped table-hover">
     <thead class="table-dark">
@@ -27,19 +26,34 @@
 
         <td @click.stop>
           <!-- STOP PROPAGATION чтобы клик по кнопке не вызывал row-click -->
-          <button class="btn btn-sm btn-outline-primary me-2" @click="$emit('activate', model.ml_model_id)">
+          
+          <!-- 🔥 Activate — только для неактивных моделей -->
+          <button 
+            v-if="!model.active"
+            class="btn btn-sm btn-outline-primary me-2" 
+            @click="$emit('activate', model.ml_model_id)"
+          >
             Activate
+          </button>
+          
+          <!-- 🔥 Deactivate — только для активных моделей -->
+          <button 
+            v-if="model.active"
+            class="btn btn-sm btn-outline-warning me-2" 
+            @click="$emit('deactivate', model.ml_model_id)"
+          >
+            Deactivate
           </button>
 
           <button class="btn btn-sm btn-outline-info me-2" @click="$emit('evaluate', model.ml_model_id)">
             Evaluate
           </button>
 
-          <button class="btn btn-sm btn-outline-warning me-2" @click="$emit('rollback', model.ml_model_id)">
+          <button class="btn btn-sm btn-outline-secondary me-2" @click="$emit('rollback', model.ml_model_id)">
             Rollback
           </button>
 
-          <!-- 🔥 НОВАЯ КНОПКА DELETE -->
+          <!-- Кнопка DELETE -->
           <button class="btn btn-sm btn-outline-danger" @click="$emit('delete', model.ml_model_id)">
             Delete
           </button>
@@ -51,7 +65,7 @@
 
 <script setup lang="ts">
 export interface ModelItem {
-  ml_model_id: number  // ← число, а не строка!
+  ml_model_id: number
   version: string
   active: boolean
   created_at: string
@@ -63,10 +77,11 @@ defineProps<{
 
 defineEmits<{
   (e: 'activate', id: number): void
+  (e: 'deactivate', id: number): void  // 🔥 новое событие
   (e: 'rollback', id: number): void
   (e: 'evaluate', id: number): void
   (e: 'row-click', id: number): void
-  (e: 'delete', id: number): void  // 🔥 новое событие
+  (e: 'delete', id: number): void
 }>()
 
 // Форматирование даты
@@ -76,7 +91,6 @@ function formatDate(dateStr: string) {
   try {
     const date = new Date(dateStr)
 
-    // Проверяем, что дата валидна
     if (isNaN(date.getTime())) {
       console.warn('Invalid date format:', dateStr)
       return '-'
@@ -94,5 +108,4 @@ function formatDate(dateStr: string) {
     return '-'
   }
 }
-
 </script>

@@ -59,8 +59,11 @@
 
     <!-- История загрузок -->
     <div class="card">
-      <div class="card-header">
+      <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Upload History</h5>
+        <button class="btn btn-sm btn-outline-secondary" @click="loadStats" :disabled="loading">
+          <i class="bi bi-arrow-repeat"></i> Refresh
+        </button>
       </div>
       <div class="card-body p-0">
         <table class="table table-striped table-hover mb-0">
@@ -72,6 +75,7 @@
               <th>Total After</th>
               <th>Duration (ms)</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -86,14 +90,43 @@
                   {{ upload.status }}
                 </span>
               </td>
+              <td>
+                <button 
+                  class="btn btn-sm btn-outline-danger" 
+                  @click="confirmDeleteBatch(upload.batch_id)"
+                  :disabled="deleting"
+                >
+                  <i class="bi bi-trash3"></i> Delete
+                </button>
+              </td>
             </tr>
             <tr v-if="!stats.upload_history?.length">
-              <td colspan="6" class="text-center text-muted p-4">
+              <td colspan="7" class="text-center text-muted p-4">
                 No uploads yet
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div v-if="showDeleteModal" class="modal-backdrop" @click.self="showDeleteModal = false">
+      <div class="modal-box">
+        <h5 class="text-danger">⚠️ Confirm Deletion</h5>
+        <p>Are you sure you want to delete this batch?</p>
+        <p class="text-muted small">Batch ID: <code>{{ batchToDelete }}</code></p>
+        <p class="text-warning small">⚠️ This will delete {{ deleteBatchRecords }} records and cannot be undone!</p>
+        
+        <div class="mt-3 d-flex justify-content-end gap-2">
+          <button class="btn btn-secondary" @click="showDeleteModal = false">
+            Cancel
+          </button>
+          <button class="btn btn-danger" @click="deleteBatch" :disabled="deleting">
+            <span v-if="deleting" class="spinner-border spinner-border-sm me-2"></span>
+            Delete Permanently
+          </button>
+        </div>
       </div>
     </div>
 
@@ -132,7 +165,14 @@ const stats = ref<DatasetStats>({
 })
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
+const loading = ref(false)
+const deleting = ref(false)
 const error = ref("")
+
+// Модальное окно удаления
+const showDeleteModal = ref(false)
+const batchToDelete = ref<string | null>(null)
+const deleteBatchRecords = ref(0)
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '-'
@@ -149,12 +189,15 @@ function handleFileSelect(event: Event) {
 }
 
 async function loadStats() {
+  loading.value = true
   try {
     const response = await api.get('/ml/dataset/stats')
     stats.value = response.data
   } catch (e) {
     console.error('Failed to load stats:', e)
     error.value = "Failed to load dataset statistics"
+  } finally {
+    loading.value = false
   }
 }
 
@@ -187,7 +230,88 @@ async function uploadDataset() {
   }
 }
 
+function confirmDeleteBatch(batchId: string) {
+  // Находим запись, чтобы показать количество записей
+  const upload = stats.value.upload_history.find(u => u.batch_id === batchId)
+  if (upload) {
+    deleteBatchRecords.value = upload.records_added
+  }
+  batchToDelete.value = batchId
+  showDeleteModal.value = true
+}
+
+async function deleteBatch() {
+  if (!batchToDelete.value) return
+  
+  deleting.value = true
+  
+  try {
+    const response = await api.delete(`/ml/dataset/batch/${batchToDelete.value}`)
+    console.log('Delete response:', response.data)
+    
+    // Обновляем статистику после удаления
+    await loadStats()
+    
+    showDeleteModal.value = false
+    batchToDelete.value = null
+    
+  } catch (e: any) {
+    console.error('Delete error:', e)
+    const detail = e.response?.data?.detail
+    if (typeof detail === 'object') {
+      error.value = detail.message || "Failed to delete batch"
+    } else {
+      error.value = detail || "Failed to delete batch"
+    }
+  } finally {
+    deleting.value = false
+  }
+}
+
 onMounted(() => {
   loadStats()
 })
 </script>
+
+<style scoped>
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+}
+
+.modal-box {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  width: 450px;
+  max-width: 90%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.modal-box code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.text-danger {
+  color: #dc3545 !important;
+}
+
+.text-warning {
+  color: #ffc107 !important;
+}
+
+.bg-success {
+  background-color: #198754 !important;
+}
+
+.bg-danger {
+  background-color: #dc3545 !important;
+}
+</style>

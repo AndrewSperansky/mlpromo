@@ -6,41 +6,45 @@ from typing import Optional, Dict, Any, List
 
 
 class PredictionRequest(BaseModel):
-    """Запрос на предсказание (инференс)"""
+    """Запрос на предсказание — возвращает коэффициент прироста"""
 
-    promo_code: str = Field(..., description="Код промо-акции")
-    sku: str = Field(..., description="SKU товара")
-    store_id: str = Field(..., description="ID магазина")
-    prediction_date: date = Field(..., description="Дата прогноза")
+    # 🔥 Промо-акция
+    promo_id: str = Field(..., min_length=1, description="ID промо-акции")
 
-    promo_week1: int = Field(..., description="Номер первой недели промо", ge=1, le=52)
-    promo_week2: int = Field(..., description="Номер второй недели промо", ge=1, le=52)
+    # Временные параметры
+    week: int = Field(..., ge=1, le=52, description="Номер недели в году (1-52)")
+    month: int = Field(..., ge=1, le=12, description="Номер месяца в году (1-12)")
 
-    regular_price: float = Field(..., description="Обычная цена", gt=0)
-    promo_price: float = Field(..., description="Промо-цена", gt=0)
+    # Товар и категория
+    sku: str = Field(..., min_length=1, description="SKU товара")
+    category: str = Field(..., min_length=1, description="Категория")
 
-    prev_promo_id: Optional[str] = Field(None, description="ID предыдущей промо-акции")
+    # Цены
+    regular_price: float = Field(..., gt=0, description="Обычная цена")
+    promo_price: float = Field(..., gt=0, description="Промо-цена")
+
+    # Магазин и локация
+    store_id: str = Field(..., min_length=1, description="ID магазина")
+    region: str = Field(..., min_length=1, description="Регион")
+    store_location_type: str = Field(..., min_length=1, description="Тип локации")
+    format_assortment: str = Field(..., min_length=1, description="Формат ассортимента")
+
+    # Маркетинг и механики
     adv_carrier: Optional[str] = Field(None, description="Рекламный носитель")
     adv_material: Optional[str] = Field(None, description="Рекламный материал")
     promo_mechanics: Optional[str] = Field(None, description="Механика промо")
+    marketing_type: Optional[str] = Field(None, description="Тип маркетинга")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "promo_code": "Промо-1-2026",
-                "sku": "РН229840",
-                "store_id": "МГЗ №366",
-                "prediction_date": "2026-03-27",
-                "promo_week1": 10,
-                "promo_week2": 11,
-                "regular_price": 259.99,
-                "promo_price": 229.99,
-                "prev_promo_id": "Промо-4-2025",
-                "adv_carrier": "Паук",
-                "adv_material": "Каталог",
-                "promo_mechanics": "1+1"
-            }
-        }
+
+    # Справочные поля
+    analog_sku: Optional[List[str]] = Field(None, description="Список SKU аналогов")
+
+    # Дополнительные данные
+    extra_features: Optional[Dict[str, Any]] = Field(None, description="Дополнительные данные")
+
+    # Для обратной совместимости
+    promo_code: Optional[str] = Field(None, description="Код промо-акции (устарело)")
+    prediction_date: Optional[date] = Field(None, description="Дата прогноза (устарело)")
 
 
 class ShapValue(BaseModel):
@@ -82,25 +86,45 @@ class HistoricalContext(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    promo_code: str
+    """Ответ API — возвращает коэффициент прироста"""
+
+    # Входные параметры (для контекста)
+    promo_id: str
     sku: str
-    store_id: Optional[str] = None
-    date: date
+    store_id: str
+    category: str
+    region: str
+    store_location_type: str
+    format_assortment: str
+    week: int
+    month: int
+    regular_price: float
+    promo_price: float
+    marketing_type: Optional[str] = None
 
-    prediction: Optional[float] = None
-    baseline: Optional[float] = None
-    uplift: Optional[float] = None
+    # 🔥 ОСНОВНОЙ РЕЗУЛЬТАТ
+    k_uplift: Optional[float] = Field(None, description="Коэффициент прироста (прогноз)")
+    confidence: Optional[float] = Field(None, description="Уверенность прогноза (0-1)")
 
+    # SHAP объяснения
     shap_values: List[ShapValue] = Field(default_factory=list)
 
+    # Метаданные модели
     ml_model_id: str
     version: str
     trained_at: Optional[datetime] = None
 
-    features: Optional[Dict[str, Any]] = None
-    fallback_used: bool
+    # Дополнительная информация
+    features_used: Optional[Dict[str, Any]] = None
+    fallback_used: bool = False
     reason: Optional[str] = None
 
-    finance_metrics: Optional[FinanceMetrics] = None
-    promo_effectiveness: Optional[PromoEffectiveness] = None
+    # Исторический контекст
     historical_context: Optional[HistoricalContext] = None
+
+    # Для обратной совместимости
+    promo_code: Optional[str] = None
+    date: Optional[date] = None
+    prediction: Optional[float] = None
+    baseline: Optional[float] = None
+    uplift: Optional[float] = None

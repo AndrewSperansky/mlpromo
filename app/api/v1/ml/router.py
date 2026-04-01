@@ -33,7 +33,7 @@ from app.services.audit_service import get_audit_page
 
 from models.dataset_upload_history import DatasetUploadHistory
 from models.industrial_dataset import IndustrialDatasetRaw
-
+from sqlalchemy import cast, String
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.schemas.dataset_schema_csv import (
@@ -219,7 +219,7 @@ def train_model(
 ):
     """
     Обучает модель на ВСЁМ датасете (industrial_dataset_raw).
-
+    Модель предсказывает k_uplift (коэффициент прироста продаж).
     Параметры:
     - promote: bool — автоматически активировать модель после обучения
     """
@@ -428,7 +428,7 @@ from app.controllers.prediction_controller import PredictionController
 
 @router.post(
     "/predict",
-    summary="ML предсказание + SHAP",
+    summary="ML предсказание коэффициента прироста (k_uplift) + SHAP",
     response_model=PredictionResponse,
 )
 def predict(
@@ -436,7 +436,7 @@ def predict(
     svc: MLPredictionService = Depends(get_prediction_service),
     db: Session = Depends(get_db),
 ):
-    controller = PredictionController(svc)
+    controller = PredictionController(svc,db)
     return controller.predict(payload, db)
 
 
@@ -554,7 +554,7 @@ def get_dataset_stats():
 
 
 # =========================================
-# DATASET UPLOAD
+# DATASET UPLOAD CSV
 # =========================================
 
 
@@ -579,81 +579,85 @@ def upload_dataset(
 
 
 # =========================================
-# DATASET DELETE (С ИГНОРИРОВАНИЕМ ЛИНТЕРА)
+# DATASET Batches
 # =========================================
 
-@router.delete("/datasets/{dataset_id}")
-def delete_dataset(
-        dataset_id: UUID,
+
+@router.get("/dataset/batches")
+def list_batches(db: Session = Depends(get_db)):
+    """
+    Возвращает список всех загрузок (batches)
+    """
+    batches = db.query(DatasetUploadHistory).order_by(
+        DatasetUploadHistory.uploaded_at.desc()
+    ).all()
+
+    return [
+        {
+            "batch_id": str(b.batch_id),
+            "uploaded_at": b.uploaded_at.isoformat(),
+            "records_added": b.records_added,
+            "status": b.status
+        }
+        for b in batches
+    ]
+
+
+# =========================================
+# DATASET DELETE BY BATCH ID
+# =========================================
+
+@router.delete("/dataset/batch/{batch_id}")
+def delete_dataset_batch(
+        batch_id: UUID,
         force: bool = False,
         db: Session = Depends(get_db)
 ):
-    # Находим версию датасета
-    dataset = db.query(DatasetVersion).filter(DatasetVersion.id == dataset_id).first()  # type: ignore
+    """
+    Удаляет все записи, загруженные в рамках указанного batch_id.
+    """
 
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+    # ========== 1. ПРОВЕРЯЕМ СУЩЕСТВОВАНИЕ BATCH ==========
+    upload_record = db.query(DatasetUploadHistory).filter(
+        cast(DatasetUploadHistory.batch_id, String) == str(batch_id)
+    ).first()
 
-    from models.ml_model import MLModel
+    if not upload_record:
+        raise HTTPException(status_code=404, detail="Batch not found")
 
-    # Преобразуем UUID в строку один раз
-    ds_id_str = str(dataset_id)
+    # ========== 2. ПОЛУЧАЕМ СТРОКИ ДЛЯ УДАЛЕНИЯ ==========
+    rows_to_delete = db.query(IndustrialDatasetRaw).filter(
+        cast(IndustrialDatasetRaw.batch_id, String) == str(batch_id)
+    ).all()
 
-    # ========== 1. ПРОВЕРЯЕМ СВЯЗАННЫЕ МОДЕЛИ ==========
-    # Считаем модели, использующие этот датасет
-    models_count = db.query(MLModel).filter(
-        MLModel.dataset_version_id == ds_id_str  # type: ignore
-    ).count()
+    if not rows_to_delete:
+        raise HTTPException(status_code=404, detail="No records found for this batch")
 
-    if models_count > 0 and not force:
-        # Считаем активные модели
-        active_models = db.query(MLModel).filter(
-            MLModel.dataset_version_id == ds_id_str,  # type: ignore
-            MLModel.is_deleted == False  # type: ignore
-        ).count()
-
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "message": "Cannot delete dataset: it is used by one or more models",
-                "total_models": models_count,
-                "active_models": active_models,
-                "dataset_id": ds_id_str,
-                "suggestion": "Use force=true to delete dataset and all related models"
-            }
-        )
-
-    # ========== 2. ЕСЛИ force=True, УДАЛЯЕМ ВСЁ ==========
+    # ========== 3. УДАЛЯЕМ ДАННЫЕ ==========
     try:
-        # 2.1 Сначала удаляем все строки из industrial_dataset_raw
-        raw_deleted = db.query(IndustrialDatasetRaw).filter(
-            IndustrialDatasetRaw.dataset_version_id == ds_id_str  # type: ignore
+        # Удаляем строки из industrial_dataset_raw
+        rows_deleted = db.query(IndustrialDatasetRaw).filter(
+            cast(IndustrialDatasetRaw.batch_id, String) == str(batch_id)
         ).delete(synchronize_session=False)
 
-        # 2.2 Если force=True, удаляем связанные модели
-        if force and models_count > 0:
-            models_deleted = db.query(MLModel).filter(
-                MLModel.dataset_version_id == ds_id_str  # type: ignore
-            ).delete(synchronize_session=False)
-            logger.info(f"🗑️ Deleted {models_deleted} related models")
-
-        # 2.3 Удаляем сам датасет
-        db.delete(dataset)
-
+        # Удаляем запись из истории загрузок
+        db.delete(upload_record)
 
         db.commit()
 
+        logger.info(f"🗑️ Deleted batch {batch_id}: {rows_deleted} rows removed")
+
         return {
-            "status": "deleted",
-            "dataset_version_id": ds_id_str,
-            "rows_deleted": raw_deleted,
-            "models_deleted": models_count if force else 0,
-            "force": force
+            "status": "success",
+            "batch_id": str(batch_id),
+            "rows_deleted": rows_deleted,
+            "force": force,
+            "message": f"Deleted {rows_deleted} rows from batch {batch_id}"
         }
 
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ Error deleting dataset {dataset_id}: {str(e)}")
+        logger.error(f"❌ Error deleting batch {batch_id}: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Database error: {str(e)}"
@@ -842,6 +846,8 @@ async def stream_dataset(
     return result
 
 
+# app/api/v1/ml/router.py
+
 @router.get("/dataset/info")
 def get_dataset_info(db: Session = Depends(get_db)):
     """
@@ -857,18 +863,12 @@ def get_dataset_info(db: Session = Depends(get_db)):
 
     return {
         "total_rows": total_rows,
-        "last_updated": uploads[0].uploaded_at if uploads else None,
-        "total_uploads": len(uploads),
         "upload_history": [
             {
-                "id": h.id,
-                "batch_id": str(h.batch_id),
                 "uploaded_at": h.uploaded_at.isoformat(),
                 "records_added": h.records_added,
                 "total_records_after": h.total_records_after,
                 "status": h.status,
-                "error_message": h.error_message,
-                "duration_ms": h.duration_ms
             }
             for h in uploads
         ]

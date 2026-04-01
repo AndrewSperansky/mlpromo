@@ -23,7 +23,7 @@ from models.industrial_dataset import IndustrialDatasetRaw
 
 logger = logging.getLogger(__name__)
 
-TARGET = "SalesQty_Promo"
+TARGET = "k_uplift"
 
 
 def _get_models_dir() -> Path:
@@ -36,25 +36,40 @@ def load_full_dataset(db: Session) -> pd.DataFrame:
     """
     logger.info("📊 Loading full dataset from industrial_dataset_raw")
 
-    # Получаем все строки
-    rows = db.query(IndustrialDatasetRaw).all()
+    # Используем SQL запрос для загрузки всех данных
+    from sqlalchemy import text
 
-    if not rows:
+    query = text("""
+        SELECT 
+            promo_id,
+            sku,
+            store_id,
+            category,
+            region,
+            store_location_type,
+            format_assortment,
+            month,
+            week,
+            regular_price,
+            promo_price,
+            promo_mechanics,
+            adv_carrier,
+            adv_material,
+            marketing_type,
+            analog_sku,
+            k_uplift,
+            extra_features
+        FROM industrial_dataset_raw
+        WHERE k_uplift IS NOT NULL
+    """)
+
+    df = pd.read_sql(query, db.bind)
+
+    if df.empty:
         raise ValueError("No data in industrial_dataset_raw")
 
-    # Преобразуем в DataFrame — самый простой способ
-    data = []
-    for row in rows:
-        # Берём все атрибуты объекта
-        row_dict = row.__dict__.copy()
-        # Удаляем служебные поля
-        row_dict.pop('_sa_instance_state', None)
-        row_dict.pop('id', None)
-        row_dict.pop('dataset_version_id', None)
-        data.append(row_dict)
-
-    df = pd.DataFrame(data)
     logger.info(f"✅ Loaded {len(df)} rows from dataset")
+    logger.info(f"📋 Columns: {list(df.columns)}")
 
     return df
 
@@ -103,7 +118,7 @@ def train_pipeline(
     rows_used = cleaned_count
 
     # ========== ОПРЕДЕЛЯЕМ ПРИЗНАКИ ==========
-    exclude_cols = {"id", "dataset_version_id", TARGET}
+    exclude_cols = {"id", TARGET}
 
     numeric_columns = []
     for col in df.columns:
@@ -153,7 +168,6 @@ def train_pipeline(
             target=TARGET,
             features=FEATURES,
             metrics={"rmse": rmse_value},
-            dataset_version_id=None,  # больше не используем версии
             trained_rows_count=rows_used,
         )
 

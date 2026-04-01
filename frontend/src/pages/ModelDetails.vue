@@ -46,7 +46,6 @@ async function deactivate() {
 
         <p><b>Name:</b> {{ model.name }}</p>
         <p><b>Version:</b> {{ model.version }}</p>
-        <p><b>Dataset:</b> {{ model.dataset_version_id }}</p>
         <p><b>Rows:</b> {{ model.trained_rows_count }}</p>
         <p><b>Status:</b> {{ model.is_active ? "Active" : "Inactive" }}</p>
 

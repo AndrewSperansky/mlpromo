@@ -51,7 +51,6 @@ CREATE TABLE public.dataset_versions (
 
 CREATE TABLE public.industrial_dataset_raw (
     id bigint NOT NULL,
-    dataset_version_id uuid NOT NULL,
     "PromoID" text,
     "SKU" text,
     "SKU_Level2" text,
@@ -133,7 +132,6 @@ CREATE TABLE public.ml_model (
     metrics json,
     model_path text,
     is_deleted boolean DEFAULT false NOT NULL,
-    dataset_version_id uuid NOT NULL,
     trained_rows_count integer DEFAULT 0 NOT NULL
 );
 
@@ -484,12 +482,6 @@ CREATE INDEX idx_ml_audit_created ON public.ml_prediction_audit USING btree (cre
 
 CREATE INDEX idx_ml_audit_model ON public.ml_prediction_audit USING btree (model_id);
 
-
---
--- Name: idx_ml_model_dataset_version_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_ml_model_dataset_version_id ON public.ml_model USING btree (dataset_version_id);
 
 
 --

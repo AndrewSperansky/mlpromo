@@ -16,29 +16,24 @@ logger = logging.getLogger("promo_ml")
 
 
 class MLTrainingService:
-    """
-    Сервис обучения ML модели на едином датасете.
-    """
 
     def train(
             self,
             promote: bool = False,
             trigger: str = "manual",
-            train_on_all: bool = False,  # оставлен для совместимости, но игнорируется
-            dataset_version_id: Optional[str] = None,  # устарел, игнорируется
     ) -> Dict[str, Any]:
         """
         Запускает обучение на ВСЁМ датасете из industrial_dataset_raw.
+        Модель предсказывает k_uplift (коэффициент прироста).
         """
         logger.info(
-            "🚀 ML training started on complete dataset",
+            "🚀 ML training started",
             extra={
                 "promote": promote,
                 "trigger": trigger,
             }
         )
 
-        # Получаем количество строк в датасете
         db = SessionLocal()
         try:
             total_rows = db.query(IndustrialDatasetRaw).count()
@@ -49,7 +44,7 @@ class MLTrainingService:
         if total_rows == 0:
             raise ValueError("No data in industrial_dataset_raw")
 
-        # 🔥 Запускаем обучение (вся логика в train_pipeline)
+        # 🔥 Убираем target_column — train_pipeline сам знает целевую переменную
         result = train_pipeline(
             promote=promote,
             trigger=trigger,
@@ -73,7 +68,7 @@ class MLTrainingService:
             "metrics": result.get("metrics", {}),
             "promoted": result.get("promoted", False),
             "stage": result.get("stage", "completed"),
-            "note": result.get("note", f"Trained on {total_rows} rows")
+            "note": result.get("note", f"Trained on {total_rows} rows, target: k_uplift")
         }
 
     def get_dataset_stats(self) -> Dict[str, Any]:
@@ -84,12 +79,10 @@ class MLTrainingService:
         try:
             total_rows = db.query(IndustrialDatasetRaw).count()
 
-            # Последняя загрузка
             last_upload = db.query(DatasetUploadHistory).order_by(
                 DatasetUploadHistory.uploaded_at.desc()
             ).first()
 
-            # История загрузок (последние 5)
             recent_uploads = db.query(DatasetUploadHistory).order_by(
                 DatasetUploadHistory.uploaded_at.desc()
             ).limit(5).all()

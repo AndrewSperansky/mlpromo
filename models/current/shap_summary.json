@@ -1,18 +1,6 @@
 {
-  "RegularPrice": 0.011117484150761827,
-  "PromoPrice": 0.011372755370331264,
-  "PurchasePriceBefore": 0.012298125495134074,
-  "PurchasePricePromo": 0.011319159629303402,
-  "PercentPriceDrop": 0.009537069344691616,
-  "VolumeRegular": 0.023356303653499104,
-  "HistoricalSalesPromo": 0.020793003694388464,
-  "SalesQty_PrevModel": 0.4743677133026155,
-  "FM_Regular": 0.010518084064146444,
-  "FM_Promo": 0.006626826122826581,
-  "TurnoverBefore": 0.03105301175764574,
-  "TurnoverPromo": 0.1110006999318736,
-  "SeasonCoef_Week": 0.0,
-  "ManualCoefficientFlag": 0.0,
-  "IsNewSKU": 0.0,
-  "IsAnalogSKU": 0.0
+  "month": 0.23378811101010286,
+  "week": 1.0040619072641712,
+  "regular_price": 0.6775630558053694,
+  "promo_price": 0.42694107777025075
 }

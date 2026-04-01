@@ -45,5 +45,4 @@ class ModelActivationController:
             "model_id": model.id,
             "name": model.name,
             "version": model.version,
-            "dataset_version_id": str(model.dataset_version_id),
         }
