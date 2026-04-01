@@ -44,6 +44,8 @@ from app.schemas.dataset_schema_csv import (
 from app.schemas.prediction_schema import (
     PredictionRequest,
     PredictionResponse,
+    BatchPredictionRequest,
+    BatchPredictionResponse,
 )
 
 from app.controllers.model_activation_controller import ModelActivationController
@@ -438,6 +440,27 @@ def predict(
 ):
     controller = PredictionController(svc,db)
     return controller.predict(payload, db)
+
+
+# ========================================
+# PREDICT BATCH (множественный)
+# ========================================
+
+@router.post(
+    "/predict/batch",
+    summary="Batch ML предсказание",
+    response_model=BatchPredictionResponse,
+)
+def predict_batch(
+    payload: BatchPredictionRequest,
+    svc: MLPredictionService = Depends(get_prediction_service),
+    db: Session = Depends(get_db),
+):
+    """
+    Принимает список запросов (до 100) и возвращает список прогнозов.
+    """
+    controller = PredictionController(svc, db)
+    return controller.predict_batch(payload, db)
 
 
 

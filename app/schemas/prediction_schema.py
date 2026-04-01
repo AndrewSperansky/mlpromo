@@ -35,6 +35,8 @@ class PredictionRequest(BaseModel):
     promo_mechanics: Optional[str] = Field(None, description="Механика промо")
     marketing_type: Optional[str] = Field(None, description="Тип маркетинга")
 
+    # 🔥 базовые продажи без промо
+    baseline: Optional[float] = Field(None, description="Базовые продажи без промо (за последний месяц)")
 
     # Справочные поля
     analog_sku: Optional[List[str]] = Field(None, description="Список SKU аналогов")
@@ -102,9 +104,7 @@ class PredictionResponse(BaseModel):
     promo_price: float
     marketing_type: Optional[str] = None
 
-    # 🔥 ОСНОВНОЙ РЕЗУЛЬТАТ
-    k_uplift: Optional[float] = Field(None, description="Коэффициент прироста (прогноз)")
-    confidence: Optional[float] = Field(None, description="Уверенность прогноза (0-1)")
+
 
     # SHAP объяснения
     shap_values: List[ShapValue] = Field(default_factory=list)
@@ -122,9 +122,22 @@ class PredictionResponse(BaseModel):
     # Исторический контекст
     historical_context: Optional[HistoricalContext] = None
 
-    # Для обратной совместимости
-    promo_code: Optional[str] = None
-    date: Optional[date] = None
-    prediction: Optional[float] = None
-    baseline: Optional[float] = None
-    uplift: Optional[float] = None
+    # 🔥 ОСНОВНОЙ РЕЗУЛЬТАТ
+    k_uplift: Optional[float] = Field(None, description="Коэффициент прироста (прогноз)")
+    baseline: Optional[float] = Field(None, description="Базовые продажи без промо")
+    prediction_absolute: Optional[float] = Field(None, description="Абсолютный прогноз продаж (k_uplift * baseline)")
+    uplift_percent: Optional[float] = Field(None, description="Прирост в процентах")
+    confidence: Optional[float] = Field(None, description="Уверенность прогноза (0-1)")
+
+
+class BatchPredictionRequest(BaseModel):
+    """Запрос на множественный прогноз"""
+    requests: List[PredictionRequest] = Field(..., min_length=1, max_length=100, description="Список запросов (макс. 100)")
+
+
+class BatchPredictionResponse(BaseModel):
+    """Ответ на множественный прогноз"""
+    predictions: List[PredictionResponse] = Field(..., description="Список прогнозов")
+    total_count: int = Field(..., description="Всего запросов")
+    success_count: int = Field(..., description="Успешных")
+    error_count: int = Field(..., description="С ошибками")

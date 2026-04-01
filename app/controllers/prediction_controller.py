@@ -5,6 +5,7 @@ import logging
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from typing import List, Tuple
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.services.ml_prediction_service import MLPredictionService
@@ -13,6 +14,8 @@ from app.schemas.prediction_schema import (
     PredictionResponse,
     ShapValue,
     HistoricalContext,
+    BatchPredictionRequest,
+    BatchPredictionResponse,
 )
 from app.services.promo_calculator_service import PromoCalculatorService
 from app.services.historical_data_service import HistoricalDataService
@@ -130,6 +133,11 @@ class PredictionController:
             seasonal_patterns=None,
         )
 
+        # 🔥 Вычисляем абсолютный прогноз в зависимости от baseline
+        baseline_value = payload.baseline if payload.baseline is not None else 1.0
+        absolute_prediction = k_uplift * baseline_value
+        uplift_percent = (k_uplift - 1.0) * 100 if payload.baseline is None else ((k_uplift * baseline_value - baseline_value) / baseline_value) * 100
+
         # =========================================================
         # 7. Формируем ответ
         # =========================================================
@@ -155,6 +163,9 @@ class PredictionController:
 
             # Результат прогноза
             k_uplift=round(k_uplift, 4),
+            baseline=baseline_value,
+            prediction_absolute=round(absolute_prediction, 2),
+            uplift_percent=round(uplift_percent, 2),
             confidence=None,
 
             # SHAP
@@ -173,10 +184,6 @@ class PredictionController:
             # Исторический контекст
             historical_context=historical_context,
 
-            # Для обратной совместимости
-            prediction=k_uplift,
-            baseline=1.0,
-            uplift=round((k_uplift - 1.0) * 100, 2),
         )
 
         logger.info(f"✅ Response created successfully")
@@ -224,6 +231,9 @@ class PredictionController:
             }
         )
 
+
+
+
         # =========================================================
         # 9. Финансовые метрики (опционально)
         # =========================================================
@@ -252,7 +262,71 @@ class PredictionController:
         #     response.finance_metrics = None
         #==================================================================================
 
-
         db.commit()
 
         return response
+
+
+    def predict_batch(
+            self,
+            payload: BatchPredictionRequest,
+            db: Session,
+    ) -> BatchPredictionResponse:
+        """
+        Batch предсказание — обрабатывает список запросов
+        """
+        logger.info(f"🔥 Batch predict request: {len(payload.requests)} items")
+
+        results = []
+        success_count = 0
+        error_count = 0
+
+        for idx, req in enumerate(payload.requests):
+            try:
+                logger.debug(f"Processing request {idx + 1}/{len(payload.requests)}")
+                result = self.predict(req, db)
+                results.append(result)
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Batch prediction error at index {idx}: {e}")
+                # Возвращаем fallback для ошибочного запроса
+                results.append(self._create_fallback_response(req, str(e)))
+                error_count += 1
+
+        return BatchPredictionResponse(
+            predictions=results,
+            total_count=len(payload.requests),
+            success_count=success_count,
+            error_count=error_count,
+        )
+
+
+    def _create_fallback_response(self, req: PredictionRequest, error_msg: str) -> PredictionResponse:
+        """Создаёт fallback ответ при ошибке"""
+        return PredictionResponse(
+            promo_id=req.promo_id,
+            sku=req.sku,
+            store_id=req.store_id,
+            category=req.category,
+            region=req.region,
+            store_location_type=req.store_location_type,
+            format_assortment=req.format_assortment,
+            week=req.week,
+            month=req.month,
+            regular_price=req.regular_price,
+            promo_price=req.promo_price,
+            marketing_type=req.marketing_type,
+            k_uplift=1.0,
+            confidence=None,
+            shap_values=[],
+            ml_model_id="unknown",
+            version="unknown",
+            trained_at=None,
+            features_used=None,
+            fallback_used=True,
+            reason=error_msg,
+            historical_context=None,
+            prediction=1.0,
+            baseline=1.0,
+            uplift=0.0,
+        )

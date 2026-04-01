@@ -1,5 +1,4 @@
-<!-- frontend\src\pages\Predict.vue -->
-
+<!-- frontend/src/pages/Predict.vue -->
 
 <template>
   <div>
@@ -47,26 +46,28 @@
       <div class="col-md-12 mt-4">
         <div class="card shadow-sm">
           <div class="card-header bg-info text-white">
-            <i class="bi bi-table me-2"></i>Детализация прогнозов
+            <i class="bi bi-table me-2"></i>Детализация
           </div>
           <div class="card-body p-0">
             <table class="table table-striped table-hover mb-0">
               <thead class="table-dark">
-                <tr>
+                 <tr>
                   <th>#</th>
+                  <th>k_uplift</th>
                   <th>Прогноз (шт)</th>
-                  <th>Дата</th>
-                  <th>SKU</th>
-                  <th>Промо-код</th>
-                </tr>
+                  <th>Baseline</th>
+                  <th>Прирост</th>
+                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(item, idx) in tableData" :key="idx">
-                  <td class="fw-bold">{{ item.index }}</td>
-                  <td class="text-primary fw-bold">{{ item.prediction }}</td>
-                  <td>{{ item.date }}</td>
-                  <td>{{ item.sku }}</td>
-                  <td>{{ item.promoCode }}</td>
+                <tr v-for="(item, idx) in predictions" :key="idx">
+                  <td class="fw-bold">{{ idx + 1 }}</td>
+                  <td class="text-primary fw-bold">{{ item.k_uplift.toFixed(3) }}x</td>
+                  <td class="text-success fw-bold">{{ item.prediction_absolute.toFixed(2) }}</td>
+                  <td class="text-secondary">{{ item.baseline.toFixed(2) }}</td>
+                  <td :class="item.uplift_percent >= 0 ? 'text-success' : 'text-danger'">
+                    {{ item.uplift_percent >= 0 ? '+' : '' }}{{ item.uplift_percent.toFixed(1) }}%
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -102,8 +103,16 @@ interface CsvRow {
   [key: string]: any
 }
 
+interface PredictionResult {
+  k_uplift: number
+  baseline: number
+  prediction_absolute: number
+  uplift_percent: number
+  store_id?: string  // 🔥 добавляем store_id
+}
+
 const rows = ref<CsvRow[]>([])
-const predictions = ref<{ value: number; date: string; sku: string; promoCode: string }[]>([])
+const predictions = ref<PredictionResult[]>([])
 const loading = ref(false)
 const chartRef = ref<HTMLCanvasElement | null>(null)
 let chartInstance: Chart | null = null
@@ -112,16 +121,6 @@ const topShap = ref<{ feature: string; value: number }[]>([])
 const statusText = computed(() => {
   if (!rows.value.length) return 'No data loaded'
   return `Ready to predict (${rows.value.length} samples)`
-})
-
-const tableData = computed(() => {
-  return predictions.value.map((pred, idx) => ({
-    index: idx + 1,
-    prediction: pred.value.toFixed(2),
-    date: pred.date,
-    sku: pred.sku,
-    promoCode: pred.promoCode
-  }))
 })
 
 function handleCSVUpload(event: Event) {
@@ -180,31 +179,35 @@ async function runBatchPredict() {
   try {
     for (const row of rows.value) {
       const payload = {
-        promo_code: String(row.promo_code || row.PromoID || 'TEST'),
-        sku: String(row.sku || row.SKU || 'SKU'),
-        prediction_date: String(row.prediction_date || row.Date || new Date().toISOString().split('T')[0]),
-        features: {
-          RegularPrice: Number(row.RegularPrice || 0),
-          PromoPrice: Number(row.PromoPrice || 0),
-          VolumeRegular: Number(row.VolumeRegular || 0),
-          HistoricalSalesPromo: Number(row.HistoricalSalesPromo || 0),
-          SalesQty_PrevModel: Number(row.SalesQty_PrevModel || 0),
-          TurnoverBefore: Number(row.TurnoverBefore || 0),
-          TurnoverPromo: Number(row.TurnoverPromo || 0),
-          IsNewSKU: Number(row.IsNewSKU || 0),
-          IsAnalogSKU: Number(row.IsAnalogSKU || 0)
-        }
+        promo_id: String(row.promo_id || row.PromoID || ''),
+        week: Number(row.week || 1),
+        month: Number(row.month || 1),
+        sku: String(row.sku || row.SKU || ''),
+        category: String(row.category || ''),
+        regular_price: Number(row.regular_price || 0),
+        promo_price: Number(row.promo_price || 0),
+        store_id: String(row.store_id || row.StoreID || ''),
+        region: String(row.region || ''),
+        store_location_type: String(row.store_location_type || ''),
+        format_assortment: String(row.format_assortment || ''),
+        adv_carrier: String(row.adv_carrier || ''),
+        adv_material: String(row.adv_material || ''),
+        promo_mechanics: String(row.promo_mechanics || ''),
+        marketing_type: String(row.marketing_type || ''),
+        analog_sku: row.analog_sku ? JSON.parse(row.analog_sku) : [],
+        baseline: row.baseline ? Number(row.baseline) : undefined
       }
 
       const response = await predictBatch(payload)
       const data = response.data
       
-      if (data.prediction !== undefined) {
+      if (data.k_uplift !== undefined) {
         predictions.value.push({
-          value: data.prediction,
-          date: payload.prediction_date,
-          sku: payload.sku,
-          promoCode: payload.promo_code
+          k_uplift: data.k_uplift,
+          baseline: data.baseline,
+          prediction_absolute: data.prediction_absolute,
+          uplift_percent: data.uplift_percent,
+          store_id: payload.store_id  // 🔥 сохраняем store_id
         })
       }
 
@@ -241,17 +244,35 @@ function renderChart() {
     chartInstance.destroy()
   }
 
+  if (predictions.value.length === 0) return
+
+  const firstPrediction = predictions.value[0]
+  if (!firstPrediction) return
+
   chartInstance = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: predictions.value.map((_, i) => i + 1),
+      labels: predictions.value.map((p, i) => {
+        // 🔥 безопасная проверка
+        const storeId = p.store_id || `Строка ${i + 1}`
+        return `${storeId}\nбаза: ${p.baseline.toFixed(0)}`
+      }),
       datasets: [
         {
-          label: 'Прогноз продаж (шт)',
-          data: predictions.value.map(p => p.value),
-          backgroundColor: 'rgba(54, 162, 235, 0.7)',
+          label: 'Базовые продажи (без промо)',
+          data: predictions.value.map(p => p.baseline),
+          backgroundColor: 'rgba(255, 99, 132, 0.9)',
+          borderColor: 'rgba(255, 99, 132, 1)',
+          borderWidth: 1,
+          borderRadius: 4
+        },
+        {
+          label: 'Дополнительные продажи (промо эффект)',
+          data: predictions.value.map(p => Math.max(0, p.prediction_absolute - p.baseline)),
+          backgroundColor: 'rgba(54, 162, 235, 0.8)',
           borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 1
+          borderWidth: 1,
+          borderRadius: 4
         }
       ]
     },
@@ -264,7 +285,12 @@ function renderChart() {
         tooltip: {
           callbacks: {
             label: (context: any) => {
-              return `${context.dataset.label}: ${context.raw.toFixed(2)} шт`
+              if (context.dataset.label === 'Базовые продажи (без промо)') {
+                return `${context.dataset.label}: ${context.raw.toFixed(2)} шт`
+              }
+              const baseline = predictions.value[context.dataIndex]?.baseline || 0
+              const total = baseline + context.raw
+              return `${context.dataset.label}: ${context.raw.toFixed(2)} шт (всего: ${total.toFixed(2)})`
             }
           }
         }
@@ -275,13 +301,15 @@ function renderChart() {
             display: true,
             text: 'Количество продаж (шт)'
           },
+          stacked: true,
           beginAtZero: true
         },
         x: {
           title: {
             display: true,
-            text: 'Номер строки'
-          }
+            text: 'Магазин / Сценарий'
+          },
+          stacked: true
         }
       }
     }
@@ -290,7 +318,19 @@ function renderChart() {
 </script>
 
 <style scoped>
-.card {
-  margin-bottom: 1rem;
+.text-success {
+  color: #198754 !important;
+  font-weight: bold;
+}
+.text-danger {
+  color: #dc3545 !important;
+  font-weight: bold;
+}
+.text-primary {
+  color: #0d6efd !important;
+  font-weight: bold;
+}
+.text-secondary {
+  color: #6c757d !important;
 }
 </style>
