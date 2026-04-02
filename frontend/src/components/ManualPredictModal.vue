@@ -1,4 +1,5 @@
 <!-- frontend/src/components/ManualPredictModal.vue -->
+ <!-- ГОРИЗОНТАЛЬНАЯ ФОРМА-ТАБЛИЦА В МОДАЛЬНОМ ОКНЕ -->
 
 <template>
   <div class="modal-backdrop" @click.self="$emit('close')">
