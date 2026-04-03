@@ -4,7 +4,7 @@ inference_features:
   # 🔥 Промо-акция
   - name: promo_id
     type: string
-    required: true
+    required: false
     default: ""
 
   # Временные параметры
@@ -75,6 +75,11 @@ inference_features:
   - name: promo_mechanics
     type: string
     required: false
+    default: ""
+
+  - name: marketing_type
+    type: string
+    required: true
     default: ""
 
 

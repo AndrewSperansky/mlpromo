@@ -56,7 +56,7 @@ class PredictionController:
         # =========================================================
         features_dict = {
             # 🔥 Промо-акция
-            "promo_id": payload.promo_id,
+            "promo_id": payload.promo_id or "Promo-#",
 
             # Временные параметры
             "week": payload.week,

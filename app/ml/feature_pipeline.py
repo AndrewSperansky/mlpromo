@@ -43,11 +43,14 @@ class FeaturePipeline:
         return features
 
     def _extract_inference_features(self, request: Dict) -> Dict:
-        """Извлекает фичи из запроса"""
+        """
+        Извлекает фичи из запроса
+        """
         logger.info(f"🔍 DEBUG: request keys = {list(request.keys())}")
         logger.info(f"🔍 DEBUG: request content = {request}")
 
         features = {}
+        missing_required = []  # ← собираем отсутствующие обязательные поля
 
         for f in self.config.get('inference_features', []):
             name = f['name']
@@ -85,7 +88,12 @@ class FeaturePipeline:
             features[name] = value
 
             if required and (value is None or value == '' or value == 0):
+                missing_required.append(name)
                 logger.warning(f"Required feature '{name}' is missing, using default: {default}")
+
+            # 🔥 Если есть отсутствующие обязательные поля — бросаем ошибку
+        if missing_required:
+            raise ValueError(f"Missing required features: {', '.join(missing_required)}")
 
         return features
 

@@ -9,7 +9,7 @@ class PredictionRequest(BaseModel):
     """Запрос на предсказание — возвращает коэффициент прироста"""
 
     # 🔥 Промо-акция
-    promo_id: str = Field(..., min_length=1, description="ID промо-акции")
+    promo_id: Optional[str] = Field(..., min_length=1, description="ID промо-акции")
 
     # Временные параметры
     week: int = Field(..., ge=1, le=52, description="Номер недели в году (1-52)")
@@ -33,7 +33,7 @@ class PredictionRequest(BaseModel):
     adv_carrier: Optional[str] = Field(None, description="Рекламный носитель")
     adv_material: Optional[str] = Field(None, description="Рекламный материал")
     promo_mechanics: Optional[str] = Field(None, description="Механика промо")
-    marketing_type: Optional[str] = Field(None, description="Тип маркетинга")
+    marketing_type: str = Field(None, description="Тип маркетинга")
 
     # 🔥 базовые продажи без промо
     baseline: Optional[float] = Field(None, description="Базовые продажи без промо (за последний месяц)")
