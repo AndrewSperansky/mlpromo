@@ -27,7 +27,8 @@ ML_RUNTIME_STATE: Dict[str, Any] = {
     "retrain_candidate_id": None,
     "retrain_candidate_version": None,
     "retrain_recommended_at": None,
-
+    "training_completed": False,
+    "training_result": None,              # {comparison, candidate_model_id, trained_at}
    }
 
 

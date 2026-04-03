@@ -163,6 +163,36 @@ export const trainModel = async (data: TrainModelParams) => {
     }
 }
 
+// ========================================
+// MODEL TRAIN DIRECT On The Runtime Page
+// ========================================
+
+export const trainModelDirect = async (promote: boolean = false) => {
+    console.log('🚀 Starting direct model training...', { promote })
+    
+    try {
+        const response = await api.post('/ml/train', { promote }, {
+            timeout: 300000  // 5 минут
+        })
+        
+        console.log('✅ Training completed:', response.data)
+        return response
+        
+    } catch (error: unknown) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNABORTED') {
+            console.error('❌ Training timeout')
+            throw new Error('Training timeout. The model training is taking longer than expected.')
+        }
+        
+        if (error instanceof Error) {
+            console.error('❌ Training failed:', error.message)
+        }
+        
+        throw error
+    }
+}
+
+
 // ============================
 // MODEL DELETE
 // ============================ 

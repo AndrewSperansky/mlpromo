@@ -155,3 +155,21 @@ def clear_retrain():
     Сбрасывает флаг принудительного переобучения.
     """
     return service.clear_retrain()
+
+# ==========================================================
+# CLEAR TRAIN RESULT
+# ==========================================================
+
+@router.post("/clear-training-result")
+def clear_training_result():
+    """Очищает результат обучения (после активации или отклонения)"""
+    return service.clear_training_result()
+
+# ==========================================================
+# MODEL TRAINING RESULT
+# ==========================================================
+
+@router.get("/training-result")
+def get_training_result():
+    """Возвращает результат последнего обучения"""
+    return service.get_training_result()

@@ -202,6 +202,10 @@ class SystemService:
         ML_RUNTIME_STATE["retrain_candidate_version"] = None
         ML_RUNTIME_STATE["retrain_recommended_at"] = None
 
+        # 🔥 ДОБАВИТЬ: сбрасываем результат обучения
+        ML_RUNTIME_STATE["training_completed"] = False
+        ML_RUNTIME_STATE["training_result"] = None
+
         return {
             "status": "dismissed",
             "message": "Retrain recommendation dismissed",
@@ -286,4 +290,32 @@ class SystemService:
         return {
             "retrain_requested": False,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ==========================================================
+    # CLEAR TRAINING RESULT
+    # ==========================================================
+
+    def clear_training_result(self) -> dict:
+        """Очищает результат обучения"""
+        ML_RUNTIME_STATE["training_completed"] = False
+        ML_RUNTIME_STATE["training_result"] = None
+
+        logger.info("Training result cleared")
+
+        return {
+            "status": "cleared",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ==========================================================
+    # MODEL TRAINING RESULT
+    # ==========================================================
+
+
+    def get_training_result(self) -> dict:
+        """Возвращает результат последнего обучения"""
+        return {
+            "training_completed": ML_RUNTIME_STATE.get("training_completed", False),
+            "training_result": ML_RUNTIME_STATE.get("training_result"),
         }

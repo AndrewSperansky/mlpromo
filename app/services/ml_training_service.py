@@ -6,9 +6,10 @@ ML Training Service — обучение на едином потоковом д
 
 from typing import Dict, Any, Optional
 import logging
-
+from datetime import datetime, timezone
 from app.ml.train.train_pipeline import train_pipeline
 from app.db.session import SessionLocal
+from app.ml.runtime_state import ML_RUNTIME_STATE
 from models.dataset_upload_history import DatasetUploadHistory
 from models.industrial_dataset import IndustrialDatasetRaw
 
@@ -50,6 +51,19 @@ class MLTrainingService:
             trigger=trigger,
         )
 
+        # ========== НОВОЕ: Сохраняем результат для UI ==========
+        if result.get("comparison"):
+            ML_RUNTIME_STATE["training_completed"] = True
+            ML_RUNTIME_STATE["training_result"] = {
+                "comparison": result["comparison"],
+                "candidate_model_id": result["model_id"],
+                "candidate_metrics": result["metrics"],
+                "trained_at": datetime.now(timezone.utc).isoformat(),
+            }
+            logger.info(f"✅ Training result saved to runtime_state: model_id={result['model_id']}")
+
+
+
         logger.info(
             "✅ ML training completed",
             extra={
@@ -66,7 +80,8 @@ class MLTrainingService:
             "total_rows": total_rows,
             "rows_removed": result.get("rows_removed", 0),
             "metrics": result.get("metrics", {}),
-            "promoted": result.get("promoted", False),
+            "promoted": False,
+            "comparison": result.get("comparison"),  # ← для ответа API
             "stage": result.get("stage", "completed"),
             "note": result.get("note", f"Trained on {total_rows} rows, target: k_uplift")
         }

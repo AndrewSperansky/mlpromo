@@ -52,6 +52,7 @@ from app.controllers.model_activation_controller import ModelActivationControlle
 from app.controllers.models_compare_controller import ModelsCompareController
 from app.controllers.model_evaluation_controller import ModelEvaluationController
 from app.controllers.dataset_upload_controller import DatasetUploadController
+from app.controllers.dataset_delete_controller import DatasetDeleteController
 
 
 
@@ -639,52 +640,8 @@ def delete_dataset_batch(
     """
     Удаляет все записи, загруженные в рамках указанного batch_id.
     """
-
-    # ========== 1. ПРОВЕРЯЕМ СУЩЕСТВОВАНИЕ BATCH ==========
-    upload_record = db.query(DatasetUploadHistory).filter(
-        cast(DatasetUploadHistory.batch_id, String) == str(batch_id)
-    ).first()
-
-    if not upload_record:
-        raise HTTPException(status_code=404, detail="Batch not found")
-
-    # ========== 2. ПОЛУЧАЕМ СТРОКИ ДЛЯ УДАЛЕНИЯ ==========
-    rows_to_delete = db.query(IndustrialDatasetRaw).filter(
-        cast(IndustrialDatasetRaw.batch_id, String) == str(batch_id)
-    ).all()
-
-    if not rows_to_delete:
-        raise HTTPException(status_code=404, detail="No records found for this batch")
-
-    # ========== 3. УДАЛЯЕМ ДАННЫЕ ==========
-    try:
-        # Удаляем строки из industrial_dataset_raw
-        rows_deleted = db.query(IndustrialDatasetRaw).filter(
-            cast(IndustrialDatasetRaw.batch_id, String) == str(batch_id)
-        ).delete(synchronize_session=False)
-
-        # Удаляем запись из истории загрузок
-        db.delete(upload_record)
-
-        db.commit()
-
-        logger.info(f"🗑️ Deleted batch {batch_id}: {rows_deleted} rows removed")
-
-        return {
-            "status": "success",
-            "batch_id": str(batch_id),
-            "rows_deleted": rows_deleted,
-            "force": force,
-            "message": f"Deleted {rows_deleted} rows from batch {batch_id}"
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Error deleting batch {batch_id}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database error: {str(e)}"
-        )
+    controller = DatasetDeleteController(db)
+    return controller.delete_batch(batch_id, force)
 
 
 # =========================================
@@ -895,4 +852,39 @@ def get_dataset_info(db: Session = Depends(get_db)):
             }
             for h in uploads
         ]
+    }
+
+
+# ОТЛАДОЧНЫЙ ENDPOINT
+
+@router.get("/dataset/batch/{batch_id}/debug")
+def debug_batch(
+        batch_id: str,
+        db: Session = Depends(get_db)
+):
+    """
+    Отладочный эндпоинт для проверки batch_id
+    """
+    from sqlalchemy import cast, String
+
+    # Ищем в истории
+    upload_record = db.query(DatasetUploadHistory).filter(
+        cast(DatasetUploadHistory.batch_id, String) == batch_id
+    ).first()
+
+    # Ищем в данных
+    rows_count = db.query(IndustrialDatasetRaw).filter(
+        cast(IndustrialDatasetRaw.batch_id, String) == batch_id
+    ).count()
+
+    # Все batch_id из истории
+    all_batches = db.query(DatasetUploadHistory.batch_id).all()
+    all_batches_str = [str(b[0]) for b in all_batches]
+
+    return {
+        "search_batch_id": batch_id,
+        "found_in_history": upload_record is not None,
+        "rows_count_in_data": rows_count,
+        "all_batches": all_batches_str[:10],  # первые 10
+        "batch_exists": batch_id in all_batches_str
     }

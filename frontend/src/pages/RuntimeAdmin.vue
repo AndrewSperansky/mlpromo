@@ -13,13 +13,17 @@
     </div>
 
     <!-- ========================================================= -->
-    <!-- ========== RETRAIN RECOMMENDATION CARD (НОВЫЙ) ========= -->
+    <!-- ========== 🟡 ЖЁЛТАЯ КАРТОЧКА (новые данные) =========== -->
     <!-- ========================================================= -->
-    <div v-if="retrainRecommendation.recommended" class="card mb-4 border-warning shadow-sm">
+
+    <div 
+      v-if="retrainRecommendation.recommended && !trainingCompleted && !trainingInProgress" 
+      class="card mb-4 border-warning shadow-sm"
+    >
       <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
         <div>
           <i class="bi bi-exclamation-triangle-fill me-2"></i>
-          <strong>Retrain Recommendation</strong>
+          <strong>New Data Available</strong>
         </div>
         <span class="badge bg-dark" :class="priorityBadgeClass">
           {{ priorityText }}
@@ -29,45 +33,21 @@
         <div class="row align-items-center">
           <div class="col-md-8">
             <p class="mb-2 fs-5">
-              <i class="bi bi-info-circle-fill me-2 text-primary"></i>
+              <i class="bi bi-database-fill me-2 text-primary"></i>
               {{ retrainRecommendation.reason }}
             </p>
-            <p v-if="retrainRecommendation.recommended_at" class="text-muted small mb-0">
+            <p class="text-muted small mb-0">
               <i class="bi bi-clock me-1"></i>
-              Recommended at: {{ formatDate(retrainRecommendation.recommended_at) }}
+              {{ formatDate(retrainRecommendation.recommended_at) }}
             </p>
-            
-            <!-- Candidate Metrics (если есть) -->
-            <div v-if="retrainRecommendation.candidate_metrics" class="mt-3">
-              <strong class="text-primary">
-                <i class="bi bi-graph-up me-1"></i>Candidate Model Metrics:
-              </strong>
-              <table class="table table-sm table-bordered mt-2" style="width: auto; background-color: #f8f9fa;">
-                <tbody>
-                  <tr v-for="(value, key) in retrainRecommendation.candidate_metrics" :key="key">
-                    <td class="fw-bold">{{ key }}</td>
-                    <td>{{ typeof value === 'number' ? value.toFixed(6) : value }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
-          
           <div class="col-md-4 text-end">
-            <button 
-              class="btn btn-success me-2 px-4" 
-              @click="approveRetrain" 
-              :disabled="retrainActionLoading"
-            >
-              <span v-if="retrainActionLoading" class="spinner-border spinner-border-sm me-2"></span>
-              <i v-else class="bi bi-check-lg me-2"></i>
-              {{ retrainActionLoading ? 'Training...' : 'Approve & Train' }}
+            <button class="btn btn-primary" @click="startTraining" :disabled="trainingInProgress">
+              <span v-if="trainingInProgress" class="spinner-border spinner-border-sm me-2"></span>
+              <i v-else class="bi bi-rocket-takeoff me-2"></i>
+              {{ trainingInProgress ? 'Training...' : 'Train Model' }}
             </button>
-            <button 
-              class="btn btn-outline-secondary" 
-              @click="dismissRetrain" 
-              :disabled="retrainActionLoading"
-            >
+            <button class="btn btn-outline-secondary ms-2" @click="dismissRetrain" :disabled="trainingInProgress">
               <i class="bi bi-x-lg me-1"></i>
               Dismiss
             </button>
@@ -76,9 +56,18 @@
       </div>
     </div>
 
+    <!-- ========================================================= -->
+    <!-- ========== 🔵 СИНЯЯ КАРТОЧКА (результат обучения) ======= -->
+    <!-- ========================================================= -->
+    <TrainingResultCard 
+      v-if="trainingCompleted && trainingResult" 
+      :trainingResult="trainingResult"
+      @activated="handleTrainingActivated"
+      @dismissed="handleTrainingDismissed"
+    />
+
     <!-- ===== Operational Overview ===== -->
     <div class="row g-3 mb-4">
-      <!-- Model ID и Version на половинках -->
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text status-label bg-secondary text-light">Model ID</span>
@@ -93,7 +82,6 @@
         </div>
       </div>
 
-      <!-- Остальные статусы по 3 колонки -->
       <div class="col-md-3">
         <div class="input-group">
           <span class="input-group-text status-label bg-secondary text-light">Model Loaded</span>
@@ -203,7 +191,6 @@
 
     <!-- ===== Debug Sections ===== -->
     <div class="row">
-      <!-- Overview Debug -->
       <div class="col-md-6">
         <div class="card shadow-sm">
           <div class="card-header d-flex justify-content-between align-items-center bg-secondary text-white">
@@ -218,7 +205,6 @@
         </div>
       </div>
 
-      <!-- Runtime State Debug -->
       <div class="col-md-6">
         <div class="card shadow-sm">
           <div class="card-header d-flex justify-content-between align-items-center bg-info text-white">
@@ -241,9 +227,12 @@
   </div>
 </template>
 
+
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue"
+import { ref, onMounted, onUnmounted, computed } from "vue"
 import api from "../services/api"
+import { trainModelDirect } from "../services/api" 
+import TrainingResultCard from "../components/TrainingResultCard.vue"
 
 // ===== Types =====
 interface OverviewResponse {
@@ -292,6 +281,20 @@ interface RetrainRecommendation {
   recommended_at: string | null
 }
 
+interface TrainingResult {
+  comparison: {
+    current_model_id: number
+    candidate_model_id: number
+    current_metrics: Record<string, number>
+    candidate_metrics: Record<string, number>
+    metrics_diff: Record<string, number>
+    is_better: boolean
+    improvement_percent: number
+  }
+  candidate_model_id: number
+  trained_at: string
+}
+
 // ===== State =====
 const overview = ref<OverviewResponse>({
   timestamp: "",
@@ -322,6 +325,11 @@ const retrainRecommendation = ref<RetrainRecommendation>({
   recommended_at: null,
 })
 
+// ========== НОВЫЕ ПЕРЕМЕННЫЕ ==========
+const trainingCompleted = ref(false)
+const trainingResult = ref<TrainingResult | null>(null)
+const trainingInProgress = ref(false)  // ← флаг процесса обучения  
+
 const showOverviewDebug = ref(false)
 const showRuntimeDebug = ref(false)
 const loading = ref(false)
@@ -343,6 +351,9 @@ const priorityBadgeClass = computed(() => {
   if (reason.includes('⏰')) return 'bg-warning'
   return 'bg-info'
 })
+
+
+
 
 // ===== Methods =====
 async function loadOverview() {
@@ -375,13 +386,26 @@ async function loadRetrainRecommendation() {
   }
 }
 
+// ========== НОВЫЙ МЕТОД ==========
+async function loadTrainingResult() {
+  try {
+    const res = await api.get("/system/training-result")
+    trainingCompleted.value = res.data.training_completed
+    trainingResult.value = res.data.training_result
+    console.log("🎓 Training result:", { trainingCompleted: trainingCompleted.value, trainingResult: trainingResult.value })
+  } catch (error) {
+    console.error("Failed to load training result:", error)
+  }
+}
+
 async function refreshAll() {
   loading.value = true
   try {
     await Promise.all([
       loadOverview(),
       loadRuntimeState(),
-      loadRetrainRecommendation()
+      loadRetrainRecommendation(),
+      loadTrainingResult(),  // ← новый вызов
     ])
     console.log("✅ All data refreshed")
   } catch (error) {
@@ -429,30 +453,82 @@ async function forceRetrain() {
   }
 }
 
-async function approveRetrain() {
-  retrainActionLoading.value = true
+async function handleTrainingActivated() {
+  console.log("Training activated, clearing all states")
+  
+  // Сбрасываем все флаги
+  trainingCompleted.value = false
+  trainingResult.value = null
+  trainingInProgress.value = false
+  
+  // Сбрасываем рекомендацию (жёлтая карточка)
+  retrainRecommendation.value.recommended = false
+  retrainRecommendation.value.reason = null
+  retrainRecommendation.value.recommended_at = null
+  
+  // Очищаем результат обучения на бэкенде
   try {
-    const response = await api.post("/system/retrain-approve")
-    console.log("Retrain approved:", response.data)
+    await api.post("/system/retrain-dismiss")
+    await api.post("/system/clear-training-result")
+  } catch (error) {
+    console.error("Failed to clear training result:", error)
+  }
+  
+  // Обновляем всё
+  await refreshAll()
+}
+
+// TRAINING DISMISSED
+
+async function handleTrainingDismissed() {
+  console.log("Training dismissed, clearing all states")
+  
+  // Сбрасываем все флаги
+  trainingCompleted.value = false
+  trainingResult.value = null
+  trainingInProgress.value = false
+  
+  // Сбрасываем рекомендацию (жёлтая карточка)
+  retrainRecommendation.value.recommended = false
+  retrainRecommendation.value.reason = null
+  retrainRecommendation.value.recommended_at = null
+  
+  // Очищаем результат обучения на бэкенде
+  try {
+    await api.post("/system/retrain-dismiss")
+    await api.post("/system/clear-training-result")
+  } catch (error) {
+    console.error("Failed to clear training result:", error)
+  }
+  
+  // Обновляем всё
+  await refreshAll()
+}
+
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return '—'
+  const date = new Date(dateStr)
+  return date.toLocaleString('ru-RU')
+}
+
+async function startTraining() {
+  trainingInProgress.value = true
+  
+  try {
+    const response = await trainModelDirect(false)  // promote=false, ждём ручной активации
+    console.log("Training started:", response.data)
     
-    // Сбросить рекомендацию на UI
-    retrainRecommendation.value.recommended = false
+    // После успешного запуска — начинаем polling для получения результата
+    startPollingForTrainingResult()
     
-    // Показать уведомление
-    alert("✅ Training started! New model will be promoted upon completion.")
-    
-    // Перезагрузить всё через несколько секунд
-    setTimeout(() => {
-      refreshAll()
-    }, 3000)
-    
-  } catch (error: any) {
-    console.error("Failed to approve retrain:", error)
-    alert(`❌ Failed to start retraining: ${error.response?.data?.message || error.message}`)
+  } catch (error) {
+    console.error("Training failed:", error)
+    alert(`Training failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   } finally {
-    retrainActionLoading.value = false
+    trainingInProgress.value = false
   }
 }
+
 
 async function dismissRetrain() {
   retrainActionLoading.value = true
@@ -460,8 +536,10 @@ async function dismissRetrain() {
     const response = await api.post("/system/retrain-dismiss")
     console.log("Retrain dismissed:", response.data)
     
-    // Сбросить рекомендацию на UI
+    // Сбрасываем рекомендацию
     retrainRecommendation.value.recommended = false
+    retrainRecommendation.value.reason = null
+    retrainRecommendation.value.recommended_at = null
     
   } catch (error) {
     console.error("Failed to dismiss retrain:", error)
@@ -470,16 +548,54 @@ async function dismissRetrain() {
   }
 }
 
-function formatDate(dateStr: string) {
-  if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  return date.toLocaleString('ru-RU')
+
+// 🔥 ПОЛЛИНГ для получения результата обучения
+let pollingInterval: number | null = null
+
+function startPollingForTrainingResult() {
+  // Очищаем предыдущий интервал
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+  }
+  
+  // Начинаем polling каждые 3 секунды
+  pollingInterval = setInterval(async () => {
+    try {
+      const res = await api.get("/system/training-result")
+      
+      if (res.data.training_completed && res.data.training_result) {
+        // Обучение завершено!
+        trainingCompleted.value = true
+        trainingResult.value = res.data.training_result
+        
+        // Останавливаем polling
+        if (pollingInterval) {
+          clearInterval(pollingInterval)
+          pollingInterval = null
+        }
+        
+        // Обновляем рекомендацию (она должна исчезнуть)
+        await loadRetrainRecommendation()
+      }
+    } catch (error) {
+      console.error("Polling error:", error)
+    }
+  }, 3000)  // каждые 3 секунды
 }
+
+
+// Очищаем polling при размонтировании компонента
+onUnmounted(() => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+  }
+})
+
+
 
 // ===== Lifecycle =====
 onMounted(() => {
   refreshAll()
-  // Автообновление каждые 30 секунд
   setInterval(() => {
     refreshAll()
   }, 30000)
