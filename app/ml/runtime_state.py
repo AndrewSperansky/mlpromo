@@ -29,6 +29,11 @@ ML_RUNTIME_STATE: Dict[str, Any] = {
     "retrain_recommended_at": None,
     "training_completed": False,
     "training_result": None,              # {comparison, candidate_model_id, trained_at}
+
+# ==========🔥 НОВЫЕ СЧЁТЧИКИ ДЛЯ МЕТРИК ==========
+    "predictions_count": 0,
+    "errors_count": 0,
+    "latencies": [],  # для расчёта P95
    }
 
 

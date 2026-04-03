@@ -26,15 +26,15 @@ class TelemetryExporter:
         # SAFE INFERENCE METRICS ACCESS
         # --------------------------------------------------
 
-        predictions_count = 0
-        errors_count = 0
+        # predictions_count = 0
+        # errors_count = 0
 
         # inference_metrics реализован как module-level state
-        if hasattr(inference_metrics, "INFERENCE_METRICS"):
-            metrics = getattr(inference_metrics, "INFERENCE_METRICS")
-
-            predictions_count = metrics.get("predictions_count", 0)
-            errors_count = metrics.get("errors_count", 0)
+        # if hasattr(inference_metrics, "INFERENCE_METRICS"):
+        #     metrics = getattr(inference_metrics, "INFERENCE_METRICS")
+        #
+        #     predictions_count = metrics.get("predictions_count", 0)
+        #     errors_count = metrics.get("errors_count", 0)
 
         # --------------------------------------------------
         # BUILD SNAPSHOT
@@ -56,6 +56,6 @@ class TelemetryExporter:
             "retrain_requested": ML_RUNTIME_STATE.get("retrain_requested", False),
 
             # Counters
-            "predictions_count": predictions_count,
-            "errors_count": errors_count,
+            "predictions_count": ML_RUNTIME_STATE.get("predictions_count", 0),
+            "errors_count": ML_RUNTIME_STATE.get("errors_count", 0),
         }

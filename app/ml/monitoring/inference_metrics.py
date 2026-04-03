@@ -2,7 +2,7 @@
 # — MINIMAL INFERENCE METRICS COLLECTOR
 
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 from datetime import datetime, timezone
 from pathlib import Path
 import json
@@ -10,11 +10,12 @@ import os
 import time
 import numpy as np
 
+from app.ml.runtime_state import ML_RUNTIME_STATE  # ← добавить
+
 
 def _get_metrics_dir() -> Path:
     """
     METRICS_DIR читается в runtime
-    (test / CI / prod safe)
     """
     return Path(os.getenv("METRICS_DIR", "metrics"))
 
@@ -28,13 +29,6 @@ def collect_inference_metrics(
 ) -> Dict[str, Any]:
     """
     Минимальный сбор inference-метрик.
-
-    Что фиксируем:
-    - ml_model_id
-    - timestamp
-    - latency
-    - input / output shape
-    - базовую статистику выходов
     """
 
     metrics_dir = _get_metrics_dir()
@@ -60,4 +54,27 @@ def collect_inference_metrics(
     with open(metrics_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
 
-    return record
+        # ===== НОВОЕ: обновляем счётчики в runtime_state =====
+        ML_RUNTIME_STATE["predictions_count"] = ML_RUNTIME_STATE.get("predictions_count", 0) + 1
+
+        # Обновляем латентность (скользящее окно для P95)
+        if "latencies" not in ML_RUNTIME_STATE:
+            ML_RUNTIME_STATE["latencies"] = []
+
+        latencies = ML_RUNTIME_STATE["latencies"]
+        latencies.append(latency_ms)
+
+        # Храним последние 100 замеров
+        if len(latencies) > 100:
+            latencies.pop(0)
+
+        # Пересчитываем P95
+        if len(latencies) > 0:
+            p95 = np.percentile(latencies, 95)
+            ML_RUNTIME_STATE["last_latency_p95"] = float(p95)
+
+        return record
+
+def increment_errors_count() -> None:
+    """Увеличивает счётчик ошибок"""
+    ML_RUNTIME_STATE["errors_count"] = ML_RUNTIME_STATE.get("errors_count", 0) + 1
