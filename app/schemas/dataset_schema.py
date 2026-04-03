@@ -20,7 +20,7 @@ class DatasetRecord(BaseModel):
 
     # Временные параметры
     month: int = Field(..., ge=1, le=12, description="Номер месяца (1-12)")
-    week: int = Field(..., ge=1, le=5, description="Номер недели в месяце (1-5)")
+    week: int = Field(..., ge=1, le=52, description="Номер недели в месяце (1-52)")
 
     # Цены
     regular_price: float = Field(..., gt=0, description="Обычная цена")

@@ -242,6 +242,8 @@ def train_pipeline(
                 promoted = True
                 meta["stage"] = "current"
                 logger.info(f"🎉 Model {db_model.id} promoted to champion")
+            else:
+                logger.warning(f"Promotion rejected by policy: {promotion_decision['reason']}")
 
     finally:
         db.close()

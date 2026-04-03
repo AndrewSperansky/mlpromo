@@ -148,7 +148,24 @@ class DatasetStreamingService:
             db.commit()
             logger.info(f"💾 Final commit: {records_saved} records saved")
 
+            # =========================================================
+            # CHECK RETRAIN NEED
+            # =========================================================
+
+            if status == "success":
+                # Триггерим проверку необходимости retrain
+                try:
+                    from app.services.system_service import SystemService
+                    system_service = SystemService()
+                    recommendation = system_service.force_retrain()
+                    logger.info(f"Retrain check completed: {recommendation}")
+                except Exception as e:
+                    logger.warning(f"Failed to trigger retrain check: {e}")
+
+            # =========================================================
             # Получаем общее количество строк ПОСЛЕ загрузки
+            # =========================================================
+
             total_after = db.query(IndustrialDatasetRaw).count()
             logger.info(f"📊 Total records after upload: {total_after}")
 

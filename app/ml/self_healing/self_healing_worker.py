@@ -18,7 +18,7 @@ class SelfHealingWorker:
     - Safe exception handling
     """
 
-    def __init__(self, interval_seconds: int = 30):
+    def __init__(self, interval_seconds: int = 3600):
         self.interval_seconds = interval_seconds
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()

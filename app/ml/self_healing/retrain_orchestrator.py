@@ -33,6 +33,10 @@ class RetrainOrchestrator:
 
     def process(self) -> Dict[str, Any]:
 
+        # Проверяем, есть ли новые данные
+        # if not self._has_new_data():
+        #     return {"status": "noop", "reason": "no_new_data"}
+
         # --------------------------------------------------
         # CHECK RETRAIN FLAG
         # --------------------------------------------------

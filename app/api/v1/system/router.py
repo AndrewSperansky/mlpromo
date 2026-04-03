@@ -1,9 +1,6 @@
 # app/api/v1/system/router.py
 """
 System API — системные технические эндпоинты.
-Router  →  Service  →  Repository
-         ↑
-    Depends()
 """
 
 from fastapi import APIRouter, Depends
@@ -99,12 +96,37 @@ def clear_drift():
 
 @router.post("/force-retrain")
 def force_retrain():
+    """Проверяет необходимость retrain и создаёт рекомендацию (не обучает!)"""
     return service.force_retrain()
 
 
 @router.get("/runtime-state")
 def runtime_state():
     return service.get_runtime_state()
+
+
+# ==========================================================
+# HUMAN-IN-THE-LOOP RETRAIN
+# ==========================================================
+
+@router.get("/retrain-recommendation")
+def get_retrain_recommendation():
+    """Получить текущую рекомендацию по retrain"""
+    return service.get_retrain_recommendation()
+
+
+@router.post("/retrain-approve")
+def approve_retrain():
+    """Одобрить retrain — запустить обучение с promote (activate)"""
+    return service.approve_retrain()
+
+
+@router.post("/retrain-dismiss")
+def dismiss_retrain():
+    """Отклонить рекомендацию"""
+    return service.dismiss_retrain()
+
+
 
 
 # ==========================================================
@@ -122,3 +144,14 @@ def overview():
         - registry state (если реализовано в service)
     """
     return service.get_overview()
+
+# ==========================================================
+# DROP Flag Force Retrain
+# ==========================================================
+
+@router.post("/clear-retrain")
+def clear_retrain():
+    """
+    Сбрасывает флаг принудительного переобучения.
+    """
+    return service.clear_retrain()

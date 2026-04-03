@@ -19,6 +19,15 @@ ML_RUNTIME_STATE: Dict[str, Any] = {
     "last_decision_timestamp": None,
     "retrain_requested": False,
     "ml_model_id": "cb_promo_v1",
+
+# ========== НОВЫЕ ПОЛЯ ДЛЯ HUMAN-IN-THE-LOOP ==========
+    "retrain_recommended": False,
+    "retrain_recommended_reason": None,
+    "retrain_candidate_metrics": None,
+    "retrain_candidate_id": None,
+    "retrain_candidate_version": None,
+    "retrain_recommended_at": None,
+
    }
 
 

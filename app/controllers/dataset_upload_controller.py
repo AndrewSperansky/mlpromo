@@ -70,6 +70,16 @@ class DatasetUploadController:
 
         logger.info(f"✅ Upload completed: {records_saved} records, total={total_after}, duration={duration_ms}ms")
 
+        # =====================================================
+        # Триггерим проверку необходимости retrain
+        # =====================================================
+        try:
+            from app.services.system_service import SystemService
+            system_service = SystemService()
+            system_service.force_retrain()
+        except Exception as e:
+            logger.warning(f"Failed to trigger retrain check: {e}")
+
         return {
             "batch_id": str(batch_id),
             "status": "success",

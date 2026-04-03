@@ -2,12 +2,14 @@
 
 from datetime import datetime, timezone
 import logging
+from typing import Dict, Any, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.settings import settings
 from app.ml.telemetry import TelemetryExporter
 from app.ml.runtime_state import ML_RUNTIME_STATE
+from app.ml.self_healing.retrain_detector import RetrainDetector
 
 logger = logging.getLogger("promo_ml")
 
@@ -42,7 +44,6 @@ class SystemService:
     def health_db(self, db: Session) -> dict:
         """
         Проверка соединения с БД.
-        НЕ для docker healthcheck.
         """
 
         db.execute(text("SELECT 1"))
@@ -99,18 +100,119 @@ class SystemService:
         }
 
     def force_retrain(self) -> dict:
-        ML_RUNTIME_STATE["retrain_requested"] = True
-        ML_RUNTIME_STATE["last_retrain_request"] = datetime.now(
-            timezone.utc
-        ).isoformat()
+        """
+       Проверяет необходимость retrain и создаёт рекомендацию.
+       НЕ запускает обучение автоматически — human-in-the-loop!
+       """
+        logger.info("🔍 Checking retrain need...")
+
+        with RetrainDetector() as detector:
+            recommendation = detector.check_and_recommend()
+
+        if recommendation["needed"]:
+            ML_RUNTIME_STATE["retrain_recommended"] = True
+            ML_RUNTIME_STATE["retrain_recommended_reason"] = recommendation["reason"]
+            ML_RUNTIME_STATE["retrain_recommended_at"] = datetime.now(timezone.utc).isoformat()
+            ML_RUNTIME_STATE["retrain_candidate_metrics"] = recommendation.get("candidate_metrics")
+
+            logger.info(
+                f"📢 Retrain recommendation created",
+                extra={
+                    "reason": recommendation["reason"],
+                    "priority": recommendation["priority"],
+                    "new_data_count": recommendation["new_data_count"],
+                }
+            )
+        else:
+            logger.info("✅ No retrain needed")
 
         return {
-            "retrain_requested": True,
-            "timestamp": ML_RUNTIME_STATE["last_retrain_request"],
+            "retrain_recommended": recommendation["needed"],
+            "reason": recommendation["reason"],
+            "priority": recommendation["priority"],
+            "new_data_count": recommendation["new_data_count"],
+            "days_since_train": recommendation["days_since_train"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def get_retrain_recommendation(self) -> dict:
+        """Возвращает текущую рекомендацию по retrain"""
+        return {
+            "recommended": ML_RUNTIME_STATE.get("retrain_recommended", False),
+            "reason": ML_RUNTIME_STATE.get("retrain_recommended_reason"),
+            "candidate_metrics": ML_RUNTIME_STATE.get("retrain_candidate_metrics"),
+            "candidate_id": ML_RUNTIME_STATE.get("retrain_candidate_id"),
+            "candidate_version": ML_RUNTIME_STATE.get("retrain_candidate_version"),
+            "recommended_at": ML_RUNTIME_STATE.get("retrain_recommended_at"),
+        }
+
+    def approve_retrain(self) -> dict:
+        """
+        Пользователь одобрил retrain — запускаем обучение и promote (activate).
+        """
+        if not ML_RUNTIME_STATE.get("retrain_recommended"):
+            return {
+                "status": "no_recommendation",
+                "message": "No retrain recommendation to approve",
+            }
+
+        logger.info("👍 Retrain approved by user, starting training...")
+
+        # Запускаем обучение с promote=true
+        from app.ml.train.train_pipeline import train_pipeline
+
+        try:
+            result = train_pipeline(promote=True, trigger="human_approved")
+
+            # Сбрасываем рекомендацию
+            ML_RUNTIME_STATE["retrain_recommended"] = False
+            ML_RUNTIME_STATE["retrain_recommended_reason"] = None
+            ML_RUNTIME_STATE["retrain_candidate_metrics"] = None
+            ML_RUNTIME_STATE["retrain_candidate_id"] = None
+            ML_RUNTIME_STATE["retrain_candidate_version"] = None
+            ML_RUNTIME_STATE["retrain_recommended_at"] = None
+
+            return {
+                "status": "retrain_started",
+                "message": "Training started with promotion",
+                "train_result": {
+                    "model_id": result.get("model_id"),
+                    "metrics": result.get("metrics"),
+                    "promoted": result.get("promoted", True),
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Retrain failed: {e}")
+            return {
+                "status": "failed",
+                "message": f"Training failed: {str(e)}",
+            }
+
+    def dismiss_retrain(self) -> dict:
+        """
+        Пользователь отклонил рекомендацию.
+        """
+        logger.info("❌ Retrain recommendation dismissed by user")
+
+        ML_RUNTIME_STATE["retrain_recommended"] = False
+        ML_RUNTIME_STATE["retrain_recommended_reason"] = None
+        ML_RUNTIME_STATE["retrain_candidate_metrics"] = None
+        ML_RUNTIME_STATE["retrain_candidate_id"] = None
+        ML_RUNTIME_STATE["retrain_candidate_version"] = None
+        ML_RUNTIME_STATE["retrain_recommended_at"] = None
+
+        return {
+            "status": "dismissed",
+            "message": "Retrain recommendation dismissed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_runtime_state(self) -> dict:
         return ML_RUNTIME_STATE
+
+
+
 
     # ==========================================================
     # STATUS (делегат для router)
@@ -167,4 +269,21 @@ class SystemService:
             },
             "errors": runtime_state.get("errors", []),
             "warnings": runtime_state.get("warnings", []),
+        }
+
+    # ==========================================================
+    # CLEAR Flag retrain
+    # ==========================================================
+
+    def clear_retrain(self) -> dict:
+        """
+        Сбрасывает флаг retrain_requested.
+        """
+        ML_RUNTIME_STATE["retrain_requested"] = False
+
+        logger.info("Retrain flag cleared manually")
+
+        return {
+            "retrain_requested": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }

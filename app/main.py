@@ -138,7 +138,7 @@ async def lifespan(_app: FastAPI):
 
 
     # --- Start Self-Healing Worker ---
-    self_healing_worker.start()
+    # self_healing_worker.start()
     logger.info("✅ SelfHealingWorker started")
     print("🟢 SelfHealingWorker started")
 

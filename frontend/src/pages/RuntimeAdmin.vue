@@ -1,4 +1,4 @@
-<!-- frontend\src\pages\RuntimeAdmin.vue -->
+<!-- frontend/src/pages/RuntimeAdmin.vue -->
 
 <template>
   <div>
@@ -12,7 +12,71 @@
       </button>
     </div>
 
-    <!-- ===== Operational Overview (обновленный) ===== -->
+    <!-- ========================================================= -->
+    <!-- ========== RETRAIN RECOMMENDATION CARD (НОВЫЙ) ========= -->
+    <!-- ========================================================= -->
+    <div v-if="retrainRecommendation.recommended" class="card mb-4 border-warning shadow-sm">
+      <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <div>
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <strong>Retrain Recommendation</strong>
+        </div>
+        <span class="badge bg-dark" :class="priorityBadgeClass">
+          {{ priorityText }}
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="row align-items-center">
+          <div class="col-md-8">
+            <p class="mb-2 fs-5">
+              <i class="bi bi-info-circle-fill me-2 text-primary"></i>
+              {{ retrainRecommendation.reason }}
+            </p>
+            <p v-if="retrainRecommendation.recommended_at" class="text-muted small mb-0">
+              <i class="bi bi-clock me-1"></i>
+              Recommended at: {{ formatDate(retrainRecommendation.recommended_at) }}
+            </p>
+            
+            <!-- Candidate Metrics (если есть) -->
+            <div v-if="retrainRecommendation.candidate_metrics" class="mt-3">
+              <strong class="text-primary">
+                <i class="bi bi-graph-up me-1"></i>Candidate Model Metrics:
+              </strong>
+              <table class="table table-sm table-bordered mt-2" style="width: auto; background-color: #f8f9fa;">
+                <tbody>
+                  <tr v-for="(value, key) in retrainRecommendation.candidate_metrics" :key="key">
+                    <td class="fw-bold">{{ key }}</td>
+                    <td>{{ typeof value === 'number' ? value.toFixed(6) : value }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div class="col-md-4 text-end">
+            <button 
+              class="btn btn-success me-2 px-4" 
+              @click="approveRetrain" 
+              :disabled="retrainActionLoading"
+            >
+              <span v-if="retrainActionLoading" class="spinner-border spinner-border-sm me-2"></span>
+              <i v-else class="bi bi-check-lg me-2"></i>
+              {{ retrainActionLoading ? 'Training...' : 'Approve & Train' }}
+            </button>
+            <button 
+              class="btn btn-outline-secondary" 
+              @click="dismissRetrain" 
+              :disabled="retrainActionLoading"
+            >
+              <i class="bi bi-x-lg me-1"></i>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Operational Overview ===== -->
     <div class="row g-3 mb-4">
       <!-- Model ID и Version на половинках -->
       <div class="col-md-6">
@@ -85,7 +149,8 @@
 
       <div class="col-md-3">
         <button class="btn btn-primary w-100" @click="forceRetrain" :disabled="loading">
-          Force Retrain
+          <i class="bi bi-rocket-takeoff me-1"></i>
+          Force Retrain Check
         </button>
       </div>
     </div>
@@ -177,7 +242,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, onMounted, computed } from "vue"
 import api from "../services/api"
 
 // ===== Types =====
@@ -218,6 +283,15 @@ interface RuntimeStateResponse {
   feature_order?: string[]
 }
 
+interface RetrainRecommendation {
+  recommended: boolean
+  reason: string | null
+  candidate_metrics: Record<string, any> | null
+  candidate_id: number | null
+  candidate_version: string | null
+  recommended_at: string | null
+}
+
 // ===== State =====
 const overview = ref<OverviewResponse>({
   timestamp: "",
@@ -239,9 +313,36 @@ const overview = ref<OverviewResponse>({
 })
 
 const runtimeState = ref<RuntimeStateResponse | null>(null)
+const retrainRecommendation = ref<RetrainRecommendation>({
+  recommended: false,
+  reason: null,
+  candidate_metrics: null,
+  candidate_id: null,
+  candidate_version: null,
+  recommended_at: null,
+})
+
 const showOverviewDebug = ref(false)
 const showRuntimeDebug = ref(false)
 const loading = ref(false)
+const retrainActionLoading = ref(false)
+
+// ===== Computed =====
+const priorityText = computed(() => {
+  if (!retrainRecommendation.value.recommended) return ''
+  const reason = retrainRecommendation.value.reason || ''
+  if (reason.includes('📊') || reason.includes('initial')) return 'High Priority'
+  if (reason.includes('⏰')) return 'Medium Priority'
+  return 'Info'
+})
+
+const priorityBadgeClass = computed(() => {
+  if (!retrainRecommendation.value.recommended) return ''
+  const reason = retrainRecommendation.value.reason || ''
+  if (reason.includes('📊') || reason.includes('initial')) return 'bg-danger'
+  if (reason.includes('⏰')) return 'bg-warning'
+  return 'bg-info'
+})
 
 // ===== Methods =====
 async function loadOverview() {
@@ -264,12 +365,23 @@ async function loadRuntimeState() {
   }
 }
 
+async function loadRetrainRecommendation() {
+  try {
+    const res = await api.get("/system/retrain-recommendation")
+    retrainRecommendation.value = res.data
+    console.log("📢 Retrain recommendation:", retrainRecommendation.value)
+  } catch (error) {
+    console.error("Failed to load retrain recommendation:", error)
+  }
+}
+
 async function refreshAll() {
   loading.value = true
   try {
     await Promise.all([
       loadOverview(),
-      loadRuntimeState()
+      loadRuntimeState(),
+      loadRetrainRecommendation()
     ])
     console.log("✅ All data refreshed")
   } catch (error) {
@@ -317,6 +429,47 @@ async function forceRetrain() {
   }
 }
 
+async function approveRetrain() {
+  retrainActionLoading.value = true
+  try {
+    const response = await api.post("/system/retrain-approve")
+    console.log("Retrain approved:", response.data)
+    
+    // Сбросить рекомендацию на UI
+    retrainRecommendation.value.recommended = false
+    
+    // Показать уведомление
+    alert("✅ Training started! New model will be promoted upon completion.")
+    
+    // Перезагрузить всё через несколько секунд
+    setTimeout(() => {
+      refreshAll()
+    }, 3000)
+    
+  } catch (error: any) {
+    console.error("Failed to approve retrain:", error)
+    alert(`❌ Failed to start retraining: ${error.response?.data?.message || error.message}`)
+  } finally {
+    retrainActionLoading.value = false
+  }
+}
+
+async function dismissRetrain() {
+  retrainActionLoading.value = true
+  try {
+    const response = await api.post("/system/retrain-dismiss")
+    console.log("Retrain dismissed:", response.data)
+    
+    // Сбросить рекомендацию на UI
+    retrainRecommendation.value.recommended = false
+    
+  } catch (error) {
+    console.error("Failed to dismiss retrain:", error)
+  } finally {
+    retrainActionLoading.value = false
+  }
+}
+
 function formatDate(dateStr: string) {
   if (!dateStr) return '—'
   const date = new Date(dateStr)
@@ -326,6 +479,10 @@ function formatDate(dateStr: string) {
 // ===== Lifecycle =====
 onMounted(() => {
   refreshAll()
+  // Автообновление каждые 30 секунд
+  setInterval(() => {
+    refreshAll()
+  }, 30000)
 })
 </script>
 
@@ -336,7 +493,6 @@ onMounted(() => {
   font-weight: 500;
 }
 
-/* Цвета для значений */
 .text-success {
   color: #198754 !important;
 }
@@ -357,19 +513,24 @@ onMounted(() => {
   color: #6c757d !important;
 }
 
-/* Жирный текст для выделения */
 .fw-bold {
   font-weight: 700 !important;
 }
 
-/* Убираем рамку при фокусе для readonly полей */
 .form-control:read-only {
   background-color: #fff;
   opacity: 1;
 }
 
-/* Выравнивание заголовков */
 .input-group-text {
   justify-content: center;
+}
+
+.card.border-warning {
+  border-width: 2px;
+}
+
+.bg-warning {
+  background-color: #ffc107 !important;
 }
 </style>
