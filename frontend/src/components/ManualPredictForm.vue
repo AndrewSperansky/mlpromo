@@ -11,8 +11,8 @@
       <div class="form-container">
         <div class="row">
           <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Promo ID <span class="text-danger">*</span></label>
-            <input v-model="formData.promo_id" class="form-control" :class="{ 'is-invalid': !formData.promo_id && touched }" placeholder="" />
+            <label class="form-label fw-bold">Promo ID </label>
+            <input v-model="formData.promo_id" class="form-control" placeholder="" />
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label fw-bold">Week <span class="text-danger">*</span></label>
@@ -67,29 +67,29 @@
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label fw-bold">Promo Mechanics</label>
-            <input v-model="formData.promo_mechanics" class="form-control" placeholder="na" />
+            <input v-model="formData.promo_mechanics" class="form-control" placeholder="" />
           </div>
 
           <div class="col-md-3 mb-3">
             <label class="form-label fw-bold">Adv Carrier</label>
-            <input v-model="formData.adv_carrier" class="form-control" placeholder="na" />
+            <input v-model="formData.adv_carrier" class="form-control" placeholder="" />
           </div>
 
           <div class="col-md-3 mb-3">
             <label class="form-label fw-bold">Adv Material</label>
-            <input v-model="formData.adv_material" class="form-control" placeholder="na" />
+            <input v-model="formData.adv_material" class="form-control" placeholder="" />
           </div>
         </div>
         
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label fw-bold">Format Assortment <span class="text-danger">*</span></label>
-            <input v-model="formData.format_assortment" class="form-control" :class="{ 'is-invalid': !formData.format_assortment && touched }" placeholder="na" />
+            <input v-model="formData.format_assortment" class="form-control" :class="{ 'is-invalid': !formData.format_assortment && touched }" placeholder="" />
           </div>
 
           <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Marketing Type</label>
-            <input v-model="formData.marketing_type" class="form-control" placeholder="Скидка по карте!" />
+            <label class="form-label fw-bold">Marketing Type <span class="text-danger">*</span></label>
+            <input v-model="formData.marketing_type" class="form-control" :class="{ 'is-invalid': !formData.format_assortment && touched }" placeholder="" />
           </div>
         </div>
         

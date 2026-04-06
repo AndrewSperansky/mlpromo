@@ -450,7 +450,12 @@ async function runCSVPrediction() {
       }
 
       const response = await predictBatch([payload])
-      const data = response.data
+      const results = response.data.predictions || response.data
+      
+      // 🔥 ПРАВИЛЬНАЯ ОБРАБОТКА: берём первый элемент из массива predictions
+      const data = results[0] || {}
+      
+      console.log('🔍 Processed data:', data)
 
       if (data.k_uplift !== undefined) {
         predictions.value.push({
@@ -476,8 +481,12 @@ async function runCSVPrediction() {
       }
     }
 
-    await nextTick()
-    renderChart()
+    console.log('🔍 FINAL predictions.value:', predictions.value)
+    
+    if (predictions.value.length > 0) {
+      await nextTick()
+      renderChart()
+    }
 
   } catch (error) {
     console.error("Prediction error:", error)

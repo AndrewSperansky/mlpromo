@@ -598,7 +598,7 @@ onMounted(() => {
   refreshAll()
   setInterval(() => {
     refreshAll()
-  }, 30000)
+  }, 300000)
 })
 </script>
 
