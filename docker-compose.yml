@@ -16,6 +16,7 @@ services:
     volumes:
       - backend-logs:/app/logs
       - ./models:/app/models
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "8000:8000"
     depends_on:

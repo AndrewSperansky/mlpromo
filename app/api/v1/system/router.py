@@ -10,11 +10,14 @@ from sqlalchemy import text
 from app.db.session import get_db
 from app.services.system_service import SystemService
 from app.core.settings import settings
+from app.services.docker_service import DockerService
 
 
 service = SystemService()
 
 router = APIRouter(tags=["system"])
+
+docker_service = DockerService()
 
 
 # ==========================================================
@@ -173,3 +176,15 @@ def clear_training_result():
 def get_training_result():
     """Возвращает результат последнего обучения"""
     return service.get_training_result()
+
+
+# ==========================================================
+# DOCKER CONTAINERS STATUS
+# ==========================================================
+
+@router.get("/containers-status")
+def get_containers_status():
+    """
+    Возвращает статус Docker контейнеров проекта.
+    """
+    return docker_service.get_containers_status()

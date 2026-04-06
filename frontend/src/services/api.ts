@@ -317,3 +317,9 @@ export const deleteDataset = (datasetId: string, force: boolean = false) => {
 
     return api.delete(url);
 };
+
+
+// ============================
+// Docker Containers Status
+// ============================
+export const getContainersStatus = () => api.get('/system/containers-status')
