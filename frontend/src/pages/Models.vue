@@ -6,7 +6,7 @@
       <h2>Model Registry</h2>
 
       <div class="d-flex mt-4 gap-2 align-items-center">
-        <button class="btn btn-primary" :disabled="training" @click="openTrainModal">
+        <button class="btn btn-primary" :disabled="training" @click="showTrainModal = true">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
@@ -30,7 +30,7 @@
       class="mt-4" 
       :models="models" 
       @activate="openActivateModal" 
-      @deactivate="handleDeactivate"
+      @deactivate="openDeactivateModal"
       @rollback="handleRollback" 
       @evaluate="handleEvaluate" 
       @row-click="goToModel" 
@@ -41,68 +41,37 @@
       Show Activation History
     </button>
 
-    <!-- TRAIN MODAL -->
-    <div v-if="showTrainModal" class="modal-backdrop">
-      <div class="modal-box">
-        <h5>Confirm Training</h5>
-        <p>Train model on the entire dataset?</p>
-        <p class="text-muted small">Model will be trained on all available data</p>
+    <!-- Модальные окна -->
+    <TrainModal 
+      :show="showTrainModal" 
+      :training="training"
+      @close="showTrainModal = false" 
+      @confirm="handleTrain" 
+    />
 
-        <div class="mt-3 d-flex justify-content-end gap-2">
-          <button class="btn btn-secondary" @click="showTrainModal = false">Cancel</button>
-          <button class="btn btn-primary" :disabled="training" @click="handleTrain">Confirm</button>
-        </div>
-      </div>
-    </div>
+    <ActivateModal 
+      :show="showActivateModal" 
+      :modelId="selectedModelForActivation"
+      @close="showActivateModal = false" 
+      @confirm="confirmActivate" 
+    />
 
-    <!-- ACTIVATE MODAL -->
-    <div v-if="showActivateModal" class="modal-backdrop">
-      <div class="modal-box">
-        <h5>Activate Model</h5>
-        <p>Activate model:</p>
-        <strong>{{ selectedModelForActivation }}</strong>
+    <DeactivateModal 
+      :show="showDeactivateModal" 
+      :modelId="selectedModelForDeactivation"
+      @close="showDeactivateModal = false" 
+      @confirm="confirmDeactivate" 
+    />
 
-        <div class="mt-3 d-flex justify-content-end gap-2">
-          <button class="btn btn-secondary" @click="showActivateModal = false">Cancel</button>
-          <button class="btn btn-success" @click="confirmActivate">Activate</button>
-        </div>
-      </div>
-    </div>
+    <DeleteModal 
+      :show="showDeleteModal" 
+      :modelId="modelToDelete"
+      @close="showDeleteModal = false" 
+      @confirm="confirmDelete" 
+    />
 
-    <!-- DEACTIVATE MODAL -->
-    <div v-if="showDeactivateModal" class="modal-backdrop">
-      <div class="modal-box">
-        <h5>Deactivate Model</h5>
-        <p>Deactivate model:</p>
-        <strong>{{ selectedModelForDeactivation }}</strong>
-        <p class="text-warning mt-2">⚠️ This model will no longer be used for predictions!</p>
-
-        <div class="mt-3 d-flex justify-content-end gap-2">
-          <button class="btn btn-secondary" @click="showDeactivateModal = false">Cancel</button>
-          <button class="btn btn-warning" @click="confirmDeactivate">Deactivate</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- DELETE MODAL -->
-    <div v-if="showDeleteModal" class="modal-backdrop" @click.self="showDeleteModal = false">
-      <div class="modal-box">
-        <h5 class="text-danger">Confirm Deletion</h5>
-        <p>Are you sure you want to delete model:</p>
-        <strong>ID: {{ modelToDelete }}</strong>
-        <p class="text-warning mt-2">⚠️ This action cannot be undone!</p>
-
-        <div class="mt-3 d-flex justify-content-end gap-2">
-          <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
-          <button class="btn btn-danger" @click="confirmDelete">Delete Permanently</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODEL DETAIL MODAL -->
     <ModelDetailsModal :modelId="selectedModelId" @closed="selectedModelId = null" />
 
-    <!-- COMPARE MODALS -->
     <CompareModelsModal 
       :show="showCompareModal" 
       :models="models" 
@@ -133,6 +102,10 @@ import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 import CompareModelsModal from '../components/CompareModelsModal.vue'
 import ActivationHistoryModal from '../components/ActivationHistoryModal.vue'
+import TrainModal from '../components/TrainModal.vue'
+import ActivateModal from '../components/ActivateModal.vue'
+import DeactivateModal from '../components/DeactivateModal.vue'
+import DeleteModal from '../components/DeleteModal.vue'
 
 const models = ref<ModelItem[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -167,25 +140,26 @@ function goToModel(id: number) {
   selectedModelId.value = id
 }
 
-function openTrainModal() {
-  showTrainModal.value = true
-}
-
 async function handleTrain() {
   try {
     training.value = true
     const response = await trainModel({ promote: false })
     uploadResult.value = response.data
     await loadModels()
+    showTrainModal.value = false
   } finally {
     training.value = false
-    showTrainModal.value = false
   }
 }
 
 function openActivateModal(modelId: number) {
   selectedModelForActivation.value = modelId.toString()
   showActivateModal.value = true
+}
+
+function openDeactivateModal(modelId: number) {
+  selectedModelForDeactivation.value = modelId.toString()
+  showDeactivateModal.value = true
 }
 
 async function confirmActivate() {
@@ -198,11 +172,6 @@ async function confirmDeactivate() {
   await deactivateModel(Number(selectedModelForDeactivation.value))
   showDeactivateModal.value = false
   await loadModels()
-}
-
-async function handleDeactivate(modelId: number) {
-  selectedModelForDeactivation.value = modelId.toString()
-  showDeactivateModal.value = true
 }
 
 async function handleEvaluate(modelId: number) {
@@ -264,23 +233,3 @@ onMounted(() => {
   loadModels()
 })
 </script>
-
-<style scoped>
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1050;
-}
-
-.modal-box {
-  background: white;
-  padding: 24px;
-  border-radius: 8px;
-  width: 400px;
-  max-width: 90vw;
-}
-</style>
