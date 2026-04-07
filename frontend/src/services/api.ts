@@ -97,11 +97,20 @@ export const getModels = () =>
     api.get<ModelItem[]>('/ml/models')
 
 // ============================
-// MODEL ACTIVATE
+// MODEL ACTIVATE / DEACTIVATE
 // ============================ 
 
-export const activateModel = (modelId: string) =>
-    api.post(`/ml/models/${modelId}/activate`)
+export const activateModel = (modelId: number, force: boolean = false) =>
+    api.post(`/ml/models/${modelId}/activate${force ? '?force=true' : ''}`)
+
+
+export const promoteModel = (modelId: number) =>
+    api.post(`/ml/models/${modelId}/promote`)
+
+
+export const deactivateModel = (modelId: number) =>
+    api.post(`/ml/models/${modelId}/deactivate`)
+
 
 // ============================
 // MODEL UPLOAD
@@ -225,11 +234,6 @@ export const fetchModelDetails = async (modelId: number): Promise<Model> => {
 export const fetchModelMetrics = (modelId: number) =>
     api.get(`/ml/models/${modelId}/metrics`)
 
-export const promoteModel = (modelId: number) =>
-    api.post(`/ml/models/${modelId}/promote`)
-
-export const deactivateModel = (modelId: number) =>
-    api.post(`/ml/models/${modelId}/deactivate`)
 
 export default api
 

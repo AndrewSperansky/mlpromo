@@ -411,12 +411,13 @@ def list_models(db: Session = Depends(get_db)):
 @router.post("/models/{model_id}/activate")
 def promote_model(
     model_id: int,
+    force: bool = False,
     db: Session = Depends(get_db),
 ):
     controller = ModelActivationController()
 
     try:
-        return controller.promote_model(model_id, db)
+        return controller.promote_model(model_id, db, force=force)
 
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -854,8 +855,9 @@ def get_dataset_info(db: Session = Depends(get_db)):
         ]
     }
 
-
+# ==============================
 # ОТЛАДОЧНЫЙ ENDPOINT
+# ==============================
 
 @router.get("/dataset/batch/{batch_id}/debug")
 def debug_batch(
@@ -933,3 +935,16 @@ def get_training_metrics():
             "best_iteration": None,
             "error": str(e)
         }
+
+
+# ==============================
+# ОТЛАДОЧНЫЙ ENDPOINT
+# ==============================
+
+@router.get("/models/debug/{model_id}")
+def debug_model(model_id: int, db: Session = Depends(get_db)):
+    registry = ModelRegistryService(db)
+    model = registry.get_model(model_id)
+    if model:
+        return {"id": model.id, "model_path": model.model_path, "is_active": model.is_active}
+    return {"error": "Model not found"}

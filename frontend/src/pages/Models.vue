@@ -53,7 +53,7 @@
       :show="showActivateModal" 
       :modelId="selectedModelForActivation"
       @close="showActivateModal = false" 
-      @confirm="confirmActivate" 
+      @activated="handleModelActivated" 
     />
 
     <DeactivateModal 
@@ -89,7 +89,7 @@
 import { ref, onMounted } from 'vue'
 import {
   getModels,
-  activateModel,
+  //activateModel,
   deactivateModel,
   uploadModel,
   evaluateModel,
@@ -98,6 +98,7 @@ import {
   deleteModel,
   type ModelItem,
 } from '../services/api'
+
 import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 import CompareModelsModal from '../components/CompareModelsModal.vue'
@@ -125,6 +126,14 @@ const showHistoryModal = ref(false)
 const selectedModelForActivation = ref<string>('')
 const selectedModelForDeactivation = ref<string>('')
 const modelToDelete = ref<number | null>(null)
+
+//const showErrorModal = ref(false)
+//const errorMessage = ref('')
+
+async function handleModelActivated() {
+  await loadModels()
+  alert('✅ Model activated successfully!')
+}
 
 async function loadModels() {
   const response = await getModels()
@@ -162,11 +171,17 @@ function openDeactivateModal(modelId: number) {
   showDeactivateModal.value = true
 }
 
-async function confirmActivate() {
-  await activateModel(selectedModelForActivation.value)
-  showActivateModal.value = false
-  await loadModels()
-}
+/* async function confirmActivate(force: boolean = false) {
+  try {
+    await activateModel(Number(selectedModelForActivation.value), force)
+    showActivateModal.value = false
+    await loadModels()
+    alert('✅ Model activated successfully!')
+  } catch (error: any) {
+    const detail = error.response?.data?.detail || error.message
+    alert(`❌ Activation failed: ${detail}`)
+  }
+} */
 
 async function confirmDeactivate() {
   await deactivateModel(Number(selectedModelForDeactivation.value))

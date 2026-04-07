@@ -120,10 +120,11 @@ class ModelRegistryService:
             logger.info("🎯 No active model found, this will be the first champion")
 
         # 4. Деактивируем ВСЕ активные модели
+        logger.info(f"📊 Deactivating all active models...")
         deactivated = self.db.query(MLModel).filter(
             MLModel.is_active == True
         ).update({"is_active": False})
-
+        logger.info(f"🔴 Deactivated {deactivated} model(s)")
         if deactivated:
             logger.info(f"🔴 Deactivated {deactivated} existing model(s)")
 
@@ -357,3 +358,20 @@ class ModelRegistryService:
             else:
                 improvement = (new_value - current_value) / current_value * 100
                 logger.info(f"   ✅ {metric_name} improved by {improvement:.4f}%")
+
+
+
+    def force_promote_model(self, model_id: int) -> MLModel:
+        """Принудительная активация без проверки метрик"""
+        new_model = self.get_model(model_id)
+        if new_model is None:
+            raise ValueError(f"Model {model_id} not found")
+
+        # Деактивируем все активные модели
+        self.db.query(MLModel).filter(MLModel.is_active == True).update({"is_active": False})
+
+        # Активируем новую
+        new_model.is_active = True
+        self.db.commit()
+
+        return new_model

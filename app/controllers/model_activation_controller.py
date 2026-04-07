@@ -12,11 +12,17 @@ logger = logging.getLogger(__name__)
 
 class ModelActivationController:
 
-    def promote_model(self, model_id: int, db: Session) -> dict:
+    def promote_model(self, model_id: int, db: Session, force: bool = False) -> dict:
         registry = ModelRegistryService(db)
 
+        if force:
+            # Принудительная активация — пропускаем проверку метрик
+            model = registry.force_promote_model(model_id)
+        else:
+            model = registry.promote_model(model_id)
+
         # 1. Promote (внутри уже commit)
-        model = registry.promote_model(model_id)
+        # model = registry.promote_model(model_id)
 
         # 2. Обновляем runtime state
         ML_RUNTIME_STATE["ml_model_id"] = model.id
