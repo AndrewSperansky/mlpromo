@@ -258,11 +258,20 @@ export const getActivationHistory = (limit: number = 10) =>
 export const predict = (payload: any) =>
     api.post('/ml/predict', payload)  
 
+
+// Прогноз с интервалом (использует тот же эндпоинт, но ожидает interval в ответе)
+export async function predictWithInterval(data: any) {
+  const response = await api.post('/ml/predict', data)
+  return response.data
+}
+
+
 // Для batch прогноза — отправляем массив в эндпоинт /predict/batch
 export const predictBatch = (requests: any[]) => {
   console.log('📤 Sending batch request with', requests.length, 'items')
   return api.post('/ml/predict/batch', { requests })
 }
+
 
 // ============================
 // AUDIT

@@ -6,11 +6,7 @@
 
     <!-- ===== CARDS ЗДОРОВЬЯ КОНТЕЙНЕРОВ ===== -->
     <div class="row g-3 mb-4">
-      <div 
-        v-for="(container, name) in containers" 
-        :key="name" 
-        class="col-md-3 col-lg-2"
-      >
+      <div v-for="(container, name) in containers" :key="name" class="col-md-3 col-lg-2">
         <div class="card h-100 border-0 shadow-sm" :class="getContainerCardClass(container)">
           <div class="card-body p-3">
             <div class="d-flex justify-content-between align-items-start">
@@ -114,7 +110,8 @@
                     {{ overview.runtime.freeze_flag ? 'Frozen' : 'Active' }}
                   </span>
                 </h3>
-                <small class="text-muted">Auto-promotion is {{ overview.runtime.freeze_flag ? 'disabled' : 'enabled' }}</small>
+                <small class="text-muted">Auto-promotion is {{ overview.runtime.freeze_flag ? 'disabled' : 'enabled'
+                  }}</small>
               </div>
               <div class="rounded-circle p-2" :class="overview.runtime.freeze_flag ? 'bg-warning' : 'bg-success'">
                 <i class="bi bi-rocket-takeoff fs-4 text-white"></i>
@@ -125,13 +122,42 @@
       </div>
     </div>
 
+
+    <!-- ===== TRAINING CURVE CHART ===== -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-12">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0">
+            <h6 class="mb-0">
+              <i class="bi bi-graph-up me-2"></i>Training Curve
+            </h6>
+          </div>
+          <div class="card-body">
+            <canvas id="trainingChart" ref="trainingChartRef" height="100"></canvas>
+            <div v-if="trainingData?.best_iteration" class="text-muted small mt-2">
+              Best iteration: {{ trainingData.best_iteration }} (RMSE: {{ trainingData.best_rmse?.toFixed(6) }})
+            </div>
+            <div v-else-if="trainingData?.message" class="text-muted small mt-2">
+              {{ trainingData.message }}
+            </div>
+            <div v-else-if="trainingData?.error" class="text-danger small mt-2">
+              Error: {{ trainingData.error }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
     <!-- ===== PERFORMANCE CARDS ===== -->
     <div class="row g-3 mb-4">
       <div class="col-md-4">
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body">
             <h6 class="text-muted mb-2"><i class="bi bi-stopwatch me-1"></i> Latency P95</h6>
-            <h2 class="mb-0">{{ overview.telemetry.latency_p95_ms?.toFixed(0) ?? '—' }} <small class="fs-6 text-muted">ms</small></h2>
+            <h2 class="mb-0">{{ overview.telemetry.latency_p95_ms?.toFixed(0) ?? '—' }} <small
+                class="fs-6 text-muted">ms</small></h2>
             <small class="text-muted">Last 100 predictions</small>
           </div>
         </div>
@@ -194,7 +220,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import Chart from 'chart.js/auto'
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { getContainersStatus } from '../services/api'
 
@@ -248,6 +275,16 @@ const overview = ref<OverviewResponse>({
 
 const containers = ref<Record<string, ContainerInfo>>({})
 const containersTimestamp = ref('')
+const trainingChartRef = ref<HTMLCanvasElement | null>(null)
+let trainingChartInstance: Chart | null = null
+const trainingData = ref<{
+  iterations: number[];
+  rmse: number[];
+  best_iteration: number;
+  best_rmse: number;
+  message?: string;
+  error?: string;
+} | null>(null)
 
 let intervalId: number | null = null
 
@@ -256,7 +293,7 @@ const healthStatus = computed(() => {
   const hasErrors = overview.value.errors.length > 0
   const modelLoaded = overview.value.runtime.model_loaded
   const driftDetected = overview.value.runtime.drift_flag
-  
+
   if (hasErrors) return 'Degraded'
   if (!modelLoaded) return 'Warning'
   if (driftDetected) return 'Attention'
@@ -340,7 +377,7 @@ function getContainerUptime(container: ContainerInfo): string {
   const diffMs = now.getTime() - startTime.getTime()
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-  
+
   if (diffHours > 0) {
     return `Up ${diffHours}h ${diffMinutes}m`
   }
@@ -382,9 +419,81 @@ function formatTime(dateStr: string) {
   return date.toLocaleTimeString('ru-RU')
 }
 
+
+async function loadTrainingMetrics() {
+  try {
+    const response = await axios.get('/api/v1/ml/training/metrics')
+    trainingData.value = response.data
+
+    // Исправлено: проверяем не null и наличие данных
+    if (trainingData.value && trainingData.value.iterations && trainingData.value.iterations.length > 0) {
+      await nextTick()
+      renderTrainingChart()
+    }
+  } catch (error) {
+    console.error('Failed to load training metrics:', error)
+  }
+}
+
+
+function renderTrainingChart() {
+  if (!trainingChartRef.value || !trainingData.value) return
+  if (trainingChartInstance) trainingChartInstance.destroy()
+
+  const ctx = trainingChartRef.value.getContext('2d')
+  if (!ctx) return
+
+  trainingChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trainingData.value.iterations,
+      datasets: [{
+        label: 'RMSE',
+        data: trainingData.value.rmse,
+        borderColor: 'rgb(75, 192, 192)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        fill: true,
+        tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            // Исправлено: явно указываем тип для context
+            label: (context: any) => {
+              const value = context.raw as number
+              return `RMSE: ${value.toFixed(6)}`
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          title: {
+            display: true,
+            text: 'RMSE'
+          }
+        },
+        x: {
+          title: {
+            display: true,
+            text: 'Iteration'
+          }
+        }
+      }
+    }
+  })
+}
+
+
+
 onMounted(() => {
   loadDashboard()
   loadContainersStatus()
+  loadTrainingMetrics()
   intervalId = setInterval(() => {
     loadDashboard()
     loadContainersStatus()

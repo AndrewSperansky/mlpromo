@@ -134,10 +134,44 @@ class ModelRegistryService:
 
         logger.info(f"🟢 Activated new champion: {new_model.name}:{new_model.version} (id={new_model.id})")
 
-        # 6. Перемещаем файлы
+        # 6. После активации модели, обновляем meta.json в current директории
+        self._update_current_meta(new_model)
+
+        # 7. Перемещаем файлы
         self._move_model_files(new_model)
 
         return new_model
+
+
+    def _update_current_meta(self, model: MLModel) -> None:
+        """Обновляет meta.json в директории current"""
+        try:
+            import json
+            from pathlib import Path
+
+            models_dir = Path("/app/models")
+            current_dir = models_dir / "current"
+            meta_path = current_dir / "cb_promo_v1.meta.json"
+
+            if meta_path.exists():
+                with open(meta_path, 'r') as f:
+                    meta = json.load(f)
+
+                # Добавляем conformal данные из метрик модели
+                if model.metrics and isinstance(model.metrics, dict):
+                    conformal = model.metrics.get("conformal")
+                    if conformal:
+                        meta["conformal"] = conformal
+                        meta["conformal_q_hat"] = conformal.get("q_hat")
+
+                        with open(meta_path, 'w') as f:
+                            json.dump(meta, f, indent=2)
+
+                        logger.info(f"✅ Updated meta.json with conformal data: q_hat={conformal.get('q_hat')}")
+        except Exception as e:
+            logger.warning(f"Failed to update meta.json: {e}")
+
+
 
     def _move_model_files(self, model: MLModel) -> None:
         """Перемещает файлы модели в папку current"""

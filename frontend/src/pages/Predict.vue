@@ -169,17 +169,29 @@
                   <th>Прогноз (шт)</th>
                   <th>Baseline</th>
                   <th>Прирост</th>
+                  <th>95% Interval</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(item, idx) in predictions" :key="idx">
                   <td class="fw-bold">{{ idx + 1 }}</td>
-                  <td class="fw-bold text-primary">{{ item.promo_price.toFixed(2) }} ₽</td>
-                  <td class="text-info fw-bold">{{ item.k_uplift.toFixed(3) }}x</td>
-                  <td class="text-success fw-bold">{{ item.prediction_absolute.toFixed(2) }}</td>
-                  <td class="text-secondary">{{ item.baseline.toFixed(2) }}</td>
-                  <td :class="item.uplift_percent >= 0 ? 'text-success' : 'text-danger'">
-                    {{ item.uplift_percent >= 0 ? '+' : '' }}{{ item.uplift_percent.toFixed(1) }}%
+                  <td class="fw-bold text-primary">
+                    {{ formatNumber(item.promo_price, 2) }} ₽
+                  </td>
+                  <td class="text-info fw-bold">
+                    {{ formatNumber(item.k_uplift, 3) }}x
+                  </td>
+                  <td class="text-success fw-bold">
+                    {{ formatNumber(item.prediction_absolute, 2) }}
+                  </td>
+                  <td class="text-secondary">
+                    {{ formatNumber(item.baseline, 2) }}
+                  </td>
+                  <td :class="getUpliftClass(item.uplift_percent)">
+                    {{ formatUplift(item.uplift_percent) }}
+                  </td>
+                  <td class="text-muted small">
+                    {{ formatInterval(item) }}
                   </td>
                 </tr>
               </tbody>
@@ -246,6 +258,8 @@ interface PredictionResult {
   uplift_percent: number
   store_id?: string
   promo_price: number
+  interval?: { lower: number[]; upper: number[] }  // ← добавить
+  has_interval?: boolean  // ← добавить
 }
 
 // Режим ввода
@@ -256,6 +270,7 @@ const manualRows = ref<RowData[]>([])
 const showModal = ref(false)
 const editingIndex = ref<number | null>(null)
 const editingRow = ref<RowData | null>(null)
+
 
 // CSV ввод
 const csvRows = ref<CsvRow[]>([])
@@ -271,6 +286,9 @@ const csvStatusText = computed(() => {
   if (csvRows.value.length === 0) return 'No data loaded'
   return `Ready to predict (${csvRows.value.length} samples)`
 })
+
+
+
 
 // ==================== РУЧНОЙ ВВОД ====================
 function openAddForm() {
@@ -336,13 +354,16 @@ async function runManualPrediction() {
     const response = await predictBatch(requests)
     const results = response.data.predictions || response.data
 
+    // ✅ ВОТ СЮДА — обновлённый map с interval
     predictions.value = results.map((p: any) => ({
       k_uplift: p.k_uplift,
       baseline: p.baseline,
       prediction_absolute: p.prediction_absolute,
       uplift_percent: p.uplift_percent,
       store_id: p.store_id,
-      promo_price: p.promo_price
+      promo_price: p.promo_price,
+      interval: p.interval,        // ← добавить
+      has_interval: p.has_interval  // ← добавить
     }))
 
     if (results[0]?.shap_values?.length) {
@@ -417,6 +438,39 @@ function parseCSV(text: string) {
   console.log("📦 parsed rows", csvRows.value)
 }
 
+// Вспомогательные функции для безопасного форматирования
+function formatNumber(value: any, decimals: number = 2): string {
+  if (value === null || value === undefined || isNaN(value)) return '?'
+  return Number(value).toFixed(decimals)
+}
+
+function getUpliftClass(value: any): string {
+  const num = Number(value)
+  if (isNaN(num)) return 'text-secondary'
+  return num >= 0 ? 'text-success' : 'text-danger'
+}
+
+function formatUplift(value: any): string {
+  const num = Number(value)
+  if (isNaN(num)) return '0%'
+  const prefix = num >= 0 ? '+' : ''
+  return `${prefix}${num.toFixed(1)}%`
+}
+
+function formatInterval(item: any): string {
+  if (!item.has_interval || !item.interval) return '—'
+  const lower = item.interval.lower
+  const upper = item.interval.upper
+  if (lower === undefined || upper === undefined) return '—'
+  if (isNaN(lower) || isNaN(upper)) return '—'
+  return `[${lower.toFixed(2)} — ${upper.toFixed(2)}]`
+}
+
+// ======================================
+// CSV Prediction
+// ======================================
+
+
 async function runCSVPrediction() {
   if (csvRows.value.length === 0) {
     alert('No data to predict')
@@ -451,20 +505,25 @@ async function runCSVPrediction() {
 
       const response = await predictBatch([payload])
       const results = response.data.predictions || response.data
-      
+
       // 🔥 ПРАВИЛЬНАЯ ОБРАБОТКА: берём первый элемент из массива predictions
       const data = results[0] || {}
-      
+
       console.log('🔍 Processed data:', data)
+      console.log('🔍 Interval:', data.interval)
+      console.log('🔍 Has interval:', data.has_interval)
+
 
       if (data.k_uplift !== undefined) {
         predictions.value.push({
-          k_uplift: data.k_uplift,
-          baseline: data.baseline,
-          prediction_absolute: data.prediction_absolute,
-          uplift_percent: data.uplift_percent,
-          store_id: payload.store_id,
-          promo_price: payload.promo_price
+          k_uplift: data.k_uplift ?? 0,
+          baseline: data.baseline ?? 0,
+          prediction_absolute: data.prediction_absolute ?? 0,
+          uplift_percent: data.uplift_percent ?? 0,
+          store_id: payload.store_id ?? '',
+          promo_price: payload.promo_price ?? 0,
+          interval: data.interval ?? null,
+          has_interval: data.has_interval ?? false
         })
       }
 
@@ -482,7 +541,8 @@ async function runCSVPrediction() {
     }
 
     console.log('🔍 FINAL predictions.value:', predictions.value)
-    
+    console.log('🔍 FINAL predictions.value:', JSON.stringify(predictions.value, null, 2))
+
     if (predictions.value.length > 0) {
       await nextTick()
       renderChart()
@@ -546,7 +606,10 @@ function renderChart() {
       }
     }
   })
-}
+} // end of renderChart
+
+
+
 </script>
 
 <style scoped>

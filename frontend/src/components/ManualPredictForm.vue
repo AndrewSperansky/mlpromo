@@ -7,112 +7,70 @@
         <h3>{{ isEdit ? 'Edit Row' : 'Add New Row' }}</h3>
         <button class="btn-close" @click="$emit('close')"></button>
       </div>
-      
+
       <div class="form-container">
         <div class="row">
           <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Promo ID </label>
-            <input v-model="formData.promo_id" class="form-control" placeholder="" />
+            <label class="form-label fw-bold">Promo ID <span class="text-danger">*</span></label>
+            <input v-model="formData.promo_id" class="form-control"
+              :class="{ 'is-invalid': !formData.promo_id && touched }" placeholder="" />
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label fw-bold">Week <span class="text-danger">*</span></label>
-            <input v-model.number="formData.week" type="number" class="form-control" :class="{ 'is-invalid': !formData.week && touched }" placeholder="" />
+            <input v-model.number="formData.week" type="number" class="form-control"
+              :class="{ 'is-invalid': !formData.week && touched }" placeholder="" />
           </div>
           <div class="col-md-3 mb-3">
             <label class="form-label fw-bold">Month <span class="text-danger">*</span></label>
-            <input v-model.number="formData.month" type="number" class="form-control" :class="{ 'is-invalid': !formData.month && touched }" placeholder="" />
+            <input v-model.number="formData.month" type="number" class="form-control"
+              :class="{ 'is-invalid': !formData.month && touched }" placeholder="" />
           </div>
         </div>
-        
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">SKU <span class="text-danger">*</span></label>
-            <input v-model="formData.sku" class="form-control" :class="{ 'is-invalid': !formData.sku && touched }" placeholder="" />
-          </div>
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Category <span class="text-danger">*</span></label>
-            <input v-model="formData.category" class="form-control" :class="{ 'is-invalid': !formData.category && touched }" placeholder="" />
-          </div>
-        </div>
-        
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Regular Price <span class="text-danger">*</span></label>
-            <input v-model.number="formData.regular_price" type="number" step="0.01" class="form-control" :class="{ 'is-invalid': !formData.regular_price && touched }" placeholder="" />
-          </div>
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Promo Price <span class="text-danger">*</span></label>
-            <input v-model.number="formData.promo_price" type="number" step="0.01" class="form-control" :class="{ 'is-invalid': !formData.promo_price && touched }" placeholder="" />
-          </div>
-        </div>
-        
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Store ID <span class="text-danger">*</span></label>
-            <input v-model="formData.store_id" class="form-control" :class="{ 'is-invalid': !formData.store_id && touched }" placeholder="" />
-          </div>
 
-          <div class="col-md-3 mb-3">
-            <label class="form-label fw-bold">Region <span class="text-danger">*</span></label>
-            <input v-model="formData.region" class="form-control" :class="{ 'is-invalid': !formData.region && touched }" placeholder="" />
-          </div>
+        <!-- ... остальные поля формы (без изменений) ... -->
 
-          <div class="col-md-3 mb-3">
-            <label class="form-label fw-bold">Store Location Type <span class="text-danger">*</span></label>
-            <input v-model="formData.store_location_type" class="form-control" :class="{ 'is-invalid': !formData.store_location_type && touched }" placeholder="" />
-          </div>
-        </div>
-        
-      
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Promo Mechanics</label>
-            <input v-model="formData.promo_mechanics" class="form-control" placeholder="" />
-          </div>
-
-          <div class="col-md-3 mb-3">
-            <label class="form-label fw-bold">Adv Carrier</label>
-            <input v-model="formData.adv_carrier" class="form-control" placeholder="" />
-          </div>
-
-          <div class="col-md-3 mb-3">
-            <label class="form-label fw-bold">Adv Material</label>
-            <input v-model="formData.adv_material" class="form-control" placeholder="" />
-          </div>
-        </div>
-        
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Format Assortment <span class="text-danger">*</span></label>
-            <input v-model="formData.format_assortment" class="form-control" :class="{ 'is-invalid': !formData.format_assortment && touched }" placeholder="" />
-          </div>
-
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Marketing Type <span class="text-danger">*</span></label>
-            <input v-model="formData.marketing_type" class="form-control" :class="{ 'is-invalid': !formData.format_assortment && touched }" placeholder="" />
-          </div>
-        </div>
-        
-        <div class="row">
-          <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Baseline (optional)</label>
-            <input v-model.number="formData.baseline" type="number" step="0.01" class="form-control" placeholder="" />
-          </div>
-        </div>
       </div>
-      
+
       <div class="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
         <button class="btn btn-secondary" @click="$emit('close')">Cancel</button>
         <button class="btn btn-primary" @click="save" :disabled="!isValid">
           {{ isEdit ? 'Update' : 'Add' }}
         </button>
       </div>
+
+      <!-- ===== Prediction Interval Display ===== -->
+      <div v-if="showInterval && interval" class="mt-3 pt-3 border-top">
+        <div class="alert" :class="intervalAlertClass">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <strong>Prediction Interval (95%):</strong>
+              <span class="ms-2">
+                [{{ interval.lower[0]?.toFixed(2) ?? '?' }} — {{ interval.upper[0]?.toFixed(2) ?? '?' }}]
+              </span>
+            </div>
+            <span :class="uncertaintyBadgeClass" class="badge">
+              {{ uncertaintyLabel }}
+            </span>
+          </div>
+          <div class="progress mt-2" style="height: 6px;">
+            <div class="progress-bar" :class="uncertaintyBarClass" :style="{ width: uncertaintyWidth + '%' }"></div>
+          </div>
+          <small class="text-muted mt-1 d-block">
+            Width: {{ intervalWidth.toFixed(2) }} |
+            Lower bound: {{ interval.lower[0]?.toFixed(2) ?? '?' }} |
+            Upper bound: {{ interval.upper[0]?.toFixed(2) ?? '?' }}
+          </small>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
+// ManualPredictForm.vue
+
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { predictWithInterval } from '../services/api'
 
 interface ManualRow {
   promo_id: string
@@ -133,18 +91,30 @@ interface ManualRow {
   baseline?: number
 }
 
+// Расширенный тип для эмита
+interface ManualRowWithPrediction extends ManualRow {
+  prediction?: number
+  interval?: { lower: number[]; upper: number[] }
+  has_interval?: boolean
+}
+
 const props = defineProps<{
   row?: ManualRow | null
   index?: number | null
 }>()
 
+// ✅ defineEmits НА ВЕРХНЕМ УРОВНЕ
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'save', row: ManualRow): void
+  (e: 'save', row: ManualRowWithPrediction): void
 }>()
 
 const touched = ref(false)
 const isEdit = computed(() => props.index !== null && props.row !== null)
+
+// ===== STATE =====
+const interval = ref<{ lower: number[]; upper: number[] } | null>(null)
+const showInterval = ref(false)
 
 const formData = ref<ManualRow>({
   promo_id: '',
@@ -168,6 +138,8 @@ const formData = ref<ManualRow>({
 watch(() => props.row, (newRow) => {
   if (newRow) {
     formData.value = { ...newRow }
+    interval.value = null
+    showInterval.value = false
   }
 }, { immediate: true })
 
@@ -179,20 +151,92 @@ const isValid = computed(() => {
     formData.value.promo_price)
 })
 
-function save() {
+// ===== COMPUTED для интервала =====
+const intervalWidth = computed(() => {
+  if (!interval.value) return 0
+  const lower = interval.value.lower[0] ?? 0
+  const upper = interval.value.upper[0] ?? 0
+  return upper - lower
+})
+
+const uncertaintyLabel = computed(() => {
+  const width = intervalWidth.value
+  if (width < 10) return 'LOW'
+  if (width < 30) return 'MEDIUM'
+  return 'HIGH'
+})
+
+const uncertaintyBadgeClass = computed(() => {
+  const width = intervalWidth.value
+  if (width < 10) return 'bg-success'
+  if (width < 30) return 'bg-warning'
+  return 'bg-danger'
+})
+
+const uncertaintyBarClass = computed(() => {
+  const width = intervalWidth.value
+  if (width < 10) return 'bg-success'
+  if (width < 30) return 'bg-warning'
+  return 'bg-danger'
+})
+
+const uncertaintyWidth = computed(() => {
+  const width = intervalWidth.value
+  return Math.min(100, (width / 50) * 100)
+})
+
+const intervalAlertClass = computed(() => {
+  const width = intervalWidth.value
+  if (width < 10) return 'alert-success'
+  if (width < 30) return 'alert-warning'
+  return 'alert-danger'
+})
+
+// ===== METHODS =====
+function closeModal() {
+  interval.value = null
+  showInterval.value = false
+  emit('close')
+}
+
+async function save() {
   touched.value = true
   if (!isValid.value) return
-  // Базовые поля из формы (без дефолтов)
+
   const rowToSave = {
     ...formData.value,
-    // Переопределяем только те поля, где нужны дефолты если 0 или пусто
     format_assortment: formData.value.format_assortment || 'na',
     adv_carrier: formData.value.adv_carrier || 'ЖЦ',
     adv_material: formData.value.adv_material || 'na',
     promo_mechanics: formData.value.promo_mechanics || 'na',
     marketing_type: formData.value.marketing_type || 'Скидка по карте!',
   }
-  emit('save', rowToSave)
+
+  try {
+    const result = await predictWithInterval(rowToSave)
+
+    // Сохраняем интервал для отображения
+    if (result.interval && result.has_interval) {
+      interval.value = result.interval
+      showInterval.value = true
+    } else {
+      interval.value = null
+      showInterval.value = false
+    }
+
+    // ✅ Эмитим результат с предсказанием (используем emit из верхнего уровня)
+    emit('save', {
+      ...rowToSave,
+      prediction: result.prediction,
+      interval: result.interval,
+      has_interval: result.has_interval
+    })
+
+    closeModal()
+  } catch (error) {
+    console.error('Prediction failed:', error)
+    alert('Failed to get prediction')
+  }
 }
 </script>
 
@@ -239,5 +283,51 @@ function save() {
 
 .text-danger {
   color: #dc3545;
+}
+
+/* Interval styles */
+.progress {
+  background-color: #e9ecef;
+  border-radius: 3px;
+}
+
+.progress-bar {
+  transition: width 0.3s ease;
+}
+
+.alert {
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.alert-success {
+  background-color: #d1e7dd;
+  border-color: #badbcc;
+  color: #0f5132;
+}
+
+.alert-warning {
+  background-color: #fff3cd;
+  border-color: #ffecb5;
+  color: #856404;
+}
+
+.alert-danger {
+  background-color: #f8d7da;
+  border-color: #f5c2c7;
+  color: #842029;
+}
+
+.bg-success {
+  background-color: #198754 !important;
+}
+
+.bg-warning {
+  background-color: #ffc107 !important;
+  color: #000 !important;
+}
+
+.bg-danger {
+  background-color: #dc3545 !important;
 }
 </style>

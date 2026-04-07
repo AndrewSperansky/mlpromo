@@ -39,6 +39,7 @@ def decide_promotion(
 ) -> PromotionResult:
     """
     Unified promotion decision pipeline.
+    Расширенная политика promotion со статистическими критериями
 
     Execution order:
 
@@ -162,6 +163,70 @@ def decide_promotion(
         # Если tradeoff approve, но shadow manual_review → эскалация
         if decision == "approve" and shadow_decision == "manual_review":
             return _normalize_result(shadow_decision, shadow_reason)
+
+        # ========== НОВЫЕ СТАТИСТИЧЕСКИЕ ПРОВЕРКИ ==========
+
+        # 1. Проверка Confidence Interval (не должны пересекаться)
+        if current_metrics and candidate_metrics:
+            curr_ci = current_metrics.get("rmse_ci")
+            cand_ci = candidate_metrics.get("rmse_ci")
+
+            if curr_ci and cand_ci:
+                # Проверяем перекрытие интервалов
+                overlap = not (cand_ci["upper"] < curr_ci["lower"])
+                if overlap:
+                    return _normalize_result(
+                        "reject",
+                        f"Confidence intervals overlap: current [{curr_ci['lower']:.4f}, {curr_ci['upper']:.4f}], "
+                        f"candidate [{cand_ci['lower']:.4f}, {cand_ci['upper']:.4f}]"
+                    )
+
+        # 2. Проверка Uplift (бизнес-метрика)
+        if current_metrics and candidate_metrics:
+            curr_uplift = current_metrics.get("uplift")
+            cand_uplift = candidate_metrics.get("uplift")
+
+            if curr_uplift is not None and cand_uplift is not None:
+                if cand_uplift < curr_uplift:
+                    return _normalize_result(
+                        "reject",
+                        f"Uplift decreased: {curr_uplift:.4f} → {cand_uplift:.4f}"
+                    )
+
+        # 3. Проверка Calibration (coverage должен быть близок к target)
+        cand_conformal = candidate_metrics.get("conformal", {})
+        if cand_conformal:
+            coverage = candidate_metrics.get("coverage", 0)
+            target = 1 - cand_conformal.get("alpha", 0.05)
+
+            if abs(coverage - target) > 0.03:
+                return _normalize_result(
+                    "manual_review",
+                    f"Model not calibrated: coverage={coverage:.3f}, target={target:.3f}"
+                )
+
+        # 4. Проверка Accuracy@ε
+        if current_metrics and candidate_metrics:
+            curr_acc = current_metrics.get("accuracy_eps")
+            cand_acc = candidate_metrics.get("accuracy_eps")
+
+            if curr_acc is not None and cand_acc is not None:
+                if cand_acc < curr_acc - 0.01:
+                    return _normalize_result(
+                        "reject",
+                        f"Accuracy@ε decreased: {curr_acc:.3f} → {cand_acc:.3f}"
+                    )
+
+        # ========== НОВАЯ ПРОВЕРКА: p-value ==========
+        # 5. Статистическая значимость (p-value < 0.05)
+        stat_comparison = candidate_metrics.get("statistical_comparison")
+        if stat_comparison and stat_comparison.get("is_significant") is not None:
+            if not stat_comparison["is_significant"]:
+                return _normalize_result(
+                    "reject",
+                    f"Not statistically significant (p={stat_comparison.get('p_value', 0):.4f})"
+                )
+
 
     # =====================================================
     # FINAL DECISION

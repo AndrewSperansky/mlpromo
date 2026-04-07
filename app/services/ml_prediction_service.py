@@ -1,7 +1,7 @@
 # app/services/ml_prediction_service.py
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from app.schemas.prediction_schema import PredictionRequest
 
@@ -378,6 +378,49 @@ class MLPredictionService:
             "fallback_used": False,
             "shap": shap_output,
         }
+
+    def _get_q_hat_from_model(self) -> Optional[float]:
+        """Устаревший метод. Используется ML_RUNTIME_STATE['conformal_q_hat']"""
+        return ML_RUNTIME_STATE.get("conformal_q_hat")
+
+
+    def predict_with_interval(self, features: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Предсказание с доверительным интервалом (Conformal Prediction)
+        """
+        logger.info(f"🔍 predict_with_interval called, features keys: {list(features.keys())}")
+        # 1. Получаем предсказание
+        prediction_result, shap_list = self.predict_raw(features)
+
+        if isinstance(prediction_result, dict):
+            pred_value = float(prediction_result.get("prediction", 1.0))
+        else:
+            pred_value = float(prediction_result) if prediction_result is not None else 1.0
+
+        # 2. Получаем q_hat из runtime_state (загружено из meta.json)
+        q_hat = ML_RUNTIME_STATE.get("conformal_q_hat")
+        logger.info(f"🔍 q_hat from runtime: {q_hat}")
+
+        # 3. Формируем ответ
+        result: Dict[str, Any] = {  # ← явно указываем тип
+            "prediction": pred_value,
+            "shap_values": shap_list
+        }
+
+        if q_hat is not None:
+            lower = pred_value - q_hat
+            upper = pred_value + q_hat
+            result["interval"] = {
+                "lower": max(0, lower),
+                "upper": upper
+            }
+            result["interval_width"] = upper - lower
+            result["has_interval"] = True
+        else:
+            result["has_interval"] = False
+            result["note"] = "Conformal prediction not available for this model"
+        return result
+
 
     def _fallback_response(self, payload: PredictionRequest, reason: str, features: dict = None) -> Dict[str, Any]:
         """Унифицированный ответ при fallback"""

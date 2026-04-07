@@ -294,6 +294,18 @@ class PredictionController:
             except Exception as e:
                 logger.warning(f"Failed to collect inference metrics: {e}")
 
+            # Добавляем интервал  (95% Interval)
+            try:
+                interval_result = self.service.predict_with_interval(full_features)
+                logger.info(f"🔍 INTERVAL RESULT: {interval_result}")
+                response.interval = interval_result.get("interval")
+                response.has_interval = interval_result.get("has_interval", False)
+                response.interval_width = interval_result.get("interval_width")
+                logger.info(f"✅ Interval added: has_interval={response.has_interval}")
+            except Exception as e:
+                logger.warning(f"Failed to get prediction interval: {e}")
+                response.has_interval = False
+
             return response
 
         except Exception as e:
@@ -301,9 +313,6 @@ class PredictionController:
             increment_errors_count()
             logger.error(f"Prediction failed: {e}", exc_info=True)
             raise
-
-
-
 
 
 

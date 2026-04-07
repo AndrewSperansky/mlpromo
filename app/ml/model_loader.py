@@ -169,6 +169,16 @@ class ModelLoader:
             try:
                 with open(meta_path) as f:
                     file_meta = json.load(f)
+
+                    # Сохраняем conformal данные в runtime_state
+                    if "conformal_q_hat" in file_meta:
+                        ML_RUNTIME_STATE["conformal_q_hat"] = file_meta["conformal_q_hat"]
+                        logger.info(f"✅ Loaded conformal_q_hat from meta: {file_meta['conformal_q_hat']}")
+
+                    if "conformal" in file_meta:
+                        ML_RUNTIME_STATE["conformal"] = file_meta["conformal"]
+                        logger.info(f"✅ Loaded conformal data (alpha={file_meta['conformal'].get('alpha')})")
+
                     if not feature_order:
                         feature_order = file_meta.get("feature_order", [])
                     if not version:
@@ -176,7 +186,7 @@ class ModelLoader:
             except Exception as e:
                 logger.warning(f"Failed to load meta file: {e}")
 
-        #  создаём метаданные
+        # создаём метаданные
         cls._meta = {
             "feature_order": feature_order,
             "version": version,

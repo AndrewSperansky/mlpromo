@@ -2,6 +2,7 @@
 
 import json
 import logging
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
@@ -19,9 +20,11 @@ from app.ml.model_registry.promotion_policy import decide_promotion
 from app.services.registry_service import ModelRegistryService
 from app.core.settings import settings
 from app.db.session import SessionLocal
-from models.industrial_dataset import IndustrialDatasetRaw
+from app.ml.statistical_metrics import StatisticalMetrics
+from app.ml.conformal import ConformalPredictor
 
-logger = logging.getLogger(__name__)
+
+logger = logging.getLogger("promo_ml")
 
 TARGET = "k_uplift"
 
@@ -36,7 +39,6 @@ def load_full_dataset(db: Session) -> pd.DataFrame:
     """
     logger.info("📊 Loading full dataset from industrial_dataset_raw")
 
-    # Используем SQL запрос для загрузки всех данных
     from sqlalchemy import text
 
     query = text("""
@@ -183,6 +185,8 @@ def train_pipeline(
         # Обновляем путь в БД
         db_model.model_path = str(model_path)
         db.commit()
+        db.refresh(db_model)  # ← обновляем объект из БД
+        logger.info(f"✅ Model saved to {model_path}, DB path={db_model.model_path}")
 
         # =========================
         # SHAP
@@ -200,7 +204,7 @@ def train_pipeline(
         )
 
         # =========================
-        # META + LINEAGE
+        # META + LINEAGE (начальный)
         # =========================
         meta = {
             "model_id": db_model.id,
@@ -216,9 +220,99 @@ def train_pipeline(
 
         meta = enrich_meta_with_lineage(meta=meta, trigger=trigger)
 
+        # ========== СТАТИСТИЧЕСКИЕ МЕТРИКИ (БЕЗ DATA LEAKAGE) ==========
+
+        # Получаем текущую активную модель для сравнения
+        db_local = SessionLocal()
+
+        try:
+            registry_local = ModelRegistryService(db_local)
+            current_model = registry_local.get_active_model("promo_uplift")
+
+            # Массив ошибок
+            errors_array = np.array(y - preds)
+
+            # 1. Confidence Interval для RMSE
+            ci = StatisticalMetrics.calculate_confidence_interval(errors_array)
+
+            # 2. Uplift (бизнес-метрика)
+            uplift = StatisticalMetrics.calculate_uplift(y, preds)
+
+            # 3. Accuracy с допуском
+            accuracy_eps = StatisticalMetrics.accuracy_with_tolerance(y, preds, epsilon=5.0)
+
+            # ========== CONFORMAL PREDICTION (С РАЗДЕЛЕНИЕМ НА CALIBRATION/TEST) ==========
+
+            # Разделяем данные для калибровки и тестирования
+            indices = np.random.permutation(len(y))
+            calib_size = int(len(y) * 0.2)
+
+            calib_indices = indices[:calib_size]
+            test_indices = indices[calib_size:]
+
+            # Преобразуем в numpy если нужно
+            if hasattr(y, 'values'):
+                y_array = y.values
+                preds_array = preds if isinstance(preds, np.ndarray) else np.array(preds)
+            else:
+                y_array = np.array(y)
+                preds_array = np.array(preds)
+
+            y_calib = y_array[calib_indices]
+            preds_calib = preds_array[calib_indices]
+
+            y_test = y_array[test_indices]
+            preds_test = preds_array[test_indices]
+
+            # Калибровка на отдельной выборке
+            cp = ConformalPredictor(alpha=0.05)
+            cp.fit(y_calib, preds_calib)
+
+            # Prediction interval для тестовых данных
+            lower_test, upper_test = cp.predict(preds_test)
+
+            # Coverage считаем ТОЛЬКО на тестовых данных
+            coverage = cp.coverage(y_test, lower_test, upper_test)
+
+            # 4. Статистическое сравнение с предыдущей моделью
+            statistical_comparison = None
+            if current_model and current_model.metrics:
+                statistical_comparison = {
+                    "note": "Requires previous model errors for paired t-test",
+                    "test_used": "paired t-test (requires saved errors)",
+                    "current_model_id": current_model.id,
+                    "current_model_version": current_model.version
+                }
+
+            # Добавляем все метрики в meta
+            meta["conformal_q_hat"] = cp.q_hat
+            meta["conformal"] = cp.to_dict()
+            meta["metrics"].update({
+                "rmse_ci": ci,
+                "uplift": uplift,
+                "accuracy_eps": accuracy_eps,
+                "coverage": coverage,
+                "coverage_target": 0.95,
+                "is_calibrated": abs(coverage - 0.95) <= 0.03,
+                "sample_size": len(y),
+                "calibration_size": calib_size,
+                "test_size": len(y_test),
+            })
+
+            if statistical_comparison:
+                meta["metrics"]["statistical_comparison"] = statistical_comparison
+
+            logger.info(
+                f"📊 Statistical metrics added: RMSE_CI={ci['rmse']:.6f}, coverage={coverage:.3f}, uplift={uplift:.4f}")
+
+        finally:
+            db_local.close()
+
+        # ===== СОХРАНЯЕМ META В ФАЙЛ (ПОСЛЕ ДОБАВЛЕНИЯ ВСЕХ МЕТРИК) =====
         meta_path = candidate_dir / f"{db_model.id}.meta.json"
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
+        logger.info(f"✅ Meta saved to {meta_path} with conformal_q_hat={cp.q_hat}")
 
         # =========================
         # PROMOTION
@@ -252,20 +346,17 @@ def train_pipeline(
 
     # ========== ВЫЧИСЛЯЕМ COMPARISON ДЛЯ UI ==========
     comparison = None
-    if promote is False:  # Для ручной активации
+    if promote is False:
         db_local = SessionLocal()
         try:
             registry_local = ModelRegistryService(db_local)
             current_model = registry_local.get_active_model("promo_uplift")
 
-            # 🔥 КЛЮЧ: Преобразуем Mapped в обычный dict
             current_metrics_dict = None
             if current_model and current_model.metrics is not None:
-                # metrics может быть уже dict или нужно преобразовать
                 if isinstance(current_model.metrics, dict):
                     current_metrics_dict = current_model.metrics
                 else:
-
                     current_metrics_dict = json.loads(current_model.metrics) if isinstance(current_model.metrics, str) else None
 
             new_metrics_dict = meta.get("metrics") if isinstance(meta.get("metrics"), dict) else None
@@ -279,7 +370,6 @@ def train_pipeline(
                     rmse_delta = current_rmse - new_rmse
                     improvement_percent = (rmse_delta / current_rmse) * 100 if current_rmse != 0 else 0
 
-                    # Формируем diff для таблицы
                     metrics_diff = {}
                     all_metrics = set(current_metrics_dict.keys()) | set(new_metrics_dict.keys())
 
@@ -288,11 +378,10 @@ def train_pipeline(
                         new = new_metrics_dict.get(metric)
 
                         if curr is not None and new is not None:
-                            # lower_is_better: rmse, mae, mape
                             if metric in ["rmse", "mae", "mape"]:
-                                metrics_diff[metric] = round(curr - new, 6)  # положительный = улучшение
-                            else:  # r2, accuracy, etc.
-                                metrics_diff[metric] = round(new - curr, 6)  # положительный = улучшение
+                                metrics_diff[metric] = round(curr - new, 6)
+                            else:
+                                metrics_diff[metric] = round(new - curr, 6)
 
                     comparison = {
                         "current_model_id": current_model.id,
@@ -320,7 +409,7 @@ def train_pipeline(
         "model_id": db_model.id,
         "metrics": meta["metrics"],
         "promoted": promoted,
-        "stage": meta["stage"],
+        "stage": meta.get("stage", "candidate"),
         "comparison": comparison,
         "promotion_decision": promotion_decision,
         "rows_original": original_count,

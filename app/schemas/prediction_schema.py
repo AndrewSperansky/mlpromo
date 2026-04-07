@@ -48,6 +48,11 @@ class PredictionRequest(BaseModel):
     promo_code: Optional[str] = Field(None, description="Код промо-акции (устарело)")
     prediction_date: Optional[date] = Field(None, description="Дата прогноза (устарело)")
 
+    # 🔥 НОВЫЕ ПОЛЯ ДЛЯ ИНТЕРВАЛА (95% Interval)
+    interval: Optional[Dict[str, List[float]]] = Field(None, description="95% prediction interval")
+    has_interval: bool = Field(False, description="Whether interval is available")
+    interval_width: Optional[float] = Field(None, description="Width of the prediction interval")
+
 
 class ShapValue(BaseModel):
     feature: str
@@ -128,6 +133,11 @@ class PredictionResponse(BaseModel):
     prediction_absolute: Optional[float] = Field(None, description="Абсолютный прогноз продаж (k_uplift * baseline)")
     uplift_percent: Optional[float] = Field(None, description="Прирост в процентах")
     confidence: Optional[float] = Field(None, description="Уверенность прогноза (0-1)")
+
+    # ===== НОВЫЕ ПОЛЯ ДЛЯ INTERVAL =====
+    interval: Optional[Dict[str, List[float]]] = Field(None, description="95% prediction interval (lower, upper)")
+    has_interval: bool = Field(False, description="Whether prediction interval is available")
+    interval_width: Optional[float] = Field(None, description="Width of the prediction interval")
 
 
 class BatchPredictionRequest(BaseModel):
