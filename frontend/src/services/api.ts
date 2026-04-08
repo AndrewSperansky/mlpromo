@@ -2,6 +2,7 @@
 
 import axios from 'axios'
 import type { Model } from "@/types"
+import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
     baseURL: '/api/v1',
@@ -22,6 +23,7 @@ api.interceptors.request.use(request => {
 })
 
 api.interceptors.response.use(
+    // Успешный ответ
     response => {
         console.log('✅ Response OK:', {
             status: response.status,
@@ -30,15 +32,25 @@ api.interceptors.response.use(
         })
         return response
     },
-    error => {
+    
+    // Ошибка
+    async error => {
         console.error('❌ Response Error:', {
             status: error.response?.status,
             statusText: error.response?.statusText,
             url: error.config?.url,
             method: error.config?.method?.toUpperCase(),
             data: error.response?.data,
-            headers: error.response?.headers
+            headers: error.response?.headers,
         })
+        
+        // Если 401 Unauthorized — выходим из системы
+        if (error.response?.status === 401) {
+            const authStore = useAuthStore()
+            await authStore.logout()
+            window.location.href = '/login'
+        }
+        
         return Promise.reject(error)
     }
 )

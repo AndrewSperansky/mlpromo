@@ -33,6 +33,7 @@ def get_logging_config() -> dict:
                 "fmt": (
                     "%(asctime)s %(levelname)s %(name)s %(message)s "
                     "%(filename)s %(funcName)s %(lineno)d %(correlation_id)s"
+                    "%(user_id)s %(username)s"
                 ),
             },
             "simple": {

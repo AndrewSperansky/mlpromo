@@ -7,7 +7,6 @@ from typing import Tuple, Dict, Any
 class ConformalPredictor:
     """
     Conformal Prediction — гарантированное coverage без предположений о распределении
-
     Исправлено: добавлена поправка для гарантированного coverage
     """
 

@@ -30,6 +30,22 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # --- CORRELATION ID ---
         correlation_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
 
+        # Получаем пользователя из токена (если есть)
+        user_id = None
+        username = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            try:
+                from app.auth.jwt import decode_token
+                payload = decode_token(token)
+                if payload:
+                    user_id = payload.get("sub")
+                    username = payload.get("username")
+            except Exception:
+                pass
+
+
         # --- LOG REQUEST ---
         # Check if this is a streaming endpoint
         is_streaming = any(request.url.path.endswith(endpoint) for endpoint in self.STREAMING_ENDPOINTS)
@@ -49,6 +65,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             "Incoming request",
             extra={
                 "correlation_id": correlation_id,
+                "user_id": user_id,
+                "username": username,
                 "method": request.method,
                 "url": str(request.url),
                 "client": request.client.host if request.client else None,

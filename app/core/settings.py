@@ -6,6 +6,7 @@ Application settings — централизованные конфигураци
 
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -28,8 +29,13 @@ class Settings(BaseSettings):
 
     # === Promote Governance ===
     PROMOTE_METRIC: str = "accuracy"  # или "rmse"
-    PROMOTE_MIN_IMPROVEMENT_PERCENT: float = 0.0  # минимальное улучшение в %
+    PROMOTE_MIN_IMPROVEMENT_PERCENT: float = 0.01  # минимальное улучшение в %
     PROMOTE_REQUIRE_METRICS: bool = True  # требовать ли метрики
+
+    # JWT Settings
+    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 часа
 
     class Config:
         env_file_encoding = "utf-8"
