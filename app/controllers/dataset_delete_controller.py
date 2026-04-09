@@ -8,6 +8,8 @@ from fastapi import HTTPException
 
 from models.industrial_dataset import IndustrialDatasetRaw
 from models.dataset_upload_history import DatasetUploadHistory
+from app.services.activity_service import ActivityService
+from app.models.user import User
 
 logger = logging.getLogger("promo_ml")
 
@@ -15,8 +17,9 @@ logger = logging.getLogger("promo_ml")
 class DatasetDeleteController:
     """Контроллер для удаления батчей датасета"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, current_user: User):
         self.db = db
+        self.current_user = current_user
 
     def delete_batch(self, batch_id: UUID, force: bool = False) -> dict:
         """
@@ -43,6 +46,15 @@ class DatasetDeleteController:
             # Удаляем запись из истории загрузок
             self.db.delete(upload_record)
             self.db.commit()
+
+            # Логируем действие
+            ActivityService.log(
+                db=self.db,
+                user_id=self.current_user.id,
+                action="delete_dataset",
+                resource=f"batch_{batch_id_str}",
+                details=f"Dataset batch {batch_id_str} deleted by {self.current_user.username}, rows: {rows_deleted}"
+            )
 
             logger.info(
                 f"🗑️ Deleted batch {batch_id_str}: {rows_deleted} rows removed from data, history record deleted")

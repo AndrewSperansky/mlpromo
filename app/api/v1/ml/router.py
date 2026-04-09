@@ -19,6 +19,7 @@ from sqlalchemy import text, select, and_
 from app.db.session import get_db
 from models.activation_history import ModelActivationHistory
 from models.ml_model import MLModel
+from app.models.user import User
 
 from app.core.settings import settings
 
@@ -30,6 +31,7 @@ from app.services.registry_service import ModelRegistryService
 from app.services.dataset_service import DatasetService
 from app.services.dataset_streaming_service import DatasetStreamingService
 from app.services.audit_service import get_audit_page
+from app.services.activity_service import ActivityService
 
 from models.dataset_upload_history import DatasetUploadHistory
 from models.industrial_dataset import IndustrialDatasetRaw
@@ -53,8 +55,9 @@ from app.controllers.models_compare_controller import ModelsCompareController
 from app.controllers.model_evaluation_controller import ModelEvaluationController
 from app.controllers.dataset_upload_controller import DatasetUploadController
 from app.controllers.dataset_delete_controller import DatasetDeleteController
+from app.controllers.model_delete_controller import ModelDeleteController
 
-
+from app.auth.dependencies import get_current_user
 
 
 
@@ -473,95 +476,14 @@ def predict_batch(
 @router.delete("/models/{model_id}")
 def delete_model(
         model_id: int,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Полностью удаляет модель из БД и файловой системы.
-    Даже если файлы отсутствуют, запись из БД удаляется.
     """
-    # Находим модель
-    model = db.get(MLModel, model_id)
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-
-    # Если модель активна — ошибка (нельзя удалить активную)
-    if model.is_active:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete active model. Deactivate it first."
-        )
-
-    # ===== 1. УДАЛЯЕМ ФАЙЛЫ (ИГНОРИРУЕМ ОШИБКИ) =====
-    file_deletion_errors = []
-    model_file = None  # ← ИНИЦИАЛИЗИРУЕМ
-
-    if model.model_path:
-        try:
-            model_path_str = str(model.model_path)
-            model_file = Path(model_path_str)  # ← теперь точно определён
-
-            # Удаляем файл модели
-            if model_file.exists():
-                model_file.unlink()
-                logger.info(f"Deleted model file: {model_file}")
-        except Exception as e:
-            file_deletion_errors.append(f"Model file: {e}")
-            logger.warning(f"Could not delete model file: {e}")
-
-        # Удаляем meta.json (только если model_file определён)
-        if model_file and model_file.exists():
-            try:
-                meta_file = model_file.with_suffix('.meta.json')
-                if meta_file.exists():
-                    meta_file.unlink()
-                    logger.info(f"Deleted meta file: {meta_file}")
-            except Exception as e:
-                file_deletion_errors.append(f"Meta file: {e}")
-                logger.warning(f"Could not delete meta file: {e}")
-
-        # Удаляем shap-файлы (только если model_file определён)
-        if model_file and model_file.exists():
-            try:
-                model_dir = model_file.parent
-                for shap_file in model_dir.glob("shap_*"):
-                    if shap_file.exists():
-                        shap_file.unlink()
-                        logger.info(f"Deleted shap file: {shap_file}")
-            except Exception as e:
-                file_deletion_errors.append(f"Shap files: {e}")
-                logger.warning(f"Could not delete shap files: {e}")
-
-    # ===== 2. УДАЛЯЕМ ИСТОРИЮ АКТИВАЦИЙ =====
-    try:
-        db.query(ModelActivationHistory).filter(
-            ModelActivationHistory.model_id == model_id  # type: ignore
-        ).delete(synchronize_session=False)
-        logger.info(f"Deleted activation history for model {model_id}")
-    except Exception as e:
-        logger.warning(f"Could not delete activation history: {e}")
-
-    # ===== 3. УДАЛЯЕМ ЗАПИСЬ ИЗ БД =====
-    try:
-        db.delete(model)
-        db.commit()
-        logger.info(f"Model {model_id} permanently deleted from database")
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to delete model {model_id} from DB: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete model from database")
-
-    # Формируем сообщение о результате
-    message = "Model removed from database"
-    if file_deletion_errors:
-        message += f". Note: some files could not be deleted: {', '.join(file_deletion_errors)}"
-    else:
-        message += " and filesystem"
-
-    return {
-        "status": "deleted",
-        "model_id": model_id,
-        "message": message
-    }
+    controller = ModelDeleteController(db, current_user)
+    return controller.delete_model(model_id)
 
 # =========================================
 # DATASET STAT
@@ -636,12 +558,13 @@ def list_batches(db: Session = Depends(get_db)):
 def delete_dataset_batch(
         batch_id: UUID,
         force: bool = False,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Удаляет все записи, загруженные в рамках указанного batch_id.
     """
-    controller = DatasetDeleteController(db)
+    controller = DatasetDeleteController(db,  current_user)
     return controller.delete_batch(batch_id, force)
 
 

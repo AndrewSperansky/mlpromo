@@ -52,7 +52,7 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
 
-    ActivityService.log_activity(
+    ActivityService.log(
         db=db,
         user_id=user.id,
         action="login",
@@ -249,3 +249,32 @@ def update_user(
         "full_name": user.full_name,
         "is_active": user.is_active
     }
+
+
+@router.delete("/users/{user_id}")
+def delete_user(
+        user_id: int,
+        current_user: User = Depends(require_admin),
+        db: Session = Depends(get_db)
+):
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first() # type: ignore
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    username = user.username
+    user.is_deleted = True
+    db.commit()
+
+    # Логируем действие
+    ActivityService.log(
+        db=db,
+        user_id=current_user.id,
+        action="delete_user",
+        resource=f"user_{user_id}",
+        details=f"User {username} (id={user_id}) deleted by {current_user.username}"
+    )
+
+    return {"message": f"User {username} deleted"}

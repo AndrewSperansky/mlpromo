@@ -7,7 +7,7 @@ from typing import Optional
 
 class ActivityService:
     @staticmethod
-    def log_activity(
+    def log(
         db: Session,
         user_id: int,
         action: str,

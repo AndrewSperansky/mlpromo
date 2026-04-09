@@ -179,6 +179,9 @@ function getActionBadgeClass(action: string): string {
     case 'train': return 'badge bg-warning'
     case 'activate': return 'badge bg-danger'
     case 'upload': return 'badge bg-info'
+    case 'delete_model': return 'badge bg-dark'
+    case 'delete_dataset': return 'badge bg-dark'
+    case 'delete_user': return 'badge bg-dark'
     default: return 'badge bg-secondary'
   }
 }
