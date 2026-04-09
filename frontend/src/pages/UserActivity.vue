@@ -26,6 +26,9 @@
               <option value="train">Train Model</option>
               <option value="activate">Activate Model</option>
               <option value="upload">Upload Dataset</option>
+              <option value="delete_model">Delete Model</option>
+              <option value="delete_dataset">Delete Dataset</option>
+              <option value="delete_user">Delete User</option>
             </select>
           </div>
           <div class="col-md-3">

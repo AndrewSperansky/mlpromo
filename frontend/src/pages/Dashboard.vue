@@ -30,32 +30,33 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Остальные карточки здоровья системы -->
-    <div class="row g-3 mb-4">
-      <!-- Health Status -->
-      <div class="col-md-3">
-        <div class="card h-100 border-0 shadow-sm">
+      
+      <div class="col-md-3 col-lg-2">
+        <div class="card h-100 border-0 shadow-sm" :class="healthBorderClass">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
-              <div>
-                <h6 class="text-muted mb-1">System Health</h6>
-                <h3 class="mb-0">
+              <div class="overflow-hidden">
+                <h6 class="text-muted mb-1">SYSTEM HEALTH</h6>
+                <h5 class="mb-0">
                   <span :class="healthStatusClass">{{ healthStatus }}</span>
-                </h3>
+                </h5>
               </div>
               <div class="rounded-circle p-2" :class="healthBgClass">
-                <i :class="healthIconClass" class="fs-4 text-white"></i>
+                <i :class="healthIconClass" class="fs-5 text-white"></i>
               </div>
             </div>
             <small class="text-muted mt-2 d-block">Last check: {{ formatTime(containersTimestamp) }}</small>
           </div>
         </div>
       </div>
+    </div>
 
+
+    <!-- Остальные карточки здоровья системы -->
+    <div class="row g-3 mb-4">
+    
       <!-- Model Status -->
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
@@ -77,7 +78,7 @@
       </div>
 
       <!-- Drift Status -->
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
@@ -99,7 +100,7 @@
       </div>
 
       <!-- Freeze Status -->
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
@@ -111,7 +112,7 @@
                   </span>
                 </h3>
                 <small class="text-muted">Auto-promotion is {{ overview.runtime.freeze_flag ? 'disabled' : 'enabled'
-                  }}</small>
+                }}</small>
               </div>
               <div class="rounded-circle p-2" :class="overview.runtime.freeze_flag ? 'bg-warning' : 'bg-success'">
                 <i class="bi bi-rocket-takeoff fs-4 text-white"></i>
@@ -313,6 +314,15 @@ const healthBgClass = computed(() => {
   if (status === 'Healthy') return 'bg-success'
   if (status === 'Warning') return 'bg-warning'
   if (status === 'Attention') return 'bg-info'
+  return 'bg-danger'
+})
+
+
+const healthBorderClass = computed(() => {
+  const status = healthStatus.value
+  if (status === 'Healthy') return 'border-success'
+  if (status === 'Warning') return 'border-warning'
+  if (status === 'Attention') return 'border-info'
   return 'bg-danger'
 })
 
