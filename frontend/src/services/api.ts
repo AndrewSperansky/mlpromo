@@ -69,6 +69,17 @@ export interface Dataset {
     comment: string | null
 }
 
+
+// Тип для датасета (соответствует API)
+export interface Dataset {
+    id: string
+    created_at: string
+    row_count: number
+    target_column: string
+    status: string
+    comment: string | null
+}
+
 // Тип для параметров обучения 
 export interface TrainModelParams {
     promote?: boolean

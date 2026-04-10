@@ -17,111 +17,216 @@
                         </span>
                     </p>
                     <p class="text-muted small mb-0">
-                        This may take a few minutes. New model will be created but not activated automatically.
+                        After training, metrics will be compared with the current active model.
+                        Better metrics = automatic activation.
                     </p>
                 </div>
                 <div class="col-md-4 text-end">
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-outline-secondary btn-sm" @click="forceCheck" :disabled="checking"
-                            title="Check if retrain is needed">
-                            <span v-if="checking" class="spinner-border spinner-border-sm me-1"></span>
-                            <i v-else class="bi bi-search me-1"></i>
-                            {{ checking ? 'Checking...' : 'Force Check' }}
-                        </button>
-                        <button class="btn btn-primary" @click="showTrainModal = true" :disabled="trainingInProgress">
-                            <span v-if="trainingInProgress" class="spinner-border spinner-border-sm me-2"></span>
-                            <i v-else class="bi bi-rocket-takeoff me-2"></i>
-                            {{ trainingInProgress ? 'Training...' : 'Start Training' }}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Force Check Result -->
-            <div v-if="checkResult" class="mt-3 alert" :class="checkResult.needed ? 'alert-warning' : 'alert-info'">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <i :class="checkResult.needed ? 'bi bi-exclamation-triangle-fill' : 'bi bi-check-circle-fill'"
-                            class="me-2"></i>
-                        <strong>{{ checkResult.needed ? 'Retrain Recommended' : 'Model is Up to Date' }}</strong>
-                        <p class="mb-0 small mt-1">{{ checkResult.reason || 'No retrain needed at this time' }}</p>
-                    </div>
-                    <div v-if="checkResult.new_data_count !== undefined" class="text-end">
-                        <span class="badge bg-secondary">{{ checkResult.new_data_count }} new rows</span>
-                    </div>
+                    <button class="btn btn-primary" @click="startTraining" :disabled="trainingInProgress">
+                        <span v-if="trainingInProgress" class="spinner-border spinner-border-sm me-2"></span>
+                        <i v-else class="bi bi-rocket-takeoff me-2"></i>
+                        {{ trainingInProgress ? 'Training...' : 'Start Training' }}
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Train Modal -->
-        <TrainModal :show="showTrainModal" :training="trainingInProgress" @close="showTrainModal = false"
-            @confirm="handleTrain" />
+        <!-- Жёлтая карточка - новые данные -->
+        <div v-if="showNewDataAlert" class="mx-3 mb-3 alert alert-warning alert-dismissible fade show" role="alert">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <strong>📊 New Data Available!</strong>
+                    <p class="mb-0 small">{{ newDataMessage }}</p>
+                    <span class="small text-muted">{{ newRowsCount }} new rows detected</span>
+                </div>
+                <button type="button" class="btn-close" @click="showNewDataAlert = false" aria-label="Close"></button>
+            </div>
+        </div>
 
-        <!-- Training Result Card -->
-        <TrainingResultCard v-if="trainingCompleted && trainingResult" :trainingResult="trainingResult"
-            @activated="handleTrainingActivated" @dismissed="handleTrainingDismissed" />
+        <!-- Результат обучения -->
+        <div v-if="uploadResult" class="mx-3 mb-3 alert alert-info alert-dismissible fade show" role="alert">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <strong>Result:</strong>
+                    <pre class="mb-0 mt-1">{{ uploadResult }}</pre>
+                </div>
+                <button type="button" class="btn-close" @click="uploadResult = null" aria-label="Close"></button>
+            </div>
+        </div>
+
+        <!-- Сообщение о результате обучения с таблицей сравнения -->
+        <div v-if="trainingResultMessage" class="mx-3 mb-3 alert" :class="trainingResultClass" role="alert">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <strong>{{ trainingResultTitle }}</strong>
+                    <p class="mb-0 mt-1">{{ trainingResultMessage }}</p>
+                    <small v-if="trainingResultDetails" class="text-muted">{{ trainingResultDetails }}</small>
+
+                    <!-- Таблица сравнения -->
+                    <div v-if="trainingResultComparison" class="mt-2">
+                        <table class="table table-sm table-bordered mt-2" style="width: auto; background: #f8f9fa;">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Current Model</th>
+                                    <th>→</th>
+                                    <th>New Model</th>
+                                    <th>Change</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="fw-bold">RMSE</td>
+                                    <td>{{ trainingResultCurrentRMSE?.toFixed(6) || '—' }}</td>
+                                    <td>→</td>
+                                    <td>{{ trainingResultNewRMSE?.toFixed(6) || '—' }}</td>
+                                    <td :class="trainingResultIsBetter ? 'text-success' : 'text-danger'">
+                                        {{ trainingResultIsBetter ? '✅ Better' : '⚠️ Worse' }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" @click="closeTrainingResult" aria-label="Close"></button>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { trainModel } from '../services/api'
 import api from '../services/api'
-import TrainModal from './TrainModal.vue'
-import TrainingResultCard from './TrainingResultCard.vue'
-
-const showTrainModal = ref(false)
-const trainingInProgress = ref(false)
-const trainingCompleted = ref(false)
-const trainingResult = ref<any>(null)
-const checking = ref(false)
-const checkResult = ref<any>(null)
+import { trainModel } from '../services/api'
 
 const emit = defineEmits(['model-trained', 'model-activated'])
 
-async function forceCheck() {
+const trainingInProgress = ref(false)
+const checking = ref(false)
+
+// Уведомления
+const showNewDataAlert = ref(false)
+const newRowsCount = ref(0)
+const newDataMessage = ref('')
+const uploadResult = ref<any>(null)
+
+const trainingResultMessage = ref<string | null>(null)
+const trainingResultTitle = ref('')
+const trainingResultDetails = ref('')
+const trainingResultClass = ref('alert-info')
+const trainingResultCurrentRMSE = ref<number | null>(null)
+const trainingResultNewRMSE = ref<number | null>(null)
+const trainingResultIsBetter = ref(false)
+const trainingResultComparison = ref(false)
+
+function closeTrainingResult() {
+    trainingResultMessage.value = null
+    trainingResultComparison.value = false
+}
+
+async function checkNewData() {
     checking.value = true
-    checkResult.value = null
     try {
         const response = await api.post('/system/force-retrain')
-        checkResult.value = response.data
+        if (response.data.needed) {
+            newRowsCount.value = response.data.new_data_count || 0
+            newDataMessage.value = response.data.reason || 'New data available for training'
+            showNewDataAlert.value = true
+        }
     } catch (error) {
-        console.error('Force check failed:', error)
+        console.error('Check new data failed:', error)
     } finally {
         checking.value = false
-        // Скрываем результат через 10 секунд
-        setTimeout(() => {
-            checkResult.value = null
-        }, 10000)
     }
 }
 
-async function handleTrain() {
+async function startTraining() {
     trainingInProgress.value = true
-    showTrainModal.value = false
+    showNewDataAlert.value = false
+    trainingResultMessage.value = null
 
     try {
         const response = await trainModel({ promote: false })
-        trainingResult.value = response.data
-        trainingCompleted.value = true
+        uploadResult.value = response.data
+
+        // Получаем текущую активную модель
+        const modelsResponse = await api.get('/ml/models')
+        const models = modelsResponse.data
+        const activeModel = models.find((m: any) => m.is_active === true)
+        const newModelId = response.data.model_id
+        const newRMSE = response.data.metrics?.rmse
+
+        trainingResultNewRMSE.value = newRMSE || null
+
+        if (activeModel && newRMSE) {
+            const oldRMSE = activeModel.metrics?.rmse
+            trainingResultCurrentRMSE.value = oldRMSE || null
+
+            if (oldRMSE !== undefined && newRMSE !== undefined) {
+                const isBetter = newRMSE <= oldRMSE
+                trainingResultIsBetter.value = isBetter
+                trainingResultComparison.value = true
+
+                if (isBetter) {
+                    // Метрики улучшились → активируем автоматически
+                    await api.post(`/ml/models/${newModelId}/promote`)
+                    emit('model-activated')
+
+                    trainingResultClass.value = 'alert-success'
+                    trainingResultTitle.value = '✅ Model Auto-Activated'
+                    trainingResultMessage.value = `New model (ID: ${newModelId}) has been activated automatically.`
+                    trainingResultDetails.value = `RMSE improved: ${oldRMSE.toFixed(6)} → ${newRMSE.toFixed(6)}`
+                } else {
+                    // Метрики хуже → не активируем
+                    trainingResultClass.value = 'alert-warning'
+                    trainingResultTitle.value = '⚠️ Model Trained but Not Activated'
+                    trainingResultMessage.value = `New model (ID: ${newModelId}) has worse metrics.`
+                    trainingResultDetails.value = `RMSE worsened: ${oldRMSE.toFixed(6)} → ${newRMSE.toFixed(6)} (${((newRMSE - oldRMSE) / oldRMSE * 100).toFixed(1)}% worse)`
+                }
+            } else {
+                trainingResultComparison.value = false
+                trainingResultClass.value = 'alert-info'
+                trainingResultTitle.value = 'ℹ️ Model Trained'
+                trainingResultMessage.value = `New model (ID: ${newModelId}) created.`
+                trainingResultDetails.value = 'Unable to compare metrics (missing RMSE data)'
+            }
+        } else if (newModelId) {
+            // Нет активной модели → активируем первую
+            await api.post(`/ml/models/${newModelId}/activate`)
+            emit('model-activated')
+
+            trainingResultComparison.value = false
+            trainingResultClass.value = 'alert-success'
+            trainingResultTitle.value = '✅ First Model Activated'
+            trainingResultMessage.value = `Model (ID: ${newModelId}) has been activated as the first model.`
+            trainingResultDetails.value = `RMSE: ${newRMSE?.toFixed(6) || 'N/A'}`
+        }
+
         emit('model-trained')
+
+        setTimeout(() => {
+            window.location.reload()
+        }, 1500)
+
+
     } catch (error) {
         console.error('Training failed:', error)
-        alert('Training failed. Check server logs.')
-        trainingCompleted.value = false
+        trainingResultComparison.value = false
+        trainingResultClass.value = 'alert-danger'
+        trainingResultTitle.value = '❌ Training Failed'
+        trainingResultMessage.value = 'Model training failed. Check server logs.'
+        trainingResultDetails.value = ''
     } finally {
         trainingInProgress.value = false
     }
 }
 
-function handleTrainingActivated() {
-    trainingCompleted.value = false
-    trainingResult.value = null
-    emit('model-activated')
-}
+// Загружаем проверку новых данных при монтировании
+setTimeout(() => {
+    checkNewData()
+}, 1000)
 
-function handleTrainingDismissed() {
-    trainingCompleted.value = false
-    trainingResult.value = null
-}
+defineExpose({
+    checkNewData
+})
 </script>

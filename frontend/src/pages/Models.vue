@@ -18,13 +18,37 @@
         <button class="btn btn-info" @click="showCompareModal = true">
           Compare Models
         </button>
+
+        <button class="btn btn-outline-secondary" @click="checkNewData" :disabled="checking">
+          <span v-if="checking" class="spinner-border spinner-border-sm me-1"></span>
+          <i v-else class="bi bi-search me-1"></i>
+          {{ checking ? 'Checking...' : 'Check New Data' }}
+        </button>
       </div>
     </div>
 
+    <!-- Новые данные (жёлтая карточка) -->
+    <NewDataAlert
+      v-if="showNewDataAlert"
+      :newRowsCount="newRowsCount"
+      :message="newDataMessage"
+      @close="showNewDataAlert = false"
+    />
+
     <!-- Результат обучения -->
-    <div v-if="uploadResult" class="alert alert-info">
+    <NotificationBanner
+      v-if="trainingResultMessage"
+      :type="trainingResultType"
+      :title="trainingResultTitle"
+      :message="trainingResultMessage"
+      :details="trainingResultDetails"
+      @close="trainingResultMessage = null"
+    />
+
+    <div v-if="uploadResult" class="alert alert-info alert-dismissible fade show" role="alert">
       <strong>Result:</strong>
       <pre class="mb-0">{{ uploadResult }}</pre>
+      <button type="button" class="btn-close" @click="uploadResult = null" aria-label="Close"></button>
     </div>
 
     <ModelTable 
@@ -42,7 +66,7 @@
       Show Activation History
     </button>
 
-    <!-- Activate Modal -->
+    <!-- Остальные модальные окна... -->
     <ActivateModal 
       :show="showActivateModal" 
       :modelId="selectedModelForActivation"
@@ -91,6 +115,7 @@ import {
   deleteModel,
   type ModelItem,
 } from '../services/api'
+import api from '../services/api'
 import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 import CompareModelsModal from '../components/CompareModelsModal.vue'
@@ -98,14 +123,27 @@ import ActivationHistoryModal from '../components/ActivationHistoryModal.vue'
 import ActivateModal from '../components/ActivateModal.vue'
 import DeactivateModal from '../components/DeactivateModal.vue'
 import DeleteModal from '../components/DeleteModal.vue'
+import NotificationBanner from '../components/NotificationBanner.vue'
+import NewDataAlert from '../components/NewDataAlert.vue'
 
 const models = ref<ModelItem[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const uploading = ref(false)
 const training = ref(false)
+const checking = ref(false)
 const uploadResult = ref<any>(null)
 const selectedModelId = ref<number | null>(null)
+
+// Уведомления
+const showNewDataAlert = ref(false)
+const newRowsCount = ref(0)
+const newDataMessage = ref('')
+
+const trainingResultMessage = ref<string | null>(null)
+const trainingResultType = ref<'success' | 'danger' | 'warning' | 'info'>('info')
+const trainingResultTitle = ref('')
+const trainingResultDetails = ref('')
 
 const showActivateModal = ref(false)
 const showDeactivateModal = ref(false)
@@ -117,6 +155,8 @@ const selectedModelForActivation = ref<string>('')
 const selectedModelForDeactivation = ref<string>('')
 const modelToDelete = ref<number | null>(null)
 
+
+  
 async function loadModels() {
   const response = await getModels()
   models.value = response.data.map((m: any) => ({
@@ -131,16 +171,85 @@ function goToModel(id: number) {
   selectedModelId.value = id
 }
 
+async function checkNewData() {
+  checking.value = true
+  try {
+    const response = await api.post('/system/force-retrain')
+    if (response.data.needed) {
+      newRowsCount.value = response.data.new_data_count || 0
+      newDataMessage.value = response.data.reason || 'New data available for training'
+      showNewDataAlert.value = true
+    } else {
+      trainingResultType.value = 'info'
+      trainingResultTitle.value = 'No New Data'
+      trainingResultMessage.value = 'Dataset is up to date. No retraining needed.'
+      trainingResultDetails.value = ''
+      /* setTimeout(() => {
+        trainingResultMessage.value = null
+      }, 120000) */
+    }
+  } catch (error) {
+    console.error('Check new data failed:', error)
+  } finally {
+    checking.value = false
+  }
+}
+
 async function handleTrain() {
   training.value = true
   
   try {
     const response = await trainModel({ promote: false })
     uploadResult.value = response.data
+    
+    // Получаем текущую активную модель для сравнения
+    const activeModel = models.value.find(m => m.active)
+    const newModelMetrics = response.data.metrics
+    
+    // Сравниваем RMSE
+    if (activeModel && newModelMetrics) {
+      const oldRMSE = activeModel.metrics?.rmse
+      const newRMSE = newModelMetrics.rmse
+      
+      if (newRMSE <= oldRMSE) {
+        // Метрики улучшились или такие же → активируем автоматически
+        trainingResultType.value = 'success'
+        trainingResultTitle.value = '✅ Model Auto-Activated'
+        trainingResultMessage.value = `New model (ID: ${response.data.model_id}) has been activated automatically.`
+        trainingResultDetails.value = `RMSE: ${oldRMSE?.toFixed(6)} → ${newRMSE?.toFixed(6)} (improved)`
+        
+        // Активируем модель
+        await api.post(`/ml/models/${response.data.model_id}/activate`)
+      } else {
+        // Метрики хуже → не активируем
+        trainingResultType.value = 'warning'
+        trainingResultTitle.value = '⚠️ Model Trained but Not Activated'
+        trainingResultMessage.value = `New model (ID: ${response.data.model_id}) has worse metrics.`
+        trainingResultDetails.value = `RMSE: ${oldRMSE?.toFixed(6)} → ${newRMSE?.toFixed(6)} (worsened by ${((newRMSE - oldRMSE) / oldRMSE * 100).toFixed(1)}%)`
+      }
+    } else {
+      // Нет активной модели — активируем первую
+      if (response.data.model_id) {
+        await api.post(`/ml/models/${response.data.model_id}/activate`)
+        trainingResultType.value = 'success'
+        trainingResultTitle.value = '✅ First Model Activated'
+        trainingResultMessage.value = `Model (ID: ${response.data.model_id}) has been activated as the first model.`
+      }
+    }
+    
     await loadModels()
+    
+    // Автоматически скрываем сообщение через 5 секунд
+   /*  setTimeout(() => {
+      trainingResultMessage.value = null
+    }, 120000) */
+    
   } catch (error) {
     console.error('Training failed:', error)
-    alert('Training failed. Check server logs.')
+    trainingResultType.value = 'danger'
+    trainingResultTitle.value = '❌ Training Failed'
+    trainingResultMessage.value = 'Model training failed. Check server logs.'
+    trainingResultDetails.value = ''
   } finally {
     training.value = false
   }
