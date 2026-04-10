@@ -1,4 +1,5 @@
 <!-- frontend/src/pages/LandingPage.vue -->
+
 <template>
   <div class="landing-container">
     <!-- Hero Section -->
@@ -9,31 +10,37 @@
         </div>
         <h1 class="display-3 fw-bold mb-3">Promo ML</h1>
         <p class="lead mb-4">
-          Intelligent promotion effectiveness prediction platform
+          Интеллектуальная платформа для прогнозирования эффективности промо-акций
         </p>
         <p class="mb-4">
-          Machine learning models for sales uplift prediction,<br>
-          promotion effectiveness analysis, and business intelligence
+          Прогнозирование прироста продаж, анализ эффективности промо-акций<br>
+          и бизнес-аналитика на основе машинного обучения
         </p>
-        <button class="btn btn-primary btn-lg" @click="goToLogin">
-          <i class="bi bi-box-arrow-in-right me-2"></i>
-          Login to Dashboard
-        </button>
+        <div class="d-flex gap-3 justify-content-center">
+          <button class="btn btn-primary btn-lg" @click="goToLogin">
+            <i class="bi bi-box-arrow-in-right me-2"></i>
+            Войти
+          </button>
+          <button class="btn btn-outline-light btn-lg" @click="goToRegister">
+            <i class="bi bi-person-plus me-2"></i>
+            Зарегистрироваться
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Features Section -->
     <div class="features-section">
       <div class="container">
-        <h2 class="text-center mb-5">Key Features</h2>
+        <h2 class="text-center mb-5">Ключевые возможности</h2>
         <div class="row g-4">
           <div class="col-md-4">
             <div class="feature-card text-center">
               <div class="feature-icon">
                 <i class="bi bi-cpu"></i>
               </div>
-              <h4>ML Predictions</h4>
-              <p>Sales uplift prediction with CatBoost models, confidence intervals, and SHAP explanations</p>
+              <h4>ML Прогнозы</h4>
+              <p>Прогнозирование прироста продаж с помощью CatBoost, доверительные интервалы и SHAP объяснения</p>
             </div>
           </div>
           <div class="col-md-4">
@@ -41,8 +48,8 @@
               <div class="feature-icon">
                 <i class="bi bi-bar-chart-steps"></i>
               </div>
-              <h4>Statistical Validation</h4>
-              <p>Confidence intervals, p-values, and statistical significance testing for model comparison</p>
+              <h4>Статистическая валидация</h4>
+              <p>Доверительные интервалы, p-value и тестирование статистической значимости моделей</p>
             </div>
           </div>
           <div class="col-md-4">
@@ -51,7 +58,7 @@
                 <i class="bi bi-shield-check"></i>
               </div>
               <h4>Human-in-the-Loop</h4>
-              <p>Manual approval workflow for model promotion with metric comparison</p>
+              <p>Ручное утверждение моделей с визуальным сравнением метрик перед активацией</p>
             </div>
           </div>
         </div>
@@ -65,25 +72,25 @@
           <div class="col-md-3">
             <div class="stat-card">
               <div class="stat-number">1174</div>
-              <div class="stat-label">Training Rows</div>
+              <div class="stat-label">Строк для обучения</div>
             </div>
           </div>
           <div class="col-md-3">
             <div class="stat-card">
               <div class="stat-number">95%</div>
-              <div class="stat-label">Confidence Interval</div>
+              <div class="stat-label">Доверительный интервал</div>
             </div>
           </div>
           <div class="col-md-3">
             <div class="stat-card">
               <div class="stat-number">10+</div>
-              <div class="stat-label">Model Versions</div>
+              <div class="stat-label">Версий моделей</div>
             </div>
           </div>
           <div class="col-md-3">
             <div class="stat-card">
               <div class="stat-number">24/7</div>
-              <div class="stat-label">Monitoring</div>
+              <div class="stat-label">Мониторинг</div>
             </div>
           </div>
         </div>
@@ -93,7 +100,7 @@
     <!-- Footer -->
     <footer class="footer">
       <div class="container text-center">
-        <p>&copy; 2026 Promo ML. All rights reserved.</p>
+        <p>&copy; 2026 Promo ML. Все права защищены.</p>
       </div>
     </footer>
   </div>
@@ -106,6 +113,10 @@ const router = useRouter()
 
 const goToLogin = () => {
   router.push('/login')
+}
+
+const goToRegister = () => {
+  router.push('/register')
 }
 </script>
 
@@ -150,6 +161,16 @@ const goToLogin = () => {
 
 .btn-primary:hover {
   background: #ff5252;
+  transform: translateY(-2px);
+}
+
+.btn-outline-light {
+  padding: 12px 40px;
+  font-size: 18px;
+  transition: transform 0.3s;
+}
+
+.btn-outline-light:hover {
   transform: translateY(-2px);
 }
 

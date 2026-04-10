@@ -15,14 +15,14 @@ from app.services.activity_service import ActivityService
 router = APIRouter(tags=["auth"])
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str
     password: str
 
 class RegisterRequest(BaseModel):
-    username: str
     email: str
+    username: Optional[str] = None
     password: str
-    full_name: str = None
+    full_name: Optional[str] = None
 
 class UserUpdateRequest(BaseModel):
     email: str
@@ -37,15 +37,15 @@ class UserUpdateRequest(BaseModel):
 @router.post("/login")
 def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(
-        User.username == request.username,    # type: ignore
+        User.email == request.email,         # type: ignore
         User.is_deleted == False                        # type: ignore
     ).first()
 
     if not user or not verify_password(request.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.is_active:
-        raise HTTPException(status_code=401, detail="Account disabled")
+        raise HTTPException(status_code=401, detail="Аккаунт не активирован. Ожидайте подтверждения администратором.")
 
     # Update last login
 
@@ -63,13 +63,17 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
     # token = create_access_token(data={"sub": str(user.id), "role": user.role.value})
     token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
-    return {"access_token": token, "token_type": "bearer", "user": {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "role": user.role,
-        "full_name": user.full_name
-    }}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "full_name": user.full_name
+        }
+    }
 
 # ==============================================
 #  USER REGISTRATION
@@ -77,18 +81,19 @@ def login(request: LoginRequest, req: Request, db: Session = Depends(get_db)):
 
 @router.post("/register")
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    # Проверяем email на уникальность
     existing = db.query(User).filter(
-        or_(
-            User.username == request.username,  # type: ignore
             User.email == request.email  # type: ignore
-        )
     ).first()
 
     if existing:
         raise HTTPException(status_code=400, detail="Username or email already exists")
 
+    # Если username не указан, генерируем из email
+    username = request.username or request.email.split('@')[0]
+
     user = User(
-        username=request.username,
+        username=username,
         email=request.email,
         hashed_password=get_password_hash(request.password),
         full_name=request.full_name,
@@ -99,7 +104,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    return {"message": "User created successfully. Awaiting admin approval.", "user_id": user.id}
+    return {"message": "Registration successful. Awaiting admin approval.", "user_id": user.id}
 
 # ==============================================
 #  USER LOGOUT

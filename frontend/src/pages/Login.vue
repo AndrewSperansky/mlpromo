@@ -1,4 +1,6 @@
-<!-- frontend/src/pages/Login.vue -->
+<!-- frontend\src\pages\Login.vue -->
+
+
 <template>
   <div class="login-container">
     <div class="card shadow-sm" style="width: 400px;">
@@ -9,18 +11,18 @@
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
         
         <div class="mb-3">
-          <label class="form-label">Username</label>
+          <label class="form-label">Email</label>
           <input 
-            type="text" 
+            type="email" 
             class="form-control" 
-            v-model="username" 
+            v-model="email" 
             @keyup.enter="handleLogin"
             autofocus
           >
         </div>
         
         <div class="mb-3">
-          <label class="form-label">Password</label>
+          <label class="form-label">Пароль</label>
           <input 
             type="password" 
             class="form-control" 
@@ -35,11 +37,11 @@
           :disabled="loading"
         >
           <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-          {{ loading ? 'Logging in...' : 'Login' }}
+          {{ loading ? 'Вход...' : 'Войти' }}
         </button>
         
         <div class="text-center mt-3">
-          <router-link to="/register">Don't have an account? Register</router-link>
+          <router-link to="/register">Нет аккаунта? Зарегистрироваться</router-link>
         </div>
       </div>
     </div>
@@ -54,26 +56,27 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref('')
+const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
 
 async function handleLogin() {
-  if (!username.value || !password.value) {
-    error.value = 'Please enter username and password'
+  // Проверяем email, а не username
+  if (!email.value || !password.value) {
+    error.value = 'Пожалуйста, введите email и пароль'
     return
   }
   
   loading.value = true
   error.value = ''
   
-  const result = await authStore.login(username.value, password.value)
+  const result = await authStore.login(email.value, password.value)
   
   if (result.success) {
     router.push('/dashboard')
   } else {
-    error.value = result.error || 'Login failed'
+    error.value = result.error || 'Ошибка входа'
   }
   
   loading.value = false

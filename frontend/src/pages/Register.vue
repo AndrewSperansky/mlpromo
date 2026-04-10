@@ -1,18 +1,16 @@
 <!-- frontend/src/pages/Register.vue -->
+
 <template>
   <div class="register-container">
     <div class="card shadow-sm" style="width: 450px;">
       <div class="card-header bg-primary text-white text-center">
-        <h4 class="mb-0">Create Account</h4>
+        <h4 class="mb-0">Регистрация</h4>
       </div>
       <div class="card-body">
         <div v-if="error" class="alert alert-danger">{{ error }}</div>
-        <div v-if="success" class="alert alert-success">Registration successful! Please login.</div>
-        
-        <div class="mb-3">
-          <label class="form-label">Username *</label>
-          <input type="text" class="form-control" v-model="username" :class="{ 'is-invalid': usernameError }">
-          <div class="invalid-feedback">{{ usernameError }}</div>
+        <div v-if="success" class="alert alert-success">
+          <i class="bi bi-check-circle-fill me-2"></i>
+          {{ successMessage }}
         </div>
         
         <div class="mb-3">
@@ -22,29 +20,35 @@
         </div>
         
         <div class="mb-3">
-          <label class="form-label">Full Name</label>
+          <label class="form-label">Имя пользователя (опционально)</label>
+          <input type="text" class="form-control" v-model="username">
+          <div class="form-text">Если не указать, будет сгенерировано из email</div>
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Полное имя (опционально)</label>
           <input type="text" class="form-control" v-model="fullName">
         </div>
         
         <div class="mb-3">
-          <label class="form-label">Password *</label>
+          <label class="form-label">Пароль *</label>
           <input type="password" class="form-control" v-model="password" :class="{ 'is-invalid': passwordError }">
           <div class="invalid-feedback">{{ passwordError }}</div>
         </div>
         
         <div class="mb-3">
-          <label class="form-label">Confirm Password *</label>
+          <label class="form-label">Подтверждение пароля *</label>
           <input type="password" class="form-control" v-model="confirmPassword" :class="{ 'is-invalid': confirmPasswordError }">
-          <div class="invalid-feedback">Passwords do not match</div>
+          <div class="invalid-feedback">Пароли не совпадают</div>
         </div>
         
         <button class="btn btn-primary w-100" @click="handleRegister" :disabled="loading">
           <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-          {{ loading ? 'Registering...' : 'Register' }}
+          {{ loading ? 'Регистрация...' : 'Зарегистрироваться' }}
         </button>
         
         <div class="text-center mt-3">
-          <router-link to="/login">Already have an account? Login</router-link>
+          <router-link to="/login">Уже есть аккаунт? Войти</router-link>
         </div>
       </div>
     </div>
@@ -53,47 +57,40 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref('')
 const email = ref('')
+const username = ref('')
 const fullName = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
-
-const usernameError = computed(() => {
-  if (!username.value) return 'Username is required'
-  if (username.value.length < 3) return 'Username must be at least 3 characters'
-  return ''
-})
+const successMessage = ref('')
 
 const emailError = computed(() => {
-  if (!email.value) return 'Email is required'
+  if (!email.value) return 'Email обязателен'
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email.value)) return 'Invalid email format'
+  if (!emailRegex.test(email.value)) return 'Неверный формат email'
   return ''
 })
 
 const passwordError = computed(() => {
-  if (!password.value) return 'Password is required'
-  if (password.value.length < 4) return 'Password must be at least 4 characters'
+  if (!password.value) return 'Пароль обязателен'
+  if (password.value.length < 7) return 'Пароль должен быть не менее 7 символов'
   return ''
 })
 
 const confirmPasswordError = computed(() => {
-  if (password.value !== confirmPassword.value) return 'Passwords do not match'
+  if (password.value !== confirmPassword.value) return 'Пароли не совпадают'
   return ''
 })
 
 const isValid = computed(() => {
-  return !usernameError.value && !emailError.value && !passwordError.value && !confirmPasswordError.value
+  return !emailError.value && !passwordError.value && !confirmPasswordError.value
 })
 
 async function handleRegister() {
@@ -104,19 +101,23 @@ async function handleRegister() {
   success.value = false
   
   const result = await authStore.register({
-    username: username.value,
     email: email.value,
+    username: username.value || undefined,
     password: password.value,
-    full_name: fullName.value
+    full_name: fullName.value || undefined
   })
   
   if (result.success) {
+    successMessage.value = '✓ Регистрация успешна! Допуск будет предоставлен после проверки Администратором.'
     success.value = true
-    setTimeout(() => {
-      router.push('/login')
-    }, 2000)
+    // Очищаем форму
+    email.value = ''
+    username.value = ''
+    fullName.value = ''
+    password.value = ''
+    confirmPassword.value = ''
   } else {
-    error.value = result.error || 'Registration failed'
+    error.value = result.error || 'Ошибка регистрации'
   }
   
   loading.value = false

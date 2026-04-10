@@ -8,7 +8,7 @@ import RuntimeAdmin from "../pages/RuntimeAdmin.vue" */
 
 const routes = [
     { path: '/', component: () => import('../pages/LandingPage.vue'), meta: { public: true, requiresAuth: false } },
-   { path: '/dashboard', component: () => import('../pages/Dashboard.vue'), meta: { requiresAuth: true } },
+    { path: '/dashboard', component: () => import('../pages/Dashboard.vue'), meta: { requiresAuth: true } },
     { path: '/login', component: () => import('../pages/Login.vue'), meta: { public: true, requiresAuth: false } },
     { path: '/register', component: () => import('../pages/Register.vue'), meta: { public: true, requiresAuth: false } },
     { path: '/models', component: () => import('../pages/Models.vue'), meta: { requiresAuth: true, role: 'admin' } },
