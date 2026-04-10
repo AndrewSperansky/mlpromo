@@ -6,13 +6,13 @@ Pure detection — no automatic training.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from models.ml_model import MLModel
-from models.industrial_dataset import IndustrialDatasetRaw
+from app.models.ml_model import MLModel
+from app.models.industrial_dataset import IndustrialDatasetRaw
 
 logger = logging.getLogger("promo_ml")
 

@@ -8,7 +8,6 @@ from typing import cast, Callable
 import logging
 
 # ---- Settings ----
-from app.core.settings import settings
 
 # ---- Core Logging ----
 from app.core.logging_config import setup_logging
@@ -28,7 +27,7 @@ from app.ml.self_healing.self_healing_worker import SelfHealingWorker
 
 # ========== ДОБАВЛЕНО: для работы с БД и загрузки активной модели ==========
 from app.db.session import SessionLocal
-from models.ml_model import MLModel
+from app.models.ml_model import MLModel
 from app.ml.model_loader import ModelLoader
 # =========================================================================
 

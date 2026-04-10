@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.services.registry_service import ModelRegistryService
-from models.ml_model import MLModelManager, MLModel  # ← добавили импорт MLModel
+from app.models.ml_model import MLModelManager, MLModel  # ← добавили импорт MLModel
 from app.ml.monitoring.inference_metrics import collect_inference_metrics
 
 logger = logging.getLogger(__name__)

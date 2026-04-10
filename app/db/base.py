@@ -1,3 +1,5 @@
+# app/db/base.py
+
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import MetaData
 

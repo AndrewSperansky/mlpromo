@@ -12,6 +12,102 @@
       </button>
     </div>
 
+    <!-- ===== Conformal Prediction Metrics ===== -->
+    <div class="row g-3 mb-4" v-if="conformalMetrics.available">
+      <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm"
+          style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <div class="card-body text-white">
+            <h6 class="card-title mb-2">
+              <i class="bi bi-sigma me-1"></i>
+              Alpha (α)
+            </h6>
+            <h2 class="mb-2">{{ conformalMetrics.alpha }}</h2>
+            <small class="opacity-75">
+              <i class="bi bi-info-circle me-1"></i>
+              Уровень ошибки (95% доверительный интервал → 0.05)
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm"
+          style="background: linear-gradient(135deg, #e96443 0%, #904e95 100%);">
+          <div class="card-body text-white">
+            <h6 class="card-title mb-2">
+              <i class="bi bi-calculator me-1"></i>
+              Q-hat (q̂)
+            </h6>
+            <h2 class="mb-2">{{ conformalMetrics.q_hat?.toFixed(6) ?? '—' }}</h2>
+            <small class="opacity-75">
+              <i class="bi bi-info-circle me-1"></i>
+              Квантиль оценок несоответствия (Nonconformity scores)
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm"
+          style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
+          <div class="card-body text-white">
+            <h6 class="card-title mb-2">
+              <i class="bi bi-database me-1"></i>
+              Calibration Size
+            </h6>
+            <h2 class="mb-2">{{ conformalMetrics.calibration_size }}</h2>
+            <small class="opacity-75">
+              <i class="bi bi-info-circle me-1"></i>
+              Размер калибровочной выборки (20% от данных)
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <div class="card h-100 border-0 shadow-sm"
+          style="background: linear-gradient(135deg, #134e5e 0%, #71b280 100%);">
+          <div class="card-body text-white">
+            <h6 class="card-title mb-2">
+              <i class="bi bi-arrows-angle-expand me-1"></i>
+              Interval Width
+            </h6>
+            <h2 class="mb-2">{{ conformalMetrics.interval_width?.toFixed(4) ?? '—' }}</h2>
+            <small class="opacity-75">
+              <i class="bi bi-info-circle me-1"></i>
+              Ширина доверительного интервала (2 × q̂)
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Пример интерпретации -->
+    <div class="row g-3 mb-4" v-if="conformalMetrics.available && conformalMetrics.q_hat">
+      <div class="col-md-12">
+        <div class="card border-0 shadow-sm bg-light">
+          <div class="card-body">
+            <h6 class="mb-2">
+              <i class="bi bi-graph-up me-2 text-info"></i>
+              Интерпретация
+            </h6>
+            <p class="mb-1">
+              <strong>Доверительный интервал:</strong>
+              [k_uplift - q̂, k_uplift + q̂] = k_uplift ± {{ conformalMetrics.q_hat?.toFixed(4) }}
+            </p>
+            <p class="mb-0 text-muted small">
+              <i class="bi bi-lightbulb me-1"></i>
+              Пример: при прогнозе k_uplift = 1.76,
+              95% доверительный интервал составляет
+              [{{ (1.76 - (conformalMetrics.q_hat || 0)).toFixed(4) }},
+              {{ (1.76 + (conformalMetrics.q_hat || 0)).toFixed(4) }}]
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ===== Operational Overview ===== -->
     <div class="row g-3 mb-4">
       <div class="col-md-6">
@@ -207,6 +303,22 @@ interface RuntimeStateResponse {
   feature_order?: string[]
 }
 
+interface ConformalMetrics {
+  available: boolean
+  alpha: number
+  q_hat: number | null
+  calibration_size: number
+  interval_width: number | null
+}
+
+const conformalMetrics = ref<ConformalMetrics>({
+  available: false,
+  alpha: 0.05,
+  q_hat: null,
+  calibration_size: 0,
+  interval_width: null
+})
+
 const overview = ref<OverviewResponse>({
   timestamp: "",
   runtime: {
@@ -256,7 +368,8 @@ async function refreshAll() {
   try {
     await Promise.all([
       loadOverview(),
-      loadRuntimeState()
+      loadRuntimeState(),
+      loadConformalMetrics()
     ])
   } catch (error) {
     console.error("Refresh failed:", error)
@@ -291,6 +404,33 @@ async function clearDrift() {
     await refreshAll()
   } catch (error) {
     console.error("Clear drift failed:", error)
+  }
+}
+
+async function loadConformalMetrics() {
+  try {
+    const res = await api.get("/system/runtime-state")
+    const runtime = res.data
+
+    if (runtime.conformal_q_hat || runtime.conformal) {
+      const q_hat = runtime.conformal_q_hat || runtime.conformal?.q_hat
+      const alpha = runtime.conformal?.alpha || 0.05
+      const calibration_size = runtime.conformal?.calibration_size || 0
+      const interval_width = runtime.conformal?.interval_width || (q_hat ? q_hat * 2 : null)
+
+      conformalMetrics.value = {
+        available: true,
+        alpha: alpha,
+        q_hat: q_hat,
+        calibration_size: calibration_size,
+        interval_width: interval_width
+      }
+    } else {
+      conformalMetrics.value.available = false
+    }
+  } catch (error) {
+    console.error("Failed to load conformal metrics:", error)
+    conformalMetrics.value.available = false
   }
 }
 

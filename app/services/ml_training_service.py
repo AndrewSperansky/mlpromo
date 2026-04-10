@@ -4,14 +4,14 @@
 ML Training Service — обучение на едином потоковом датасете.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import logging
 from datetime import datetime, timezone
 from app.ml.train.train_pipeline import train_pipeline
 from app.db.session import SessionLocal
 from app.ml.runtime_state import ML_RUNTIME_STATE
-from models.dataset_upload_history import DatasetUploadHistory
-from models.industrial_dataset import IndustrialDatasetRaw
+from app.models.dataset_upload_history import DatasetUploadHistory
+from app.models.industrial_dataset import IndustrialDatasetRaw
 
 logger = logging.getLogger("promo_ml")
 

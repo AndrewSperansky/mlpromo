@@ -6,8 +6,8 @@ from app.ml.runtime_state import ML_RUNTIME_STATE
 import json
 from app.core.settings import settings
 from catboost import CatBoostRegressor
+from app.models.ml_model import MLModel
 from app.db.session import SessionLocal
-from models.ml_model import MLModel
 
 
 
@@ -54,8 +54,6 @@ class ModelLoader:
         # ===== 3. Если это число — ищем в БД =====
         if isinstance(model_id, int):
             try:
-                from app.db.session import SessionLocal
-                from models.ml_model import MLModel
 
                 db = SessionLocal()
                 try:

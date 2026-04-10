@@ -5,8 +5,8 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from models.ml_model import MLModel
-from models.activation_history import ModelActivationHistory
+from app.models.ml_model import MLModel
+from app.models.activation_history import ModelActivationHistory
 from app.services.activity_service import ActivityService
 from app.models.user import User
 

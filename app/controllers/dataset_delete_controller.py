@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import cast, String
 from fastapi import HTTPException
 
-from models.industrial_dataset import IndustrialDatasetRaw
-from models.dataset_upload_history import DatasetUploadHistory
+from app.models.industrial_dataset import IndustrialDatasetRaw
+from app.models.dataset_upload_history import DatasetUploadHistory
 from app.services.activity_service import ActivityService
 from app.models.user import User
 

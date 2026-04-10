@@ -1,7 +1,7 @@
 # app/ml/registry.py
 import joblib
 from sqlalchemy.orm import Session
-from models.ml_model import MLModel
+from app.models.ml_model import MLModel
 from typing import Any
 
 

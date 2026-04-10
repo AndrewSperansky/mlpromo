@@ -4,13 +4,13 @@ import json
 import logging
 import uuid
 import time
-from typing import AsyncGenerator, Dict, List, Optional
+from typing import AsyncGenerator, Dict, List
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from models.industrial_dataset import IndustrialDatasetRaw
-from models.dataset_upload_history import DatasetUploadHistory
+from app.models.industrial_dataset import IndustrialDatasetRaw
+from app.models.dataset_upload_history import DatasetUploadHistory
 
 from app.schemas.dataset_schema import DatasetRecord
 from app.services.ml_prediction_service import MLPredictionService

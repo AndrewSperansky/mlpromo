@@ -4,7 +4,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.services.registry_service import ModelRegistryService
-from models.activation_history import ModelActivationHistory
+from app.models.activation_history import ModelActivationHistory
 from app.ml.runtime_state import ML_RUNTIME_STATE
 
 logger = logging.getLogger(__name__)

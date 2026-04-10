@@ -8,12 +8,11 @@ from io import BytesIO
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 from fastapi import UploadFile, HTTPException
 
-from models.industrial_dataset import IndustrialDatasetRaw
-from models.dataset_upload_history import DatasetUploadHistory
+from app.models.industrial_dataset import IndustrialDatasetRaw
+from app.models.dataset_upload_history import DatasetUploadHistory
 
 logger = logging.getLogger("promo_ml")
 

@@ -1,8 +1,8 @@
 # app/services/dataset_service.py
 
 from app.db.session import SessionLocal
-from models.industrial_dataset import IndustrialDatasetRaw
-from models.dataset_upload_history import DatasetUploadHistory
+from app.models.industrial_dataset import IndustrialDatasetRaw
+from app.models.dataset_upload_history import DatasetUploadHistory
 
 
 class DatasetService:

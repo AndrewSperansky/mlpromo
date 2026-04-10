@@ -8,18 +8,16 @@ import shutil
 import tempfile
 import zipfile
 import json
-import uuid
 
+from uuid import UUID
 
-from uuid import UUID, uuid4
-
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from sqlalchemy import text, select, and_
+from sqlalchemy import select, and_
 
 from app.db.session import get_db
-from models.activation_history import ModelActivationHistory
-from models.ml_model import MLModel
+from app.models.activation_history import ModelActivationHistory
+from app.models.ml_model import MLModel
 from app.models.user import User
 
 from app.core.settings import settings
@@ -32,11 +30,9 @@ from app.services.registry_service import ModelRegistryService
 from app.services.dataset_service import DatasetService
 from app.services.dataset_streaming_service import DatasetStreamingService
 from app.services.audit_service import get_audit_page
-from app.services.activity_service import ActivityService
 
-from models.dataset_upload_history import DatasetUploadHistory
-from models.industrial_dataset import IndustrialDatasetRaw
-from sqlalchemy import cast, String
+from app.models.dataset_upload_history import DatasetUploadHistory
+from app.models.industrial_dataset import IndustrialDatasetRaw
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.schemas.dataset_schema_csv import (
@@ -274,7 +270,7 @@ def rollback_model(
     Откатывает на предыдущую активную модель,
     используя таблицу истории активаций.
     """
-    from models.activation_history import ModelActivationHistory
+
 
     # 1. Найти последние 2 активации
     last_two = db.query(ModelActivationHistory).order_by(

@@ -3,15 +3,12 @@
 import logging
 import shutil
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional
 
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, and_
-from uuid import UUID
+from sqlalchemy import select, and_
 
-from models.ml_model import MLModel
-from app.core.settings import settings
+from app.models.ml_model import MLModel
 
 logger = logging.getLogger(__name__)
 

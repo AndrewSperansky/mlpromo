@@ -5,7 +5,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-from models.ml_model import MLModel
+from app.models.ml_model import MLModel
 from app.ml.predictor import Predictor
 from app.ml.train.train_pipeline import load_full_dataset
 
