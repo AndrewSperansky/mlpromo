@@ -10,6 +10,7 @@ import zipfile
 import json
 import uuid
 
+
 from uuid import UUID, uuid4
 
 from datetime import datetime, timezone, timedelta
@@ -871,3 +872,54 @@ def debug_model(model_id: int, db: Session = Depends(get_db)):
     if model:
         return {"id": model.id, "model_path": model.model_path, "is_active": model.is_active}
     return {"error": "Model not found"}
+
+
+# ==============================
+# TRAINING METRICS
+# ==============================
+
+@router.get("/training/metrics")
+def get_training_metrics():
+    """
+    Возвращает метрики обучения для графика
+    """
+    import json
+    from pathlib import Path
+    from app.core.settings import settings
+
+    MODELS_DIR = Path(settings.ML_MODEL_DIR)
+
+    # Сначала ищем в current, потом в _candidate
+    metrics_path = MODELS_DIR / "current" / "training_metrics.json"
+    if not metrics_path.exists():
+        metrics_path = MODELS_DIR / "_candidate" / "training_metrics.json"
+
+    if not metrics_path.exists():
+        return {
+            "iterations": [],
+            "train_rmse": [],
+            "val_rmse": [],
+            "best_iteration": None,
+            "message": "No training metrics available yet. Train a model first."
+        }
+
+    try:
+        with open(metrics_path) as f:
+            data = json.load(f)
+
+        return {
+            "iterations": data.get("iterations", []),
+            "train_rmse": data.get("train_rmse", []),
+            "val_rmse": data.get("val_rmse", []),
+            "best_iteration": data.get("best_iteration"),
+            "best_val_rmse": data.get("best_val_rmse"),
+            "total_iterations": len(data.get("iterations", []))
+        }
+    except Exception as e:
+        return {
+            "iterations": [],
+            "train_rmse": [],
+            "val_rmse": [],
+            "best_iteration": None,
+            "error": str(e)
+        }

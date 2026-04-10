@@ -30,7 +30,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-md-3 col-lg-2">
         <div class="card h-100 border-0 shadow-sm" :class="healthBorderClass">
           <div class="card-body">
@@ -51,10 +51,8 @@
       </div>
     </div>
 
-
     <!-- Остальные карточки здоровья системы -->
     <div class="row g-3 mb-4">
-    
       <!-- Model Status -->
       <div class="col-md-4">
         <div class="card h-100 border-0 shadow-sm">
@@ -111,8 +109,7 @@
                     {{ overview.runtime.freeze_flag ? 'Frozen' : 'Active' }}
                   </span>
                 </h3>
-                <small class="text-muted">Auto-promotion is {{ overview.runtime.freeze_flag ? 'disabled' : 'enabled'
-                }}</small>
+                <small class="text-muted">Auto-promotion is {{ overview.runtime.freeze_flag ? 'disabled' : 'enabled' }}</small>
               </div>
               <div class="rounded-circle p-2" :class="overview.runtime.freeze_flag ? 'bg-warning' : 'bg-success'">
                 <i class="bi bi-rocket-takeoff fs-4 text-white"></i>
@@ -123,33 +120,40 @@
       </div>
     </div>
 
-
-    <!-- ===== TRAINING CURVE CHART ===== -->
+    <!-- ===== TRAINING CURVE CHARTS ===== -->
     <div class="row g-3 mb-4">
       <div class="col-md-12">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-0">
             <h6 class="mb-0">
-              <i class="bi bi-graph-up me-2"></i>Training Curve
+              <i class="bi bi-graph-up me-2"></i>Training RMSE
             </h6>
           </div>
           <div class="card-body">
-            <canvas id="trainingChart" ref="trainingChartRef" height="100"></canvas>
-            <div v-if="trainingData?.best_iteration" class="text-muted small mt-2">
-              Best iteration: {{ trainingData.best_iteration }} (RMSE: {{ trainingData.best_rmse?.toFixed(6) }})
-            </div>
-            <div v-else-if="trainingData?.message" class="text-muted small mt-2">
-              {{ trainingData.message }}
-            </div>
-            <div v-else-if="trainingData?.error" class="text-danger small mt-2">
-              Error: {{ trainingData.error }}
-            </div>
+            <canvas id="trainChart" ref="trainChartRef" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-12 mt-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-0">
+            <h6 class="mb-0">
+              <i class="bi bi-graph-down me-2"></i>Validation RMSE
+            </h6>
+          </div>
+          <div class="card-body">
+            <canvas id="valChart" ref="valChartRef" height="120"></canvas>
           </div>
         </div>
       </div>
     </div>
 
-
+    <!-- Best iteration info -->
+    <div v-if="trainingData?.best_iteration" class="text-muted small mb-4">
+      <i class="bi bi-info-circle me-1"></i>
+      Best iteration: {{ trainingData.best_iteration }} (Best RMSE: {{ trainingData.best_rmse?.toFixed(6) }})
+    </div>
 
     <!-- ===== PERFORMANCE CARDS ===== -->
     <div class="row g-3 mb-4">
@@ -157,8 +161,7 @@
         <div class="card h-100 border-0 shadow-sm">
           <div class="card-body">
             <h6 class="text-muted mb-2"><i class="bi bi-stopwatch me-1"></i> Latency P95</h6>
-            <h2 class="mb-0">{{ overview.telemetry.latency_p95_ms?.toFixed(0) ?? '—' }} <small
-                class="fs-6 text-muted">ms</small></h2>
+            <h2 class="mb-0">{{ overview.telemetry.latency_p95_ms?.toFixed(0) ?? '—' }} <small class="fs-6 text-muted">ms</small></h2>
             <small class="text-muted">Last 100 predictions</small>
           </div>
         </div>
@@ -276,8 +279,11 @@ const overview = ref<OverviewResponse>({
 
 const containers = ref<Record<string, ContainerInfo>>({})
 const containersTimestamp = ref('')
-const trainingChartRef = ref<HTMLCanvasElement | null>(null)
-let trainingChartInstance: Chart | null = null
+const trainChartRef = ref<HTMLCanvasElement | null>(null)
+const valChartRef = ref<HTMLCanvasElement | null>(null)
+let trainChartInstance: any = null
+let valChartInstance: any = null
+
 const trainingData = ref<{
   iterations: number[];
   rmse: number[];
@@ -316,7 +322,6 @@ const healthBgClass = computed(() => {
   if (status === 'Attention') return 'bg-info'
   return 'bg-danger'
 })
-
 
 const healthBorderClass = computed(() => {
   const status = healthStatus.value
@@ -429,76 +434,103 @@ function formatTime(dateStr: string) {
   return date.toLocaleTimeString('ru-RU')
 }
 
-
 async function loadTrainingMetrics() {
   try {
     const response = await axios.get('/api/v1/ml/training/metrics')
     trainingData.value = response.data
 
-    // Исправлено: проверяем не null и наличие данных
-    if (trainingData.value && trainingData.value.iterations && trainingData.value.iterations.length > 0) {
+    if (trainingData.value && trainingData.value.iterations?.length > 0) {
       await nextTick()
-      renderTrainingChart()
+      renderTrainingCharts()
     }
   } catch (error) {
     console.error('Failed to load training metrics:', error)
   }
 }
 
+function renderTrainingCharts() {
+  if (!trainingData.value) return
 
-function renderTrainingChart() {
-  if (!trainingChartRef.value || !trainingData.value) return
-  if (trainingChartInstance) trainingChartInstance.destroy()
+  // Train Chart
+  if (trainChartRef.value) {
+    if (trainChartInstance) trainChartInstance.destroy()
 
-  const ctx = trainingChartRef.value.getContext('2d')
-  if (!ctx) return
-
-  trainingChartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: trainingData.value.iterations,
-      datasets: [{
-        label: 'RMSE',
-        data: trainingData.value.rmse,
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        fill: true,
-        tension: 0.4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        tooltip: {
-          callbacks: {
-            // Исправлено: явно указываем тип для context
-            label: (context: any) => {
-              const value = context.raw as number
-              return `RMSE: ${value.toFixed(6)}`
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          title: {
-            display: true,
-            text: 'RMSE'
-          }
+    const ctx = trainChartRef.value.getContext('2d')
+    if (ctx) {
+      trainChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: trainingData.value.iterations,
+          datasets: [{
+            label: 'Training RMSE',
+            data: trainingData.value.rmse,
+            borderColor: 'rgb(54, 162, 235)',
+            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
         },
-        x: {
-          title: {
-            display: true,
-            text: 'Iteration'
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (context: any) => `RMSE: ${context.raw.toFixed(6)}`
+              }
+            }
+          },
+          scales: {
+            y: { 
+              title: { display: true, text: 'RMSE' }
+            },
+            x: { title: { display: true, text: 'Iteration' } }
           }
         }
-      }
+      })
     }
-  })
+  }
+
+  // Validation Chart
+  if (valChartRef.value) {
+    if (valChartInstance) valChartInstance.destroy()
+
+    const ctx = valChartRef.value.getContext('2d')
+    if (ctx) {
+      valChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: trainingData.value.iterations,
+          datasets: [{
+            label: 'Validation RMSE',
+            data: trainingData.value.rmse,
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (context: any) => `RMSE: ${context.raw.toFixed(6)}`
+              }
+            }
+          },
+          scales: {
+            y: { 
+              title: { display: true, text: 'RMSE' }
+            },
+            x: { title: { display: true, text: 'Iteration' } }
+          }
+        }
+      })
+    }
+  }
 }
-
-
 
 onMounted(() => {
   loadDashboard()

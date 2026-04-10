@@ -203,6 +203,12 @@ class ModelRegistryService:
                 for f in candidate_dir.glob("shap_*"):
                     shutil.copy(f, current_dir / f.name)
 
+                # ========== НОВОЕ: копируем training_metrics.json ==========
+                training_metrics_src = candidate_dir / "training_metrics.json"
+                if training_metrics_src.exists():
+                    shutil.copy(training_metrics_src, current_dir / "training_metrics.json")
+                    logger.info("✅ Copied training_metrics.json to current")
+
                 # Обновляем путь в БД
                 model.model_path = str(new_path)
                 self.db.commit()

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 from sqlalchemy.orm import Session
 
 from app.ml.train.shap_utils import (
@@ -119,7 +120,7 @@ def train_pipeline(
 
     rows_used = cleaned_count
 
-    # ========== ОПРЕДЕЛЯЕМ ПРИЗНАКИ ==========
+    # ========== ОПРЕДЕЛЯЕМ ПРИЗНАКИ (FEATURES) ==========
     exclude_cols = {"id", TARGET}
 
     numeric_columns = []
@@ -136,23 +137,83 @@ def train_pipeline(
 
     logger.info(f"📊 Features ({len(FEATURES)}): {FEATURES}")
 
+    # ========== РАЗДЕЛЯЕМ ДАННЫЕ ==========
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    logger.info(f"📊 Train size: {len(X_train)}, Validation size: {len(X_val)}")
+
     # =========================
     # TRAIN
     # =========================
+    # model = CatBoostRegressor(
+    #     iterations=300,
+    #     depth=6,
+    #     learning_rate=0.05,
+    #     loss_function="RMSE",
+    #     random_seed=42,
+    #     verbose=False,
+    # )
+    #
+    # model.fit(X, y)
+    #
+    # preds = model.predict(X)
+    # rmse_value = float(mean_squared_error(y, preds, squared=False))
+    # logger.info(f"📈 Training RMSE: {rmse_value:.6f}")
+
+    # =========================
+    # TRAIN WITH VALIDATION
+    # =========================
+
     model = CatBoostRegressor(
-        iterations=300,
+        iterations=500,  # увеличим до 500
         depth=6,
         learning_rate=0.05,
         loss_function="RMSE",
         random_seed=42,
         verbose=False,
+        early_stopping_rounds=50  # остановка при отсутствии улучшений
     )
 
-    model.fit(X, y)
+    # Обучаем с валидационной выборкой
+    model.fit(
+        X_train, y_train,
+        eval_set=(X_val, y_val),
+        verbose=False,
+        plot=False
+    )
 
-    preds = model.predict(X)
+    # Получаем метрики для графика
+    evals_result = model.get_evals_result()
+    train_rmse = evals_result['learn']['RMSE']
+    val_rmse = evals_result['validation']['RMSE']
+    iterations = list(range(1, len(train_rmse) + 1))
+
+    # Сохраняем метрики в JSON для API
+    training_metrics = {
+        "iterations": iterations,
+        "train_rmse": train_rmse,
+        "val_rmse": val_rmse,
+        "best_iteration": model.get_best_iteration(),
+        "best_val_rmse": min(val_rmse)
+    }
+
+    # Сохраняем в файл
+    metrics_path = candidate_dir / "training_metrics.json"
+    with open(metrics_path, "w") as f:
+        json.dump(training_metrics, f, indent=2)
+
+    # Для обратной совместимости — используем предсказания на ВСЕХ данных
+    preds = model.predict(X)  # ← предсказания на всех данных
     rmse_value = float(mean_squared_error(y, preds, squared=False))
-    logger.info(f"📈 Training RMSE: {rmse_value:.6f}")
+    logger.info(f"📈 Training RMSE (full dataset): {rmse_value:.6f}")
+
+    # Для метрик модели используем validation RMSE (честная оценка)
+    preds_val = model.predict(X_val)
+    val_rmse_final = float(mean_squared_error(y_val, preds_val, squared=False))
+    logger.info(f"📊 Validation RMSE (hold-out): {val_rmse_final:.6f}")
+
 
     # =========================
     # REGISTRATION
@@ -169,7 +230,7 @@ def train_pipeline(
             model_type="regression",
             target=TARGET,
             features=FEATURES,
-            metrics={"rmse": rmse_value},
+            metrics={"rmse": val_rmse_final},
             trained_rows_count=rows_used,
         )
 
@@ -288,13 +349,30 @@ def train_pipeline(
             meta["conformal_q_hat"] = cp.q_hat
             meta["conformal"] = cp.to_dict()
             meta["metrics"].update({
+                "rmse": val_rmse_final,  # ← validation RMSE (честная оценка)
+
+                # Дополнительные метрики для анализа
+                "train_rmse": float(train_rmse[-1]),  # ← финальный train RMSE
+                "val_rmse": val_rmse_final,  # ← дубль для ясности
+
+                # Информация об обучении
+                "best_iteration": model.get_best_iteration(),
+                "total_iterations": len(train_rmse),
+
+                # Статистические метрики
                 "rmse_ci": ci,
                 "uplift": uplift,
                 "accuracy_eps": accuracy_eps,
+
+                # Conformal prediction
                 "coverage": coverage,
                 "coverage_target": 0.95,
                 "is_calibrated": abs(coverage - 0.95) <= 0.03,
+
+                # Информация о выборках
                 "sample_size": len(y),
+                "train_size": len(X_train),
+                "validation_size": len(X_val),
                 "calibration_size": calib_size,
                 "test_size": len(y_test),
             })

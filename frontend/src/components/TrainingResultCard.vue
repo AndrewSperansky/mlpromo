@@ -28,14 +28,12 @@
         </thead>
         <tbody>
           <tr v-for="(value, metric) in trainingResult.comparison.metrics_diff" :key="metric">
-            <td class="fw-bold">{{ metric.toUpperCase() }}</td>
-            <td class="text-muted">{{ formatMetric(trainingResult.comparison.current_metrics[metric]) }}</td>
+            <td class="fw-bold">{{ String(metric).toUpperCase() }}</td>
+            <td>{{ trainingResult.comparison.current_metrics[metric]?.toFixed(6) }}</td>
             <td>→</td>
-            <td class="fw-bold">{{ formatMetric(trainingResult.comparison.candidate_metrics[metric]) }}</td>
+            <td>{{ trainingResult.comparison.candidate_metrics[metric]?.toFixed(6) }}</td>
             <td :class="value >= 0 ? 'text-success' : 'text-danger'">
               {{ value >= 0 ? '+' : '' }}{{ value.toFixed(6) }}
-              <span v-if="metric === 'rmse' && value >= 0" class="ms-1">✅</span>
-              <span v-else-if="metric === 'rmse' && value < 0" class="ms-1">⚠️</span>
             </td>
           </tr>
         </tbody>
@@ -99,10 +97,10 @@ const props = defineProps<{
 const emit = defineEmits(['activated', 'dismissed'])
 const activating = ref(false)
 
-function formatMetric(value: number | undefined) {
+/* function formatMetric(value: number | undefined) {
   if (value === undefined) return '—'
   return value.toFixed(6)
-}
+} */
 
 function formatDate(dateStr: string) {
   if (!dateStr) return '—'
@@ -139,6 +137,7 @@ async function dismiss() {
   color: #198754 !important;
   font-weight: bold;
 }
+
 .text-danger {
   color: #dc3545 !important;
   font-weight: bold;
