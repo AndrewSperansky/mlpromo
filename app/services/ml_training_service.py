@@ -46,10 +46,11 @@ class MLTrainingService:
             raise ValueError("No data in industrial_dataset_raw")
 
         # 🔥 Убираем target_column — train_pipeline сам знает целевую переменную
-        result = train_pipeline(
-            promote=promote,
-            trigger=trigger,
-        )
+        result = train_pipeline(promote=promote, trigger=trigger,)
+
+        # 🔥 Логируем что пришло из train_pipeline
+        logger.info(f"🔍 train_pipeline result keys: {result.keys()}")
+        logger.info(f"🔍 comparison in result: {result.get('comparison')}")
 
         # ========== НОВОЕ: Сохраняем результат для UI ==========
         if result.get("comparison"):

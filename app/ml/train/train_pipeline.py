@@ -482,6 +482,9 @@ def train_pipeline(
         finally:
             db_local.close()
 
+    logger.info(f"🔍 Returning comparison: {comparison}")
+    logger.info(f"🔍 FINAL comparison type: {type(comparison)}")
+
     return {
         "status": "trained",
         "model_id": db_model.id,

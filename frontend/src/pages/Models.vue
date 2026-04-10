@@ -6,7 +6,7 @@
       <h2>Model Registry</h2>
 
       <div class="d-flex mt-4 gap-2 align-items-center">
-        <button class="btn btn-primary" :disabled="training" @click="showTrainModal = true">
+        <button class="btn btn-primary" :disabled="training" @click="handleTrain">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
 
@@ -21,6 +21,7 @@
       </div>
     </div>
 
+    <!-- Результат обучения -->
     <div v-if="uploadResult" class="alert alert-info">
       <strong>Result:</strong>
       <pre class="mb-0">{{ uploadResult }}</pre>
@@ -41,22 +42,6 @@
       Show Activation History
     </button>
 
-    <!-- Train Modal -->
-    <TrainModal 
-      :show="showTrainModal" 
-      :training="training"
-      @close="showTrainModal = false" 
-      @confirm="handleTrain" 
-    />
-
-    <!-- Training Result Card (как в RuntimeAdmin) -->
-    <TrainingResultCard 
-      v-if="trainingCompleted && trainingResult" 
-      :trainingResult="trainingResult"
-      @activated="handleTrainingActivated"
-      @dismissed="handleTrainingDismissed"
-    />
-
     <!-- Activate Modal -->
     <ActivateModal 
       :show="showActivateModal" 
@@ -65,7 +50,6 @@
       @confirm="confirmActivate" 
     />
 
-    <!-- Deactivate Modal -->
     <DeactivateModal 
       :show="showDeactivateModal" 
       :modelId="selectedModelForDeactivation"
@@ -73,7 +57,6 @@
       @confirm="confirmDeactivate" 
     />
 
-    <!-- Delete Modal -->
     <DeleteModal 
       :show="showDeleteModal" 
       :modelId="modelToDelete"
@@ -100,7 +83,6 @@
 import { ref, onMounted } from 'vue'
 import {
   getModels,
-  activateModel,
   deactivateModel,
   uploadModel,
   evaluateModel,
@@ -113,8 +95,6 @@ import ModelTable from '../components/ModelTable.vue'
 import ModelDetailsModal from "@/components/ModelDetailsModal.vue"
 import CompareModelsModal from '../components/CompareModelsModal.vue'
 import ActivationHistoryModal from '../components/ActivationHistoryModal.vue'
-import TrainModal from '../components/TrainModal.vue'
-import TrainingResultCard from '../components/TrainingResultCard.vue'
 import ActivateModal from '../components/ActivateModal.vue'
 import DeactivateModal from '../components/DeactivateModal.vue'
 import DeleteModal from '../components/DeleteModal.vue'
@@ -127,7 +107,6 @@ const training = ref(false)
 const uploadResult = ref<any>(null)
 const selectedModelId = ref<number | null>(null)
 
-const showTrainModal = ref(false)
 const showActivateModal = ref(false)
 const showDeactivateModal = ref(false)
 const showDeleteModal = ref(false)
@@ -137,10 +116,6 @@ const showHistoryModal = ref(false)
 const selectedModelForActivation = ref<string>('')
 const selectedModelForDeactivation = ref<string>('')
 const modelToDelete = ref<number | null>(null)
-
-// Training state (как в RuntimeAdmin)
-const trainingCompleted = ref(false)
-const trainingResult = ref<any>(null)
 
 async function loadModels() {
   const response = await getModels()
@@ -158,36 +133,17 @@ function goToModel(id: number) {
 
 async function handleTrain() {
   training.value = true
-  showTrainModal.value = false
   
   try {
     const response = await trainModel({ promote: false })
-    
-    // Временно: показываем alert с результатом
-    alert(`Model ${response.data.model_id} trained! RMSE: ${response.data.metrics?.rmse?.toFixed(6)}`)
-    
     uploadResult.value = response.data
-    trainingResult.value = response.data
-    trainingCompleted.value = true
     await loadModels()
   } catch (error) {
     console.error('Training failed:', error)
     alert('Training failed. Check server logs.')
-    trainingCompleted.value = false
   } finally {
     training.value = false
   }
-}
-
-function handleTrainingActivated() {
-  trainingCompleted.value = false
-  trainingResult.value = null
-  loadModels()
-}
-
-function handleTrainingDismissed() {
-  trainingCompleted.value = false
-  trainingResult.value = null
 }
 
 function openActivateModal(modelId: number) {
@@ -201,9 +157,10 @@ function openDeactivateModal(modelId: number) {
 }
 
 async function confirmActivate() {
-  await activateModel(Number(selectedModelForActivation.value))
+  await deactivateModel(Number(selectedModelForActivation.value))
   showActivateModal.value = false
   await loadModels()
+  alert('✅ Model activated successfully!')
 }
 
 async function confirmDeactivate() {
