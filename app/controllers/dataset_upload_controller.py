@@ -13,6 +13,9 @@ from fastapi import UploadFile, HTTPException
 
 from app.models.industrial_dataset import IndustrialDatasetRaw
 from app.models.dataset_upload_history import DatasetUploadHistory
+from app.models.user import User
+
+from app.services.activity_service import ActivityService
 
 logger = logging.getLogger("promo_ml")
 
@@ -20,8 +23,9 @@ logger = logging.getLogger("promo_ml")
 class DatasetUploadController:
     """Контроллер для загрузки датасета"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, current_user: User = None):
         self.db = db
+        self.current_user = current_user
 
     def upload_csv(self, file: UploadFile) -> dict:
         """
@@ -78,6 +82,16 @@ class DatasetUploadController:
             system_service.force_retrain()
         except Exception as e:
             logger.warning(f"Failed to trigger retrain check: {e}")
+
+            # 🔥 Логируем действие
+            if self.current_user:
+                ActivityService.log(
+                    db=self.db,
+                    user_id=self.current_user.id,
+                    action="upload_dataset",
+                    resource=f"batch_{batch_id}",
+                    details=f"Uploaded {file.filename}, records: {records_saved}"
+                )
 
         return {
             "batch_id": str(batch_id),

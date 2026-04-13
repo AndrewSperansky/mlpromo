@@ -527,14 +527,15 @@ def get_dataset_stats():
 @router.post("/dataset/upload")
 def upload_dataset(
         file: UploadFile = File(...),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     """
     Загружает CSV файл и добавляет данные в industrial_dataset_raw
     """
     logger.info(f"📤 Uploading dataset: {file.filename}")
 
-    controller = DatasetUploadController(db)
+    controller = DatasetUploadController(db, current_user)
 
     try:
         result = controller.upload_csv(file)
@@ -753,6 +754,7 @@ async def stream_dataset(
     request: Request,
     ml_service: MLPredictionService = Depends(),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Streaming endpoint for dataset upload from 1C
@@ -764,7 +766,7 @@ async def stream_dataset(
     service = DatasetStreamingService(ml_service)
 
     # 🔥 Передаём db
-    result = await service.process_stream(request.stream(), db)
+    result = await service.process_stream(request.stream(), db, current_user)
 
     return result
 

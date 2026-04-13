@@ -59,6 +59,16 @@ class DatasetDeleteController:
             logger.info(
                 f"🗑️ Deleted batch {batch_id_str}: {rows_deleted} rows removed from data, history record deleted")
 
+            # 🔥 Логируем действие (перед return)
+            if self.current_user:
+                ActivityService.log(
+                    db=self.db,
+                    user_id=self.current_user.id,
+                    action="delete_dataset",
+                    resource=f"batch_{batch_id_str}",
+                    details=f"Deleted batch {batch_id_str}, rows: {rows_deleted}"
+                )
+
             return {
                 "status": "success",
                 "batch_id": batch_id_str,

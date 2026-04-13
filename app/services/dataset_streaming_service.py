@@ -13,7 +13,9 @@ from app.models.industrial_dataset import IndustrialDatasetRaw
 from app.models.dataset_upload_history import DatasetUploadHistory
 
 from app.schemas.dataset_schema import DatasetRecord
+
 from app.services.ml_prediction_service import MLPredictionService
+from app.services.activity_service import ActivityService
 
 logger = logging.getLogger("promo_ml")
 
@@ -32,7 +34,8 @@ class DatasetStreamingService:
     async def process_stream(
         self,
         stream_generator: AsyncGenerator[bytes, None],
-        db: Session
+        db: Session,
+        current_user=None
     ) -> dict:
         """
         Process streaming NDJSON data
@@ -153,6 +156,17 @@ class DatasetStreamingService:
             # =========================================================
 
             if status == "success":
+
+                # 🔥 Логируем действие
+                if current_user:
+                    ActivityService.log(
+                        db=db,
+                        user_id=current_user.id,
+                        action="upload_dataset",
+                        resource=f"batch_{batch_id}",
+                        details=f"Stream upload, records: {records_saved}"
+                    )
+
                 # Триггерим проверку необходимости retrain
                 try:
                     from app.services.system_service import SystemService

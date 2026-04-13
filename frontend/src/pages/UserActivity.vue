@@ -25,7 +25,7 @@
               <option value="predict">Predict</option>
               <option value="train">Train Model</option>
               <option value="activate">Activate Model</option>
-              <option value="upload">Upload Dataset</option>
+              <option value="upload_dataset">Upload Dataset</option>
               <option value="delete_model">Delete Model</option>
               <option value="delete_dataset">Delete Dataset</option>
               <option value="delete_user">Delete User</option>
@@ -182,6 +182,7 @@ function getActionBadgeClass(action: string): string {
     case 'train': return 'badge bg-warning'
     case 'activate': return 'badge bg-danger'
     case 'upload': return 'badge bg-info'
+    case 'upload_dataset': return 'badge bg-info'
     case 'delete_model': return 'badge bg-dark'
     case 'delete_dataset': return 'badge bg-dark'
     case 'delete_user': return 'badge bg-dark'
