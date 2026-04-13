@@ -30,6 +30,7 @@ from app.services.registry_service import ModelRegistryService
 from app.services.dataset_service import DatasetService
 from app.services.dataset_streaming_service import DatasetStreamingService
 from app.services.audit_service import get_audit_page
+from app.services.activity_service import ActivityService
 
 from app.models.dataset_upload_history import DatasetUploadHistory
 from app.models.industrial_dataset import IndustrialDatasetRaw
@@ -55,7 +56,6 @@ from app.controllers.dataset_delete_controller import DatasetDeleteController
 from app.controllers.model_delete_controller import ModelDeleteController
 
 from app.auth.dependencies import get_current_user
-
 
 
 logger = logging.getLogger("promo_ml")
@@ -219,6 +219,8 @@ training_service = MLTrainingService()
 @router.post("/train", response_model=TrainResponse)  # ← меняем response_model
 def train_model(
         request: TrainRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
 ):
     """
     Обучает модель на ВСЁМ датасете (industrial_dataset_raw).
@@ -232,6 +234,15 @@ def train_model(
     result = training_service.train(
         promote=request.promote,
         trigger="api",
+    )
+
+    # 🔥 Логируем действие
+    ActivityService.log(
+        db=db,
+        user_id=current_user.id,
+        action="train_model",
+        resource=f"model_{result.get('model_id')}",
+        details=f"Model {result.get('model_id')} trained (promote={request.promote})"
     )
 
     return TrainResponse(**result)  # ← меняем на TrainResponse
@@ -413,10 +424,21 @@ def promote_model(
     model_id: int,
     force: bool = False,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     controller = ModelActivationController()
 
     try:
+
+        # 🔥 Логируем действие
+        ActivityService.log(
+            db=db,
+            user_id=current_user.id,
+            action="activate_model",
+            resource=f"model_{model_id}",
+            details=f"Model {model_id} activated by {current_user.username}"
+        )
+
         return controller.promote_model(model_id, db, force=force)
 
     except ValueError as e:
