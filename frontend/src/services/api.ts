@@ -91,6 +91,10 @@ export interface ModelItem {
     version: string
     active: boolean
     created_at: string
+    metrics?: {
+        rmse?: number
+        [key: string]: any
+    }
 }
 
 

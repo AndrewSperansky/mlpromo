@@ -195,6 +195,8 @@ async function checkNewData() {
   }
 }
 
+
+/// СРАВНЕНИЕ МОДЕЛЕЙ И РЕНДЕРИНГ БАННЕРА ПОСЛЕ ОБУЧЕНИЯ
 async function handleTrain() {
   training.value = true
   
@@ -202,47 +204,46 @@ async function handleTrain() {
     const response = await trainModel({ promote: false })
     uploadResult.value = response.data
     
-    // Получаем текущую активную модель для сравнения
-    const activeModel = models.value.find(m => m.active)
-    const newModelMetrics = response.data.metrics
+    // Получаем comparison из ответа
+    const comparison = response.data.comparison
+    const newModelId = response.data.model_id
     
-    // Сравниваем RMSE
-    if (activeModel && newModelMetrics) {
-      const oldRMSE = activeModel.metrics?.rmse
-      const newRMSE = newModelMetrics.rmse
+    if (comparison && newModelId) {
+      const rmseOld = comparison.current_metrics?.rmse ?? null
+      const rmseNew = comparison.candidate_metrics?.rmse ?? null
+      const isBetter = comparison.is_better ?? false
+      const improvement = comparison.improvement_percent ?? 0
       
-      if (newRMSE <= oldRMSE) {
-        // Метрики улучшились или такие же → активируем автоматически
+      if (isBetter) {
+        // Метрики улучшились — активируем автоматически
+        await api.post(`/ml/models/${newModelId}/activate`)
         trainingResultType.value = 'success'
         trainingResultTitle.value = '✅ Model Auto-Activated'
-        trainingResultMessage.value = `New model (ID: ${response.data.model_id}) has been activated automatically.`
-        trainingResultDetails.value = `RMSE: ${oldRMSE?.toFixed(6)} → ${newRMSE?.toFixed(6)} (improved)`
-        
-        // Активируем модель
-        await api.post(`/ml/models/${response.data.model_id}/activate`)
+        trainingResultMessage.value = `New model (ID: ${newModelId}) activated automatically.`
+        trainingResultDetails.value = `RMSE: ${rmseOld?.toFixed(6) || '?'} → ${rmseNew?.toFixed(6) || '?'} (improved by ${Math.abs(improvement).toFixed(1)}%)`
       } else {
-        // Метрики хуже → не активируем
+        // Метрики хуже — не активируем
         trainingResultType.value = 'warning'
         trainingResultTitle.value = '⚠️ Model Trained but Not Activated'
-        trainingResultMessage.value = `New model (ID: ${response.data.model_id}) has worse metrics.`
-        trainingResultDetails.value = `RMSE: ${oldRMSE?.toFixed(6)} → ${newRMSE?.toFixed(6)} (worsened by ${((newRMSE - oldRMSE) / oldRMSE * 100).toFixed(1)}%)`
+        trainingResultMessage.value = `New model (ID: ${newModelId}) has worse metrics.`
+        trainingResultDetails.value = `RMSE: ${rmseOld?.toFixed(6) || '?'} → ${rmseNew?.toFixed(6) || '?'} (worsened by ${Math.abs(improvement).toFixed(1)}%)`
       }
+    } else if (!models.value.find(m => m.active) && newModelId) {
+      // Первая модель — активируем
+      await api.post(`/ml/models/${newModelId}/activate`)
+      trainingResultType.value = 'success'
+      trainingResultTitle.value = '✅ First Model Activated'
+      trainingResultMessage.value = `Model (ID: ${newModelId}) activated as first model.`
+      trainingResultDetails.value = `RMSE: ${response.data.metrics?.rmse?.toFixed(6) || 'N/A'}`
     } else {
-      // Нет активной модели — активируем первую
-      if (response.data.model_id) {
-        await api.post(`/ml/models/${response.data.model_id}/activate`)
-        trainingResultType.value = 'success'
-        trainingResultTitle.value = '✅ First Model Activated'
-        trainingResultMessage.value = `Model (ID: ${response.data.model_id}) has been activated as the first model.`
-      }
+      // Нет comparison — просто показываем результат
+      trainingResultType.value = 'info'
+      trainingResultTitle.value = 'ℹ️ Model Trained'
+      trainingResultMessage.value = `New model (ID: ${newModelId}) created.`
+      trainingResultDetails.value = 'Check Models table for details'
     }
     
     await loadModels()
-    
-    // Автоматически скрываем сообщение через 5 секунд
-   /*  setTimeout(() => {
-      trainingResultMessage.value = null
-    }, 120000) */
     
   } catch (error) {
     console.error('Training failed:', error)

@@ -422,66 +422,72 @@ def train_pipeline(
 
     logger.info(f"✅ Training pipeline completed: model_id={db_model.id}, promoted={promoted}")
 
-    # ========== ВЫЧИСЛЯЕМ COMPARISON ДЛЯ UI ==========
+    # ========== ВЫЧИСЛЯЕМ COMPARISON ДЛЯ UI ВСЕГДА !!!! ==========
+
+    # if promote is False:   <--  Удалили
+
     comparison = None
-    if promote is False:
-        db_local = SessionLocal()
-        try:
-            registry_local = ModelRegistryService(db_local)
-            current_model = registry_local.get_active_model("promo_uplift")
+    db_local = SessionLocal()
+    try:
+        registry_local = ModelRegistryService(db_local)
+        current_model = registry_local.get_active_model("promo_uplift")
 
-            current_metrics_dict = None
-            if current_model and current_model.metrics is not None:
-                if isinstance(current_model.metrics, dict):
-                    current_metrics_dict = current_model.metrics
-                else:
-                    current_metrics_dict = json.loads(current_model.metrics) if isinstance(current_model.metrics, str) else None
-
-            new_metrics_dict = meta.get("metrics") if isinstance(meta.get("metrics"), dict) else None
-
-            if current_model and current_metrics_dict and new_metrics_dict:
-                current_rmse = current_metrics_dict.get("rmse")
-                new_rmse = new_metrics_dict.get("rmse")
-
-                if current_rmse is not None and new_rmse is not None:
-                    is_better = new_rmse < current_rmse
-                    rmse_delta = current_rmse - new_rmse
-                    improvement_percent = (rmse_delta / current_rmse) * 100 if current_rmse != 0 else 0
-
-                    metrics_diff = {}
-                    all_metrics = set(current_metrics_dict.keys()) | set(new_metrics_dict.keys())
-
-                    for metric in all_metrics:
-                        curr = current_metrics_dict.get(metric)
-                        new = new_metrics_dict.get(metric)
-
-                        if curr is not None and new is not None:
-                            if metric in ["rmse", "mae", "mape"]:
-                                metrics_diff[metric] = round(curr - new, 6)
-                            else:
-                                metrics_diff[metric] = round(new - curr, 6)
-
-                    comparison = {
-                        "current_model_id": current_model.id,
-                        "candidate_model_id": db_model.id,
-                        "current_metrics": current_metrics_dict,
-                        "candidate_metrics": new_metrics_dict,
-                        "is_better": is_better,
-                        "rmse_delta": round(rmse_delta, 6),
-                        "improvement_percent": round(improvement_percent, 2),
-                        "metrics_diff": metrics_diff,
-                    }
-
-                    logger.info(f"📊 Comparison computed: is_better={is_better}, improvement={improvement_percent:.2f}%")
-                else:
-                    logger.warning(f"Missing RMSE: current={current_rmse}, new={new_rmse}")
+        current_metrics_dict = None
+        if current_model and current_model.metrics is not None:
+            if isinstance(current_model.metrics, dict):
+                current_metrics_dict = current_model.metrics
             else:
-                logger.info("No current model or metrics, skipping comparison")
-        except Exception as e:
-            logger.error(f"Failed to compute comparison: {e}", exc_info=True)
-        finally:
-            db_local.close()
+                current_metrics_dict = json.loads(current_model.metrics) if isinstance(current_model.metrics,
+                                                                                       str) else None
 
+        new_metrics_dict = meta.get("metrics") if isinstance(meta.get("metrics"), dict) else None
+
+        if current_model and current_metrics_dict and new_metrics_dict:
+            current_rmse = current_metrics_dict.get("rmse")
+            new_rmse = new_metrics_dict.get("rmse")
+
+            if current_rmse is not None and new_rmse is not None:
+                is_better = new_rmse < current_rmse
+                rmse_delta = current_rmse - new_rmse
+                improvement_percent = (rmse_delta / current_rmse) * 100 if current_rmse != 0 else 0
+
+                metrics_diff = {}
+                all_metrics = set(current_metrics_dict.keys()) | set(new_metrics_dict.keys())
+
+                for metric in all_metrics:
+                    curr = current_metrics_dict.get(metric)
+                    new = new_metrics_dict.get(metric)
+
+                    if curr is not None and new is not None:
+                        if metric in ["rmse", "mae", "mape"]:
+                            metrics_diff[metric] = round(curr - new, 6)
+                        else:
+                            metrics_diff[metric] = round(new - curr, 6)
+
+                comparison = {
+                    "current_model_id": current_model.id,
+                    "candidate_model_id": db_model.id,
+                    "current_metrics": current_metrics_dict,
+                    "candidate_metrics": new_metrics_dict,
+                    "is_better": is_better,
+                    "rmse_delta": round(rmse_delta, 6),
+                    "improvement_percent": round(improvement_percent, 2),
+                    "metrics_diff": metrics_diff,
+                }
+
+                logger.info(f"📊 Comparison computed: is_better={is_better}, improvement={improvement_percent:.2f}%")
+            else:
+                logger.warning(f"Missing RMSE: current={current_rmse}, new={new_rmse}")
+        else:
+            logger.info("No current model or metrics, skipping comparison")
+
+    except Exception as e:
+        logger.error(f"Failed to compute comparison: {e}", exc_info=True)
+    finally:
+        db_local.close()
+
+    # 🔥 Логируем что возвращаем
+    logger.info(f"📦 Returning comparison: {json.dumps(comparison, indent=2) if comparison else 'None'}")
     logger.info(f"🔍 Returning comparison: {comparison}")
     logger.info(f"🔍 FINAL comparison type: {type(comparison)}")
 

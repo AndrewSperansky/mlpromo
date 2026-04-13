@@ -45,26 +45,33 @@ class MLTrainingService:
         if total_rows == 0:
             raise ValueError("No data in industrial_dataset_raw")
 
-        # 🔥 Убираем target_column — train_pipeline сам знает целевую переменную
-        result = train_pipeline(promote=promote, trigger=trigger,)
+        # 🔥
+        result = train_pipeline(promote=promote, trigger=trigger)
 
         # 🔥 Логируем что пришло из train_pipeline
         logger.info(f"🔍 train_pipeline result keys: {result.keys()}")
         logger.info(f"🔍 comparison in result: {result.get('comparison')}")
 
-        # ========== НОВОЕ: Сохраняем результат для UI ==========
-        if result.get("comparison"):
+        # ========== СОХРАНЯЕМ RESULT ДЛЯ UI (ВСЕГДА, ДАЖЕ ЕСЛИ НЕ ЛУЧШЕ) ==========
+        comparison = result.get("comparison")
+
+        if comparison is not None:  # ← 🔥 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
             ML_RUNTIME_STATE["training_completed"] = True
             ML_RUNTIME_STATE["training_result"] = {
-                "comparison": result["comparison"],
-                "candidate_model_id": result["model_id"],
-                "candidate_metrics": result["metrics"],
+                "comparison": comparison,
+                "candidate_model_id": result.get("model_id"),
+                "candidate_metrics": result.get("metrics"),
                 "trained_at": datetime.now(timezone.utc).isoformat(),
             }
-            logger.info(f"✅ Training result saved to runtime_state: model_id={result['model_id']}")
 
+            logger.info(
+                f"✅ Training result saved to runtime_state: model_id={result.get('model_id')}, "
+                f"is_better={comparison.get('is_better')}"
+            )
+        else:
+            logger.warning("⚠️ Comparison is None — runtime_state NOT updated")
 
-
+        # ========= LOG =========
         logger.info(
             "✅ ML training completed",
             extra={
@@ -74,6 +81,7 @@ class MLTrainingService:
             },
         )
 
+        # ========== FINAL API RESPONSE ==========
         return {
             "status": "success",
             "model_id": result.get("model_id", 0),
@@ -81,10 +89,15 @@ class MLTrainingService:
             "total_rows": total_rows,
             "rows_removed": result.get("rows_removed", 0),
             "metrics": result.get("metrics", {}),
-            "promoted": False,
-            "comparison": result.get("comparison"),  # ← для ответа API
+
+            # 🔥 НЕ ПЕРЕТИРАТЬ!
+            "promoted": result.get("promoted", False),
+
+            # 🔥 КРИТИЧНО ДЛЯ UI
+            "comparison": comparison,
+
             "stage": result.get("stage", "completed"),
-            "note": result.get("note", f"Trained on {total_rows} rows, target: k_uplift")
+            "note": result.get("note", f"Trained on {total_rows} rows, target: k_uplift"),
         }
 
     def get_dataset_stats(self) -> Dict[str, Any]:

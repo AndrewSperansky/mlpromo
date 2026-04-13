@@ -20,6 +20,7 @@ class TrainResponse(BaseModel):
     promoted: bool = False
     stage: Optional[str] = None
     note: Optional[str] = None
+    comparison: Optional[Dict[str, Any]] = None  # ← ДОБАВИТЬ ЭТУ СТРОКУ
 
 
 class DatasetInfo(BaseModel):
