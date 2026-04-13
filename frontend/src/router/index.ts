@@ -5,6 +5,7 @@ import Models from '../pages/Models.vue'
 import Audit from '../pages/Audit.vue'
 import Predict from '../pages/Predict.vue'
 import RuntimeAdmin from "../pages/RuntimeAdmin.vue" */
+import Lineage from '../pages/Lineage.vue'
 
 const routes = [
     { path: '/', component: () => import('../pages/LandingPage.vue'), meta: { public: true, requiresAuth: false } },
@@ -18,6 +19,7 @@ const routes = [
     { path: '/datasets', component: () => import('../pages/Datasets.vue'), meta: { requiresAuth: true, role: 'admin' } },
     { path: '/users', component: () => import('../pages/Users.vue'), meta: { requiresAuth: true, role: 'admin' } },
     { path: '/activity', component: () => import('../pages/UserActivity.vue'), meta: { requiresAuth: true, role: 'admin' } },
+    { path: '/lineage', name: 'Lineage', component: Lineage,  meta: { requiresAuth: true, role: 'admin' } },
 ]
 
 const router = createRouter({

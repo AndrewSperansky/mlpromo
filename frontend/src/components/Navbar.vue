@@ -45,6 +45,13 @@
           </li>
 
           <li class="nav-item">
+            <router-link class="nav-link" to="/lineage">
+              <i class="bi bi-diagram-3 me-1"></i>
+              Lineage
+            </router-link>
+          </li>
+
+          <li class="nav-item">
             <router-link class="nav-link" to="/audit">
               Audit
             </router-link>
