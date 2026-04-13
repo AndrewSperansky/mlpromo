@@ -28,78 +28,47 @@
     </div>
 
     <!-- Новые данные (жёлтая карточка) -->
-    <NewDataAlert
-      v-if="showNewDataAlert"
-      :newRowsCount="newRowsCount"
-      :message="newDataMessage"
-      @close="showNewDataAlert = false"
-    />
+    <NewDataAlert v-if="showNewDataAlert" :newRowsCount="newRowsCount" :message="newDataMessage"
+      @close="showNewDataAlert = false" />
 
-    <!-- Результат обучения -->
-    <NotificationBanner
-      v-if="trainingResultMessage"
-      :type="trainingResultType"
-      :title="trainingResultTitle"
-      :message="trainingResultMessage"
-      :details="trainingResultDetails"
-      @close="trainingResultMessage = null"
-    />
+    <!-- Результат обучения  Training Bunner-->
+    <NotificationBanner v-if="trainingResultMessage" :type="trainingResultType" :title="trainingResultTitle"
+      :message="trainingResultMessage" :details="trainingResultDetails" @close="trainingResultMessage = null" />
 
+    <!-- График сравнения моделей -->
+    <ModelCompareChart v-if="trainingResultMessage && trainingResultComparison"
+      :comparison="trainingResultComparisonData" />
+
+
+    <!-- Uploaded Model Metrics -->
     <div v-if="uploadResult" class="alert alert-info alert-dismissible fade show" role="alert">
       <strong>Result:</strong>
       <pre class="mb-0">{{ uploadResult }}</pre>
       <button type="button" class="btn-close" @click="uploadResult = null" aria-label="Close"></button>
     </div>
 
-    <ModelTable 
-      class="mt-4" 
-      :models="models" 
-      @activate="openActivateModal" 
-      @deactivate="openDeactivateModal"
-      @rollback="handleRollback" 
-      @evaluate="handleEvaluate" 
-      @row-click="goToModel" 
-      @delete="openDeleteModal" 
-    />
+    <ModelTable class="mt-4" :models="models" @activate="openActivateModal" @deactivate="openDeactivateModal"
+      @rollback="handleRollback" @evaluate="handleEvaluate" @row-click="goToModel" @delete="openDeleteModal" />
 
     <button class="btn btn-sm btn-outline-info" @click="showHistoryModal = true">
       Show Activation History
     </button>
 
     <!-- Остальные модальные окна... -->
-    <ActivateModal 
-      :show="showActivateModal" 
-      :modelId="selectedModelForActivation"
-      @close="showActivateModal = false" 
-      @confirm="confirmActivate" 
-    />
+    <ActivateModal :show="showActivateModal" :modelId="selectedModelForActivation" @close="showActivateModal = false"
+      @confirm="confirmActivate" />
 
-    <DeactivateModal 
-      :show="showDeactivateModal" 
-      :modelId="selectedModelForDeactivation"
-      @close="showDeactivateModal = false" 
-      @confirm="confirmDeactivate" 
-    />
+    <DeactivateModal :show="showDeactivateModal" :modelId="selectedModelForDeactivation"
+      @close="showDeactivateModal = false" @confirm="confirmDeactivate" />
 
-    <DeleteModal 
-      :show="showDeleteModal" 
-      :modelId="modelToDelete"
-      @close="showDeleteModal = false" 
-      @confirm="confirmDelete" 
-    />
+    <DeleteModal :show="showDeleteModal" :modelId="modelToDelete" @close="showDeleteModal = false"
+      @confirm="confirmDelete" />
 
     <ModelDetailsModal :modelId="selectedModelId" @closed="selectedModelId = null" />
 
-    <CompareModelsModal 
-      :show="showCompareModal" 
-      :models="models" 
-      @close="showCompareModal = false" 
-    />
+    <CompareModelsModal :show="showCompareModal" :models="models" @close="showCompareModal = false" />
 
-    <ActivationHistoryModal 
-      :show="showHistoryModal" 
-      @close="showHistoryModal = false" 
-    />
+    <ActivationHistoryModal :show="showHistoryModal" @close="showHistoryModal = false" />
   </div>
 </template>
 
@@ -125,6 +94,7 @@ import DeactivateModal from '../components/DeactivateModal.vue'
 import DeleteModal from '../components/DeleteModal.vue'
 import NotificationBanner from '../components/NotificationBanner.vue'
 import NewDataAlert from '../components/NewDataAlert.vue'
+import ModelCompareChart from '../components/ModelCompareChart.vue'
 
 const models = ref<ModelItem[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -155,8 +125,11 @@ const selectedModelForActivation = ref<string>('')
 const selectedModelForDeactivation = ref<string>('')
 const modelToDelete = ref<number | null>(null)
 
+const trainingResultComparison = ref(false)
+const trainingResultComparisonData = ref<any>(null)  
 
-  
+
+
 async function loadModels() {
   const response = await getModels()
   models.value = response.data.map((m: any) => ({
@@ -196,24 +169,33 @@ async function checkNewData() {
 }
 
 
-/// СРАВНЕНИЕ МОДЕЛЕЙ И РЕНДЕРИНГ БАННЕРА ПОСЛЕ ОБУЧЕНИЯ
+/// СРАВНЕНИЕ МОДЕЛЕЙ И РЕНДЕРИНГ БАННЕРА ПОСЛЕ ОБУЧЕНИЯ + График сравнения
 async function handleTrain() {
   training.value = true
-  
+
   try {
     const response = await trainModel({ promote: false })
     uploadResult.value = response.data
-    
+
     // Получаем comparison из ответа
     const comparison = response.data.comparison
+    console.log('🔍 COMPARISON DATA:', JSON.stringify(comparison, null, 2))
+
+    if (comparison) {
+      trainingResultComparisonData.value = comparison
+      trainingResultComparison.value = true
+      console.log('📊 Comparison data saved for chart:', comparison)
+    }
+
+    // Получаем model_id из ответа
     const newModelId = response.data.model_id
-    
+
     if (comparison && newModelId) {
       const rmseOld = comparison.current_metrics?.rmse ?? null
       const rmseNew = comparison.candidate_metrics?.rmse ?? null
       const isBetter = comparison.is_better ?? false
       const improvement = comparison.improvement_percent ?? 0
-      
+
       if (isBetter) {
         // Метрики улучшились — активируем автоматически
         await api.post(`/ml/models/${newModelId}/activate`)
@@ -242,9 +224,9 @@ async function handleTrain() {
       trainingResultMessage.value = `New model (ID: ${newModelId}) created.`
       trainingResultDetails.value = 'Check Models table for details'
     }
-    
+
     await loadModels()
-    
+
   } catch (error) {
     console.error('Training failed:', error)
     trainingResultType.value = 'danger'
