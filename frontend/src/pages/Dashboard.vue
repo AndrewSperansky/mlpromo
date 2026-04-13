@@ -120,6 +120,9 @@
       </div>
     </div>
 
+    <!-- Drift & Coverage Chart -->
+    <DriftCoverageChart />
+
     <!-- ===== TRAINING CURVE CHARTS ===== -->
     <div class="row g-3 mb-4">
       <div class="col-md-12">
@@ -228,6 +231,7 @@ import Chart from 'chart.js/auto'
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { getContainersStatus } from '../services/api'
+import DriftCoverageChart from '../components/DriftCoverageChart.vue'
 
 interface OverviewResponse {
   timestamp: string

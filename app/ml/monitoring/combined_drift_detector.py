@@ -8,6 +8,9 @@ import json
 from app.ml.monitoring.alert_engine import decide_action            # ✨ NEW
 from app.ml.monitoring.retrain_trigger import handle_retrain_if_needed  # ✨ NEW
 
+from app.ml.runtime_state import ML_RUNTIME_STATE
+from datetime import datetime, timezone
+
 
 MODELS_DIR = Path("models")
 
@@ -83,6 +86,27 @@ def run_drift_pipeline(
 
     alert = decide_action(combined)                     # ✨ NEW
     retrain = handle_retrain_if_needed(alert)           # ✨ NEW
+
+    # 🔥 Сохраняем в историю
+    drift_score = 0.0
+    if combined["summary"]["shap_drift"]:
+        drift_score += 0.5
+    if combined["summary"]["data_drift"]:
+        drift_score += 0.5
+
+    drift_record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "drift_score": drift_score,
+        "shap_drift": combined["summary"]["shap_drift"],
+        "data_drift": combined["summary"]["data_drift"]
+    }
+
+    # Сохраняем последние 100 записей
+    history = ML_RUNTIME_STATE.get("drift_history", [])
+    history.append(drift_record)
+    if len(history) > 100:
+        history = history[-100:]
+    ML_RUNTIME_STATE["drift_history"] = history
 
     return {
         "combined_drift": combined,

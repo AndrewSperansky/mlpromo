@@ -919,3 +919,46 @@ def get_training_metrics():
             "best_iteration": None,
             "error": str(e)
         }
+
+# ========================================
+# DRIFT + COVERAGE Realtime (Для графика)
+# ========================================
+
+
+@router.get("/monitoring/drift")
+def get_drift_metrics():
+    """
+    Возвращает drift + coverage в динамике
+    """
+    from app.ml.runtime_state import ML_RUNTIME_STATE
+    from datetime import datetime, timedelta
+    import random
+
+    # Пока используем мок-данные для теста
+    # Потом заменим на реальные из ML_RUNTIME_STATE
+    now = datetime.now(timezone.utc)
+
+    points = []
+    for i in range(20):
+        points.append({
+            "time": (now - timedelta(minutes=20 - i)).isoformat(),
+            "drift": random.uniform(0.0, 0.3),
+            "coverage": random.uniform(0.88, 0.98)
+        })
+
+    # Реальный дрифт из runtime_state (если есть)
+    drift_history = ML_RUNTIME_STATE.get("drift_history", [])
+    coverage_history = ML_RUNTIME_STATE.get("coverage_history", [])
+
+    if drift_history:
+        current_drift = drift_history[-1].get("drift_score", 0) if drift_history else 0
+        current_coverage = coverage_history[-1].get("coverage", 0) if coverage_history else 0
+    else:
+        current_drift = random.uniform(0.0, 0.2)
+        current_coverage = random.uniform(0.92, 0.96)
+
+    return {
+        "points": points,
+        "current_drift": current_drift,
+        "current_coverage": current_coverage
+    }

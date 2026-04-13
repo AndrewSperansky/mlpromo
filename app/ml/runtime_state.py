@@ -34,6 +34,10 @@ ML_RUNTIME_STATE: Dict[str, Any] = {
     "predictions_count": 0,
     "errors_count": 0,
     "latencies": [],  # для расчёта P95
+
+# ==========🔥 История дрифта и coverage ==========
+    "drift_history": [],  # список {timestamp, drift_score, shap_drift, data_drift}
+    "coverage_history": [],  # список {timestamp, coverage}
    }
 
 
