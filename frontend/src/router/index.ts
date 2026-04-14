@@ -7,6 +7,8 @@ import Predict from '../pages/Predict.vue'
 import RuntimeAdmin from "../pages/RuntimeAdmin.vue" */
 import Lineage from '../pages/Lineage.vue'
 
+
+
 const routes = [
     { path: '/', component: () => import('../pages/LandingPage.vue'), meta: { public: true, requiresAuth: false } },
     { path: '/dashboard', component: () => import('../pages/Dashboard.vue'), meta: { requiresAuth: true } },
@@ -27,25 +29,33 @@ const router = createRouter({
     routes
 })
 
+
+
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
   
-  // Ждём инициализации
-    if (!authStore.user && authStore.token) {
-        await authStore.fetchMe()
-    }
-    
-    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-        next('/login')
-        return
-    }
+  // 🔥 Если токен есть, но пользователь не загружен — восстанавливаем сессию
+  if (authStore.token && !authStore.user) {
+    await authStore.fetchMe()
+  }
+  
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    next('/login')
+    return
+  }
   
   if (to.meta.role && authStore.user?.role !== to.meta.role && authStore.user?.role !== 'admin') {
     next('/')
     return
   }
   
+  if (to.path === '/login' && authStore.isAuthenticated) {
+    next('/dashboard')
+    return
+  }
+  
   next()
 })
+
 
 export default router

@@ -1,4 +1,4 @@
-// frontend\src\stores\auth.ts
+// frontend/src/stores/auth.ts
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -10,6 +10,7 @@ interface User {
   email: string
   role: string
   full_name: string
+  is_active: boolean
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -40,7 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = response.data.user
       return { success: true }
     } catch (error: any) {
-      return { success: false, error: error.response?.data?.detail || 'Login failed' }
+      return { success: false, error: error.response?.data?.detail || 'Ошибка входа' }
     } finally {
       loading.value = false
     }
@@ -49,31 +50,56 @@ export const useAuthStore = defineStore('auth', () => {
   async function register(data: any) {
     loading.value = true
     try {
-      await api.post('/auth/register', data)
-      return { success: true }
+      const response = await api.post('/auth/register', data)
+      return { success: true, message: response.data.message }
     } catch (error: any) {
-      return { success: false, error: error.response?.data?.detail || 'Registration failed' }
+      return { success: false, error: error.response?.data?.detail || 'Ошибка регистрации' }
     } finally {
       loading.value = false
     }
   }
 
   async function logout() {
-    await api.post('/auth/logout')
-    setToken(null)
-    user.value = null
+    try {
+      await api.post('/auth/logout')
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      setToken(null)
+      user.value = null
+    }
   }
+  // ==========================================
+  // 🔥 ВОССТАНОВЛЕНИЕ СЕССИИ ПРИ ЗАГРУЗКЕ
+  // ==========================================
 
   async function fetchMe() {
     if (!token.value) return
     try {
       const response = await api.get('/auth/me')
       user.value = response.data
-    } catch {
+      return true
+    } catch (error) {
+      console.error('Session restore failed:', error)
       setToken(null)
       user.value = null
+      return false
     }
   }
+
+  // =============================================
+  // 🔥 ИНИЦИАЛИЗАЦИЯ — проверяем токен при старте
+  // =============================================
+  
+  const init = async () => {
+    if (token.value) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
+      await fetchMe()
+    }
+  }
+
+  // Запускаем инициализацию
+  init()
 
   return {
     user,
@@ -86,6 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     fetchMe,
-    setToken
+    setToken,
+    init
   }
 })

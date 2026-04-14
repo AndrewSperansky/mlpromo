@@ -283,3 +283,16 @@ def delete_user(
     )
 
     return {"message": f"User {username} deleted"}
+
+
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "full_name": current_user.full_name,
+        "is_active": current_user.is_active
+    }
