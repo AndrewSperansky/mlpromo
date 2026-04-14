@@ -22,17 +22,21 @@ from app.schemas.prediction_schema import (
 # from app.services.promo_calculator_service import PromoCalculatorService
 from app.services.historical_data_service import HistoricalDataService
 from app.ml.feature_pipeline import FeaturePipeline
-from app.ml.monitoring.inference_metrics import increment_errors_count, collect_inference_metrics  # ← добавить
+from app.ml.monitoring.inference_metrics import increment_errors_count, collect_inference_metrics
+
+from app.services.activity_service import ActivityService
+from app.models.user import User
 
 logger = logging.getLogger("promo_ml")
 
 
 class PredictionController:
 
-    def __init__(self, service: MLPredictionService, db: Session):
+    def __init__(self, service: MLPredictionService, db: Session, current_user: User=None):
         self.service = service
         self.historical = HistoricalDataService(db)
         self.feature_pipeline = FeaturePipeline()  # ← без db и redis
+        self.current_user = current_user
 
     def predict(
             self,
@@ -200,6 +204,27 @@ class PredictionController:
             logger.info(f"✅ Response created successfully")
 
             # =========================================================
+            # Пишем User Activity
+            # =========================================================
+
+            print(f"🔍 current_user: {self.current_user}")
+            if self.current_user:
+                logger.info(f"🔍 Logging predict for user {self.current_user.id}")
+                try:
+                    ActivityService.log(
+                        db=db,
+                        user_id=self.current_user.id,
+                        action="predict",
+                        resource=f"model_{model_id}",
+                        details=f"Prediction: k_uplift={k_uplift:.4f}"
+                    )
+                    logger.info("✅ Activity logged successfully")
+                except Exception as e:
+                    logger.info(f"❌ Failed to log activity: {e}")
+            else:
+                logger.info("❌ No current_user")
+
+            # =========================================================
             # 8. Audit log
             # =========================================================
             if not skip_audit:
@@ -279,9 +304,9 @@ class PredictionController:
             latency_ms = (time.time() - start_time) * 1000
             logger.info(f"⏱️ Prediction latency: {latency_ms:.2f} ms")
 
-            # Собираем метрики инференса
+            # Собираем метрики inference
             try:
-                # Подготавливаем числовые фичи для метрик
+                # Подготавливаем числовые features для метрик
                 feature_values = list(features_dict.values())
                 numeric_features = []
                 for v in feature_values:

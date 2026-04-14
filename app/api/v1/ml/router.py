@@ -34,6 +34,8 @@ from app.services.dataset_streaming_service import DatasetStreamingService
 from app.services.audit_service import get_audit_page
 from app.services.activity_service import ActivityService
 
+
+
 from app.models.dataset_upload_history import DatasetUploadHistory
 from app.models.industrial_dataset import IndustrialDatasetRaw
 
@@ -56,6 +58,7 @@ from app.controllers.model_evaluation_controller import ModelEvaluationControlle
 from app.controllers.dataset_upload_controller import DatasetUploadController
 from app.controllers.dataset_delete_controller import DatasetDeleteController
 from app.controllers.model_delete_controller import ModelDeleteController
+from app.controllers.prediction_controller import PredictionController
 
 from app.auth.dependencies import get_current_user
 
@@ -418,9 +421,6 @@ def promote_model(
 # PREDICT (FastAPI)
 # =======================================
 
-from app.controllers.prediction_controller import PredictionController
-
-
 @router.post(
     "/predict",
     summary="ML предсказание коэффициента прироста (k_uplift) + SHAP",
@@ -430,8 +430,9 @@ def predict(
     payload: PredictionRequest,
     svc: MLPredictionService = Depends(get_prediction_service),
     db: Session = Depends(get_db),
+current_user: User = Depends(get_current_user)
 ):
-    controller = PredictionController(svc,db)
+    controller = PredictionController(svc,db, current_user)
     return controller.predict(payload, db)
 
 
@@ -448,11 +449,12 @@ def predict_batch(
     payload: BatchPredictionRequest,
     svc: MLPredictionService = Depends(get_prediction_service),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Принимает список запросов (до 100) и возвращает список прогнозов.
     """
-    controller = PredictionController(svc, db)
+    controller = PredictionController(svc, db, current_user)
     return controller.predict_batch(payload, db)
 
 

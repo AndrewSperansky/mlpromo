@@ -1,8 +1,9 @@
 <!-- frontend/src/pages/UserActivity.vue -->
+
 <template>
   <div>
     <h2 class="mb-4">User Activity Log</h2>
-    
+
     <!-- Filters -->
     <div class="card mb-4">
       <div class="card-body">
@@ -23,11 +24,11 @@
               <option value="login">Login</option>
               <option value="logout">Logout</option>
               <option value="predict">Predict</option>
-              <option value="train">Train Model</option>
-              <option value="activate">Activate Model</option>
+              <option value="train_model">Train Model</option>
+              <option value="activate_model">Activate Model</option>
               <option value="upload_dataset">Upload Dataset</option>
-              <option value="delete_model">Delete Model</option>
               <option value="delete_dataset">Delete Dataset</option>
+              <option value="delete_model">Delete Model</option>
               <option value="delete_user">Delete User</option>
             </select>
           </div>
@@ -52,7 +53,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Statistics -->
     <div class="row g-3 mb-4">
       <div class="col-md-3">
@@ -75,12 +76,58 @@
         <div class="card bg-warning text-dark">
           <div class="card-body">
             <h6 class="card-title">Trainings</h6>
-            <h2 class="mb-0">{{ getActionCount('train') }}</h2>
+            <h2 class="mb-0">{{ getActionCount('train_model') }}</h2>
           </div>
         </div>
       </div>
       <div class="col-md-3">
+        <div class="card bg-danger text-white">
+          <div class="card-body">
+            <h6 class="card-title">Activations</h6>
+            <h2 class="mb-0">{{ getActionCount('activate_model') }}</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
         <div class="card bg-info text-white">
+          <div class="card-body">
+            <h6 class="card-title">Dataset Uploads</h6>
+            <h2 class="mb-0">{{ getActionCount('upload_dataset') }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card bg-secondary text-white">
+          <div class="card-body">
+            <h6 class="card-title">Dataset Deletions</h6>
+            <h2 class="mb-0">{{ getActionCount('delete_dataset') }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card bg-dark text-white">
+          <div class="card-body">
+            <h6 class="card-title">Model Deletions</h6>
+            <h2 class="mb-0">{{ getActionCount('delete_model') }}</h2>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card bg-dark text-white">
+          <div class="card-body">
+            <h6 class="card-title">User Deletions</h6>
+            <h2 class="mb-0">{{ getActionCount('delete_user') }}</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card bg-secondary text-white">
           <div class="card-body">
             <h6 class="card-title">Logins</h6>
             <h2 class="mb-0">{{ getActionCount('login') }}</h2>
@@ -88,6 +135,7 @@
         </div>
       </div>
     </div>
+
     
     <!-- Activities Table -->
     <div class="card shadow-sm">
@@ -126,7 +174,7 @@
                 </td>
                 <td>
                   <span :class="getActionBadgeClass(activity.action)">
-                    {{ activity.action }}
+                    {{ formatActionName(activity.action) }}
                   </span>
                 </td>
                 <td class="small">{{ activity.resource || '-' }}</td>
@@ -179,15 +227,29 @@ function getActionBadgeClass(action: string): string {
     case 'login': return 'badge bg-success'
     case 'logout': return 'badge bg-secondary'
     case 'predict': return 'badge bg-primary'
-    case 'train': return 'badge bg-warning'
-    case 'activate': return 'badge bg-danger'
-    case 'upload': return 'badge bg-info'
+    case 'train_model': return 'badge bg-warning'
+    case 'activate_model': return 'badge bg-danger'
     case 'upload_dataset': return 'badge bg-info'
-    case 'delete_model': return 'badge bg-dark'
     case 'delete_dataset': return 'badge bg-dark'
+    case 'delete_model': return 'badge bg-dark'
     case 'delete_user': return 'badge bg-dark'
     default: return 'badge bg-secondary'
   }
+}
+
+function formatActionName(action: string): string {
+  const names: Record<string, string> = {
+    'login': 'Login',
+    'logout': 'Logout',
+    'predict': 'Predict',
+    'train_model': 'Train Model',
+    'activate_model': 'Activate Model',
+    'upload_dataset': 'Upload Dataset',
+    'delete_dataset': 'Delete Dataset',
+    'delete_model': 'Delete Model',
+    'delete_user': 'Delete User'
+  }
+  return names[action] || action
 }
 
 function getRoleBadgeClass(role: string): string {
@@ -225,7 +287,7 @@ async function loadActivities() {
     if (filters.value.action) params.action = filters.value.action
     if (filters.value.dateFrom) params.date_from = filters.value.dateFrom
     if (filters.value.dateTo) params.date_to = filters.value.dateTo
-    
+
     const response = await api.get('/auth/activities', { params })
     activities.value = response.data
   } catch (error) {
