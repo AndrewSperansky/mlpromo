@@ -7,7 +7,7 @@ import numpy as np
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import List, Tuple
+# from typing import List, Tuple
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.services.ml_prediction_service import MLPredictionService
@@ -19,7 +19,7 @@ from app.schemas.prediction_schema import (
     BatchPredictionRequest,
     BatchPredictionResponse,
 )
-from app.services.promo_calculator_service import PromoCalculatorService
+# from app.services.promo_calculator_service import PromoCalculatorService
 from app.services.historical_data_service import HistoricalDataService
 from app.ml.feature_pipeline import FeaturePipeline
 from app.ml.monitoring.inference_metrics import increment_errors_count, collect_inference_metrics  # ← добавить
@@ -38,6 +38,7 @@ class PredictionController:
             self,
             payload: PredictionRequest,
             db: Session,
+            skip_audit: bool = False,
     ) -> PredictionResponse:
         start_time = time.time()
 
@@ -189,6 +190,11 @@ class PredictionController:
                 # Исторический контекст
                 historical_context=historical_context,
 
+                # Доверительный интервал
+                has_interval=False,
+                interval=None,
+                interval_width=None,
+
             )
 
             logger.info(f"✅ Response created successfully")
@@ -196,45 +202,46 @@ class PredictionController:
             # =========================================================
             # 8. Audit log
             # =========================================================
-            request_id = uuid4()
-            features_json = json.dumps({
-                "request": payload.model_dump(),
-                "features_used": features_dict,
-                "sku_data": {
-                    "original_sku": sku_data["original_sku"],
-                    "effective_sku": sku_data["effective_sku"],
-                    "used_analog": sku_data["used_analog"],
-                    "message": sku_data["message"]
-                }
-            }, default=str)
+            if not skip_audit:
+                request_id = uuid4()
+                features_json = json.dumps({
+                    "request": payload.model_dump(),
+                    "features_used": features_dict,
+                    "sku_data": {
+                        "original_sku": sku_data["original_sku"],
+                        "effective_sku": sku_data["effective_sku"],
+                        "used_analog": sku_data["used_analog"],
+                        "message": sku_data["message"]
+                    }
+                }, default=str)
 
-            db.execute(
-                text("""
-                           INSERT INTO ml_prediction_audit
-                           (
-                               request_id,
-                               model_id,
-                               model_version,
-                               prediction_value,
-                               features
-                           )
-                           VALUES
-                           (
-                               :request_id,
-                               :model_id,
-                               :model_version,
-                               :prediction_value,
-                               CAST(:features AS JSONB)
-                           )
-                       """),
-                {
-                    "request_id": request_id,
-                    "model_id": model_id,
-                    "model_version": model_version,
-                    "prediction_value": k_uplift,
-                    "features": features_json,
-                }
-            )
+                db.execute(
+                    text("""
+                               INSERT INTO ml_prediction_audit
+                               (
+                                   request_id,
+                                   model_id,
+                                   model_version,
+                                   prediction_value,
+                                   features
+                               )
+                               VALUES
+                               (
+                                   :request_id,
+                                   :model_id,
+                                   :model_version,
+                                   :prediction_value,
+                                   CAST(:features AS JSONB)
+                               )
+                           """),
+                    {
+                        "request_id": request_id,
+                        "model_id": model_id,
+                        "model_version": model_version,
+                        "prediction_value": k_uplift,
+                        "features": features_json,
+                    }
+                )
 
             # =========================================================
             # 9. Финансовые метрики (опционально)
@@ -349,7 +356,6 @@ class PredictionController:
             error_count=error_count,
         )
 
-
     def _create_fallback_response(self, req: PredictionRequest, error_msg: str) -> PredictionResponse:
         """Создаёт fallback ответ при ошибке"""
         return PredictionResponse(
@@ -366,6 +372,9 @@ class PredictionController:
             promo_price=req.promo_price,
             marketing_type=req.marketing_type,
             k_uplift=1.0,
+            baseline=1.0,
+            prediction_absolute=0.0,
+            uplift_percent=0.0,
             confidence=None,
             shap_values=[],
             ml_model_id="unknown",
@@ -375,7 +384,7 @@ class PredictionController:
             fallback_used=True,
             reason=error_msg,
             historical_context=None,
-            prediction=1.0,
-            baseline=1.0,
-            uplift=0.0,
+            has_interval=False,
+            interval=None,
+            interval_width=None
         )
