@@ -3,6 +3,7 @@
 import logging
 import uuid
 import time
+import json
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
@@ -168,7 +169,9 @@ class DatasetUploadController:
         return records_saved
 
     def _parse_analog_sku(self, value) -> list:
-        """Парсит analog_sku в список"""
+        """
+        Парсит analog_sku в список
+        """
         if value is None or pd.isna(value):
             return []
         if isinstance(value, list):
@@ -177,7 +180,6 @@ class DatasetUploadController:
             if value.strip() == '' or value.lower() == 'na':
                 return []
             try:
-                import json
                 parsed = json.loads(value)
                 return parsed if isinstance(parsed, list) else [parsed]
             except:
@@ -185,14 +187,15 @@ class DatasetUploadController:
         return []
 
     def _parse_extra_features(self, value) -> dict:
-        """Парсит extra_features в словарь"""
+        """
+        Парсит extra_features в словарь
+        """
         if value is None or pd.isna(value):
             return {}
         if isinstance(value, dict):
             return value
         if isinstance(value, str):
             try:
-                import json
                 return json.loads(value)
             except:
                 return {}

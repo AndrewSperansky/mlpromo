@@ -25,14 +25,14 @@
       <div class="col-md-4">
         <div class="card bg-info text-white">
           <div class="card-body">
-            <h6 class="card-title">Retrains</h6>
-            <h2 class="mb-0">{{ getEventCount('retrain') + getEventCount('trained') }}</h2>
+            <h6 class="card-title">Trained</h6>
+            <h2 class="mb-0">{{ getEventCount('trained') }}</h2>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Таблица с улучшенным отображением -->
+    <!-- Таблица -->
     <div class="card shadow-sm">
       <div class="card-header bg-secondary text-white">
         <i class="bi bi-diagram-3 me-2"></i>
@@ -43,10 +43,13 @@
           <table class="table table-striped table-hover mb-0">
             <thead class="table-dark">
               <tr>
-                <th style="width: 180px">Time</th>
-                <th style="width: 120px">Event</th>
-                <th>Model ID</th>
-                <th>Details</th>
+                <th style="width: 160px">Time</th>
+                <th style="width: 100px">Event</th>
+                <th style="width: 80px">Model ID</th>
+                <th style="width: 100px">RMSE</th>
+                <th style="width: 80px">Rows</th>
+                <th style="width: 100px">Previous Model</th>
+                <th>Reason</th>
               </tr>
             </thead>
             <tbody>
@@ -58,23 +61,33 @@
                     {{ formatEventType(e.event_type) }}
                   </span>
                 </td>
+                <td><strong>{{ e.model_id }}</strong></td>
                 <td>
-                  <strong>{{ e.model_id }}</strong>
+                  <span v-if="e.metadata?.rmse" class="text-primary">
+                    {{ e.metadata.rmse.toFixed(4) }}
+                  </span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>
+                  <span v-if="e.metadata?.rows_used" class="text-muted">
+                    {{ e.metadata.rows_used }}
+                  </span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>
+                  <span v-if="e.metadata?.previous_model_id" class="text-warning">
+                    {{ e.metadata.previous_model_id }}
+                  </span>
+                  <span v-else class="text-muted">—</span>
                 </td>
                 <td class="small text-muted">
-                  <span v-if="e.metadata?.decision" class="text-info">
-                    Decision: {{ e.metadata.decision.decision || e.metadata.decision }}
-                  </span>
-                  <span v-else-if="e.metadata?.reason" class="text-warning">
-                    {{ e.metadata.reason }}
-                  </span>
-                  <span v-else>—</span>
+                  {{ e.reason || '—' }}
                 </td>
               </tr>
             </tbody>
             <tbody v-if="events.length === 0">
               <tr>
-                <td colspan="4" class="text-center text-muted py-4">
+                <td colspan="7" class="text-center text-muted py-4">
                   <i class="bi bi-diagram-3 fs-1"></i>
                   <p class="mt-2">No lineage events yet</p>
                   <small>Train or promote a model to see lineage</small>
@@ -96,7 +109,13 @@ interface LineageEvent {
   timestamp: string
   event_type: string
   model_id: string
-  metadata?: any
+  reason?: string
+  metadata?: {
+    rmse?: number
+    rows_used?: number
+    previous_model_id?: string
+    decision?: any
+  }
 }
 
 const events = ref<LineageEvent[]>([])
@@ -109,14 +128,9 @@ function formatDate(dateStr: string) {
 function getEventBadgeClass(eventType: string): string {
   switch (eventType) {
     case 'promoted':
-    case 'approve':
       return 'bg-success'
-    case 'retrain':
     case 'trained':
       return 'bg-primary'
-    case 'rejected':
-    case 'reject':
-      return 'bg-danger'
     case 'upload':
       return 'bg-info'
     case 'rollback':
@@ -129,14 +143,9 @@ function getEventBadgeClass(eventType: string): string {
 function getEventIcon(eventType: string): string {
   switch (eventType) {
     case 'promoted':
-    case 'approve':
-      return 'bi bi-check-circle'
-    case 'retrain':
+      return 'bi bi-star-fill'
     case 'trained':
       return 'bi bi-arrow-repeat'
-    case 'rejected':
-    case 'reject':
-      return 'bi bi-x-circle'
     case 'upload':
       return 'bi bi-cloud-upload'
     case 'rollback':
@@ -149,14 +158,9 @@ function getEventIcon(eventType: string): string {
 function formatEventType(eventType: string): string {
   const types: Record<string, string> = {
     'promoted': 'Promoted',
-    'approve': 'Approved',
-    'retrain': 'Retrain',
     'trained': 'Trained',
-    'rejected': 'Rejected',
-    'reject': 'Rejected',
     'upload': 'Uploaded',
-    'rollback': 'Rollback',
-    'evaluate': 'Evaluated'
+    'rollback': 'Rollback'
   }
   return types[eventType] || eventType.charAt(0).toUpperCase() + eventType.slice(1)
 }
@@ -191,8 +195,9 @@ onMounted(async () => {
   background-color: #0d6efd !important;
 }
 
-.bg-danger {
-  background-color: #dc3545 !important;
+.bg-info {
+  background-color: #0dcaf0 !important;
+  color: #000 !important;
 }
 
 .bg-warning {
@@ -200,16 +205,11 @@ onMounted(async () => {
   color: #000 !important;
 }
 
-.bg-info {
-  background-color: #0dcaf0 !important;
-  color: #000 !important;
-}
-
-.bg-secondary {
-  background-color: #6c757d !important;
-}
-
 .table-responsive {
   overflow-x: auto;
+}
+
+th, td {
+  vertical-align: middle;
 }
 </style>

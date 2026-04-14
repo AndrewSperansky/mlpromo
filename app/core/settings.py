@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     ML_META_PATH: str = "/app/models/current/cb_promo_v1.meta.json"
     # ============================
 
+    # ===== ML LINEAGE ===========
+    ML_LINEAGE_DIR: str = "/app/models/history"
+    # ============================
+
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/promo"
     REDIS_URL: str = "redis://localhost:6379/0"
     SQLALCHEMY_ECHO: bool = Field(default=False, alias="SQLALCHEMY_ECHO")

@@ -16,8 +16,11 @@ from app.ml.train.shap_utils import (
     compute_shap_catboost,
     save_shap_artifacts,
 )
+
 from app.ml.model_registry.lineage import enrich_meta_with_lineage
 from app.ml.model_registry.promotion_policy import decide_promotion
+from app.ml.model_registry.lineage import record_lineage_event
+
 from app.services.registry_service import ModelRegistryService
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -235,6 +238,18 @@ def train_pipeline(
         )
 
         logger.info(f"✅ Model registered with id={db_model.id}")
+
+        record_lineage_event(
+            event_type="trained",
+            model_id=str(db_model.id),
+            reason=f"Training completed (trigger={trigger})",
+            metadata={
+                "rmse": val_rmse_final,
+                "rows_used": rows_used
+            }
+        )
+
+        logger.info(f"🔥🔥🔥 LINEAGE EVENT RECORDED: trained for model {db_model.id}")
 
         # =========================
         # СОХРАНЯЕМ МОДЕЛЬ

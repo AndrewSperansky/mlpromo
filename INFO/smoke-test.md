@@ -186,7 +186,7 @@ curl http://localhost:8000/api/v1/system/status | jq
   "IsAnalogSKU"
 ]
 
-(base) asper@00000-WS2:/mnt/d/PycharmProjects/promo-ml$ curl http://localhost:8000/api/v1/system/runtime-state | jq '.ml_model_id'
+curl http://localhost:8000/api/v1/system/runtime-state | jq '.ml_model_id'
 
 42
 

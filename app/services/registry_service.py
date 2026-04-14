@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, and_
 
 from app.models.ml_model import MLModel
+from app.ml.model_registry.lineage import record_lineage_event
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("promo_ml")
 
 
 class ModelRegistryService:
@@ -132,10 +133,23 @@ class ModelRegistryService:
 
         logger.info(f"🟢 Activated new champion: {new_model.name}:{new_model.version} (id={new_model.id})")
 
-        # 6. После активации модели, обновляем meta.json в current директории
+        # 6. После успешной активации делаем запись в Lineage
+        record_lineage_event(
+            event_type="promoted",
+            model_id=str(model_id),
+            reason="Model promoted to champion",
+            metadata={
+                "previous_model_id": current_model.id if current_model else None,
+                "rmse": new_model.metrics.get("rmse") if new_model.metrics else None
+            }
+        )
+
+        logger.info(f"🔥🔥🔥 LINEAGE EVENT RECORDED: promoted for model {model_id}")
+
+        # 7. После активации модели, обновляем meta.json в current директории
         self._update_current_meta(new_model)
 
-        # 7. Перемещаем файлы
+        # 8. Перемещаем файлы
         self._move_model_files(new_model)
 
         return new_model

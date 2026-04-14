@@ -23,6 +23,8 @@ from app.models.user import User
 from app.core.settings import settings
 
 from app.ml.model_registry.promotion_policy import decide_promotion
+from app.ml.model_registry.lineage import get_lineage_events_file
+from app.ml.model_registry.lineage import record_lineage_event, get_current_metrics
 
 from app.services.ml_training_service import MLTrainingService
 from app.services.ml_prediction_service import MLPredictionService
@@ -67,7 +69,7 @@ BASE_DIR = Path(settings.ML_MODEL_DIR)
 
 MODELS_DIR = BASE_DIR / "current"
 ARCHIVE_DIR = BASE_DIR / "archive"
-LINEAGE_FILE = BASE_DIR / "lineage_events.json"
+
 
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -86,40 +88,6 @@ def get_prediction_service() -> MLPredictionService:
 def get_training_service() -> MLTrainingService:
     return MLTrainingService()
 
-
-# =========================================
-# Utils
-# =========================================
-
-def record_lineage_event(event_type: str, model_id: str, metadata: dict):
-    LINEAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-    if LINEAGE_FILE.exists():
-        with open(LINEAGE_FILE) as f:
-            events = json.load(f)
-    else:
-        events = []
-
-    events.append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "event_type": event_type,
-        "model_id": model_id,
-        "metadata": metadata
-    })
-
-    with open(LINEAGE_FILE, "w") as f:
-        json.dump(events, f, indent=2)
-
-
-def get_current_metrics():
-    current_metrics_file = BASE_DIR / "current.metrics.json"
-    if current_metrics_file.exists():
-        with open(current_metrics_file) as f:
-            return json.load(f)
-    return {}
-
-
-# ============================ ENDPOINTS ===============================
 
 # =========================================
 # AUDIT
@@ -196,10 +164,11 @@ def upload_model_bundle(file: UploadFile = File(...)):
             current_metrics=get_current_metrics(),
         )
 
+
         record_lineage_event(
-            "upload",
-            model_id,
-            {"decision": decision}
+            event_type="upload",
+            model_id=model_id,
+            metadata={"decision": decision}  # ← указываем имя параметра
         )
 
         return {
@@ -370,11 +339,11 @@ def get_activation_history(
 
 @router.get("/models/lineage")
 def get_lineage():
-
-    if not LINEAGE_FILE.exists():
+    lineage_file = get_lineage_events_file()
+    if not lineage_file.exists():
         return []
 
-    with open(LINEAGE_FILE) as f:
+    with open(lineage_file) as f:
         return json.load(f)
 
 # =========================================
@@ -903,11 +872,7 @@ def get_training_metrics():
     """
     Возвращает метрики обучения для графика
     """
-    import json
-    from pathlib import Path
-    from app.core.settings import settings
 
-    MODELS_DIR = Path(settings.ML_MODEL_DIR)
 
     # Сначала ищем в current, потом в _candidate
     metrics_path = MODELS_DIR / "current" / "training_metrics.json"
