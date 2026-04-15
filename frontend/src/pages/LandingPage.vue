@@ -14,7 +14,8 @@
         </p>
         <p class="mb-4">
           Прогнозирование прироста продаж, анализ эффективности промо-акций<br>
-          и бизнес-аналитика на основе машинного обучения
+          и бизнес-аналитика на основе машинного обучения<br>
+
         </p>
         <div class="d-flex gap-3 justify-content-center">
           <button class="btn btn-primary btn-lg" @click="goToLogin">
@@ -26,6 +27,12 @@
             Зарегистрироваться
           </button>
         </div>
+        <div class="mt-4 text-center">
+            <a href="/docs" target="_blank" class="text-white text-decoration-none opacity-75">
+              <i class="bi bi-file-text me-1"></i>
+              API Docs (Swagger UI)
+            </a>
+          </div>
       </div>
     </div>
 
@@ -35,7 +42,7 @@
         <h2 class="text-center mb-5">Ключевые возможности</h2>
         <div class="row g-4">
           <div class="col-md-4">
-            <div class="feature-card text-center">
+            <div class="feature-card text-center  h-100">
               <div class="feature-icon">
                 <i class="bi bi-cpu"></i>
               </div>
@@ -44,7 +51,7 @@
             </div>
           </div>
           <div class="col-md-4">
-            <div class="feature-card text-center">
+            <div class="feature-card text-center  h-100">
               <div class="feature-icon">
                 <i class="bi bi-bar-chart-steps"></i>
               </div>
@@ -53,7 +60,7 @@
             </div>
           </div>
           <div class="col-md-4">
-            <div class="feature-card text-center">
+            <div class="feature-card text-center  h-100">
               <div class="feature-icon">
                 <i class="bi bi-shield-check"></i>
               </div>
@@ -136,7 +143,7 @@ const goToRegister = () => {
 }
 
 .hero-icon i {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   padding: 30px;
   border-radius: 50%;
 }
@@ -183,12 +190,12 @@ const goToRegister = () => {
   padding: 30px;
   border-radius: 12px;
   transition: all 0.3s;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .feature-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
 
 .feature-icon {
@@ -228,11 +235,11 @@ const goToRegister = () => {
   .hero-section h1 {
     font-size: 36px;
   }
-  
+
   .hero-section {
     padding: 60px 20px;
   }
-  
+
   .feature-card {
     margin-bottom: 20px;
   }

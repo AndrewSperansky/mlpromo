@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3aONZSEeNzaM5ST90jaw0cv4WanzKPT8fPJga8MUuno3YNg6vxHsg6OAvKthmlE
+\restrict HJ8VSuhCLm3mFkyxmcx5WqS6XP3vKClEsbvbddViDq1GqZ6ZwABht5OkeItoHyi
 
 -- Dumped from database version 15.15 (Debian 15.15-1.pgdg13+1)
 -- Dumped by pg_dump version 15.15 (Debian 15.15-1.pgdg13+1)
@@ -17,6 +17,18 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: userrole; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.userrole AS ENUM (
+    'admin',
+    'ml_engineer',
+    'analyst',
+    'viewer'
+);
+
 
 SET default_tablespace = '';
 
@@ -299,6 +311,81 @@ ALTER SEQUENCE public.prediction_id_seq OWNED BY public.prediction.id;
 
 
 --
+-- Name: user_activities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_activities (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    action character varying(50) NOT NULL,
+    resource character varying(200),
+    details text,
+    ip_address character varying(45),
+    user_agent character varying(500),
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: user_activities_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.user_activities_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: user_activities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.user_activities_id_seq OWNED BY public.user_activities.id;
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    username character varying(50) NOT NULL,
+    email character varying(100) NOT NULL,
+    hashed_password character varying(200) NOT NULL,
+    full_name character varying(100),
+    role public.userrole DEFAULT 'viewer'::public.userrole,
+    is_active boolean DEFAULT true,
+    is_deleted boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    last_login_at timestamp with time zone
+);
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+
+
+--
 -- Name: dataset_upload_history id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -345,6 +432,20 @@ ALTER TABLE ONLY public.model_activation_history ALTER COLUMN id SET DEFAULT nex
 --
 
 ALTER TABLE ONLY public.prediction ALTER COLUMN id SET DEFAULT nextval('public.prediction_id_seq'::regclass);
+
+
+--
+-- Name: user_activities id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_activities ALTER COLUMN id SET DEFAULT nextval('public.user_activities_id_seq'::regclass);
+
+
+--
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
 
 
 --
@@ -409,6 +510,59 @@ ALTER TABLE ONLY public.ml_model
 
 ALTER TABLE ONLY public.prediction
     ADD CONSTRAINT pk_prediction PRIMARY KEY (id);
+
+
+--
+-- Name: user_activities user_activities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_activities
+    ADD CONSTRAINT user_activities_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_key UNIQUE (username);
+
+
+--
+-- Name: idx_activities_action; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activities_action ON public.user_activities USING btree (action);
+
+
+--
+-- Name: idx_activities_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activities_created_at ON public.user_activities USING btree (created_at DESC);
+
+
+--
+-- Name: idx_activities_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_activities_user_id ON public.user_activities USING btree (user_id);
 
 
 --
@@ -580,6 +734,27 @@ CREATE INDEX idx_upload_history_uploaded_at ON public.dataset_upload_history USI
 
 
 --
+-- Name: idx_users_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_users_email ON public.users USING btree (email);
+
+
+--
+-- Name: idx_users_is_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_users_is_active ON public.users USING btree (is_active);
+
+
+--
+-- Name: idx_users_username; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_users_username ON public.users USING btree (username);
+
+
+--
 -- Name: ix_prediction_ml_model_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -621,5 +796,5 @@ ALTER TABLE ONLY public.model_activation_history
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3aONZSEeNzaM5ST90jaw0cv4WanzKPT8fPJga8MUuno3YNg6vxHsg6OAvKthmlE
+\unrestrict HJ8VSuhCLm3mFkyxmcx5WqS6XP3vKClEsbvbddViDq1GqZ6ZwABht5OkeItoHyi
 

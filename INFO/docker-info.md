@@ -483,26 +483,30 @@ docker images
 ### 4. Существует ли образ локально
 docker images | grep promo-ml   
 
-### 5. Тегируем latest как stage1
+### 5. Тегируем latest как stage5
 `docker tag promo-ml:latest asperansky/promo-ml:stage5`  
 🔹 Важно:  
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
-### 6. Собрать образ (если еще не собран)
+### 6. Собрать образ Backend
 `docker build -t asperansky/promo-ml:stage5 . ` 
+`docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . `
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
 
-### 7. Отправить образ на Docker Hub
-`docker push asperansky/promo-ml:stage5`
+### 7. Отправить образ Backend на Docker Hub
+docker push asperansky/promo-ml:stage5
+docker push asperansky/promo-ml:v1.2
 
 
-# Собрать фронтенд
+# Собрать Frontend
 docker build -t asperansky/promo-ml-front:stage5 -f Dockerfile.frontend .
+docker build -t asperansky/promo-ml-front:v1.2 -f Dockerfile.frontend .
 
-# Запушить на Docker Hub
+# Запушить  Frontend на Docker Hub
 docker push asperansky/promo-ml-front:stage5
+docker push asperansky/promo-ml-front:v1.2
 
 
 
@@ -512,7 +516,7 @@ docker push asperansky/promo-ml-front:stage5
 docker images asperansky/promo-ml
 docker inspect asperansky/promo-ml:stage5 | grep Id 
 ### Production
-docker images asperansky/promo-ml:prod2
+docker images asperansky/promo-ml
 docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
 ### Frontend
 docker images asperansky/promo-ml-front

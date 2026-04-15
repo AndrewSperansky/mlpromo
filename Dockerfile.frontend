@@ -2,9 +2,14 @@
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+# Копируем package.json
 COPY frontend/package*.json ./
+# Устанавливаем зависимости
 RUN npm ci
+# Копируем весь код фронтенда
 COPY frontend/ .
+
+# Сборка
 RUN npm run build
 
 FROM nginx:alpine

@@ -502,9 +502,38 @@ docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-ow
 `docker exec -t promo_postgres pg_dump -U postgres -Fc promo > backup/promo_backup_$(date +%Y%m%d_%H%M).dump`
 
 ## Создание Backup.sql  
-`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_$(date +%Y%m%d_%H%M).sql`
+`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_v1.2_$(date +%Y%m%d_%H%M).sql`
 
 
 ## Восстановление < Backup.dump
 docker exec -i promo_postgres pg_restore -U postgres -d promo < dump/promo_backup.dump
 
+
+## Создание юзера с ролью 'admin' и паролем 'admin123' 
+
+docker exec -it promo_postgres psql -U postgres -d promo -c "
+INSERT INTO users (username, email, hashed_password, full_name, role, is_active)
+VALUES (
+    'a.shigaev',
+    'a.shigaev@agrohold.ru',
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYQrQ7qZv7xK',
+    'Andrey Shigaev',
+    'admin',
+    TRUE
+);
+"
+## Проверка входа
+
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "a.shigaev@agrohold.ru", "password": "admin123"}'
+
+
+## Сгенерировать новый хэш
+
+docker exec -it promo_ml_backend python -c "
+import bcrypt
+password = b'your_password_here'
+hashed = bcrypt.hashpw(password, bcrypt.gensalt())
+print(hashed.decode())
+"

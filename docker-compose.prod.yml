@@ -6,7 +6,7 @@ services:
 
   backend:
     container_name: promo_ml_backend
-    image: asperansky/promo-ml:stage5
+    image: asperansky/promo-ml:v1.2
     restart: unless-stopped
 
 
@@ -16,6 +16,7 @@ services:
       ML_MODEL_DIR: /app/models
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/promo
       REDIS_URL: redis://redis:6379/0
+
 
     volumes:
       - backend-logs:/app/logs
@@ -41,7 +42,7 @@ services:
 
   frontend:
     container_name: promo_ml_frontend
-    image: asperansky/promo-ml-front:stage5
+    image: asperansky/promo-ml-front:v1.2
     restart: unless-stopped
 
     ports:

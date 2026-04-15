@@ -10,8 +10,8 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    ENV: str = "dev"  # dev / test / prod
-    DEBUG: bool = True
+    ENV: str = "prod"  # dev / test / prod
+    DEBUG: bool = False
     API_CONTRACT_VERSION: str = Field(
         default="ml-predict.v1",
         description="ML API contract version"
@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 часа
 
     class Config:
+        env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
 
