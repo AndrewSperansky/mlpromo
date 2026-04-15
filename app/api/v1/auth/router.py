@@ -97,7 +97,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         email=request.email,
         hashed_password=get_password_hash(request.password),
         full_name=request.full_name,
-        role="viewer",
+        role=UserRole.ANALYST.value,  # ← analyst по умолчанию
         is_active=False  # ← новый пользователь неактивен
     )
     db.add(user)

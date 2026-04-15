@@ -14,14 +14,14 @@ const routes = [
     { path: '/dashboard', component: () => import('../pages/Dashboard.vue'), meta: { requiresAuth: true } },
     { path: '/login', component: () => import('../pages/Login.vue'), meta: { public: true, requiresAuth: false } },
     { path: '/register', component: () => import('../pages/Register.vue'), meta: { public: true, requiresAuth: false } },
-    { path: '/models', component: () => import('../pages/Models.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/audit', component: () => import('../pages/Audit.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/predict', component: () => import('../pages/Predict.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/runtime', component: () => import('../pages/RuntimeAdmin.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/datasets', component: () => import('../pages/Datasets.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/users', component: () => import('../pages/Users.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/activity', component: () => import('../pages/UserActivity.vue'), meta: { requiresAuth: true, role: 'admin' } },
-    { path: '/lineage', name: 'Lineage', component: Lineage,  meta: { requiresAuth: true, role: 'admin' } },
+    { path: '/models', component: () => import('../pages/Models.vue'), meta: { requiresAuth: true, roles: ['admin', 'ml_engineer'] } },
+    { path: '/audit', component: () => import('../pages/Audit.vue'), meta: { requiresAuth: true, roles: ['admin', 'analyst', 'ml_engineer'] } },
+    { path: '/predict', component: () => import('../pages/Predict.vue'), meta: { requiresAuth: true, roles: ['admin', 'analyst', 'ml_engineer'] } },
+    { path: '/runtime', component: () => import('../pages/RuntimeAdmin.vue'), meta: { requiresAuth: true, roles: ['admin', 'ml_engineer'] } },
+    { path: '/datasets', component: () => import('../pages/Datasets.vue'), meta: { requiresAuth: true, roles: ['admin', 'ml_engineer'] } },
+    { path: '/users', component: () => import('../pages/Users.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
+    { path: '/activity', component: () => import('../pages/UserActivity.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
+    { path: '/lineage', name: 'Lineage', component: Lineage,  meta: { requiresAuth: true, roles: ['admin', 'analyst', 'ml_engineer'] } },
 ]
 
 const router = createRouter({
@@ -44,10 +44,14 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
   
-  if (to.meta.role && authStore.user?.role !== to.meta.role && authStore.user?.role !== 'admin') {
-    next('/')
-    return
-  }
+  // 🔥 Проверка roles (массив)
+    if (to.meta.roles && Array.isArray(to.meta.roles)) {
+        const userRole = authStore.user?.role
+        if (!userRole || !to.meta.roles.includes(userRole)) {
+            next('/dashboard')
+            return
+        }
+    }
   
   if (to.path === '/login' && authStore.isAuthenticated) {
     next('/dashboard')

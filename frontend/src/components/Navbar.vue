@@ -20,19 +20,19 @@
             </router-link>
           </li>
 
-          <li class="nav-item">
+          <li v-if="authStore.isAdmin || authStore.isMLEngineer" class="nav-item">
             <router-link class="nav-link" to="/models">
               Models
             </router-link>
           </li>
 
-          <li class="nav-item">
+          <li  v-if="authStore.isAdmin || authStore.isMLEngineer" class="nav-item">
             <router-link class="nav-link" to="/datasets">
               Datasets
             </router-link>
           </li>
 
-          <li class="nav-item">
+          <li v-if="authStore.isAdmin || authStore.isMLEngineer" class="nav-item">
             <router-link class="nav-link" to="/runtime">
               Runtime
             </router-link>
@@ -57,7 +57,7 @@
             </router-link>
           </li>
 
-          <li class="nav-item">
+          <li v-if="authStore.isAdmin" class="nav-item">
             <a :href="grafanaUrl" target="_blank" class="nav-link">
               Grafana
             </a>
