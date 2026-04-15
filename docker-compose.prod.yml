@@ -133,6 +133,22 @@ services:
       retries: 5
       start_period: 10s
 
+  # ------------- REDIS EXPORTER ----------------
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: promo_redis_exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://promo_redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - promo_net
+
   # -------------------- NGINX --------------------
 
   nginx:
