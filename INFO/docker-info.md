@@ -552,6 +552,9 @@ cd /srv/promo-ml
 git  pull
 ### Скачать новые образы
 docker compose -f docker-compose.prod.yml pull
+### или
+docker pull asperansky/promo-ml:v1.2
+docker pull asperansky/promo-ml-front:v1.2
 
 ### Перезапустить
 docker compose -f docker-compose.prod.yml down
