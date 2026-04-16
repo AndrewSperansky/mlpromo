@@ -1,6 +1,7 @@
 import time
 import uuid
 import logging
+from app.auth.jwt import decode_token
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -37,7 +38,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]
             try:
-                from app.auth.jwt import decode_token
                 payload = decode_token(token)
                 if payload:
                     user_id = payload.get("sub")

@@ -1,9 +1,11 @@
 # models/model_manager.py
 
-from pathlib import Path
-from datetime import datetime, timezone
 import shutil
 import os
+from pathlib import Path
+from datetime import datetime, timezone
+from app.core.settings import settings
+
 
 
 ARTIFACT_FILES = [
@@ -17,7 +19,7 @@ def _base_models_dir() -> Path:
     """
     Возвращает актуальный MODELS_DIR из окружения
     """
-    return Path(os.getenv("MODELS_DIR", "models"))  # ← NEW
+    return Path(settings.ML_BASE_DIR)
 
 
 def ensure_dirs():

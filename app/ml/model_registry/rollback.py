@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import shutil
 import json
 import os
-
+from app.core.settings import settings
 from app.ml.model_registry.lineage import record_lineage_event
 from app.ml.monitoring.alert_engine import trigger_alert
 
@@ -32,7 +32,7 @@ def rollback_current_to_archive(
     Возвращает информацию о выполненном rollback.
     """
 
-    models_dir = Path(os.getenv("MODELS_DIR", "models"))
+    models_dir = Path(settings.ML_BASE_DIR)
 
     current_dir = models_dir / "current"
     archive_dir = models_dir / "archive"

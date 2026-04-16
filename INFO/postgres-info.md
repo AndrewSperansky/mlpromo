@@ -492,8 +492,6 @@ FOREIGN KEY (model_id) REFERENCES ml_model(id);
 `docker exec -it promo_postgres psql -h localhost -U postgres -p 5432`
 
 
-
-
 ## Выгрузка только схемы БД
 docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-owner --no-privileges > app/db/schema.sql
 

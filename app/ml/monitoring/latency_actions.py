@@ -2,16 +2,17 @@
 # — AUTOMATIC ROLLBACK ON LATENCY BREACH
 # делает одно: 👉 восстановить current из последнего archive
 
-
+import os
+import shutil
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any
-import os
-import shutil
+from app.core.settings import settings
+
 
 
 def _get_models_dir() -> Path:
-    return Path(os.getenv("MODELS_DIR", "models"))
+    return Path(settings.ML_BASE_DIR)
 
 
 def rollback_current_to_previous() -> Dict[str, Any]:

@@ -9,7 +9,7 @@ import json
 import os
 import time
 import numpy as np
-
+from app.core.settings import settings
 from app.ml.runtime_state import ML_RUNTIME_STATE  # ← добавить
 
 
@@ -17,7 +17,7 @@ def _get_metrics_dir() -> Path:
     """
     METRICS_DIR читается в runtime
     """
-    return Path(os.getenv("METRICS_DIR", "metrics"))
+    return Path(settings.METRICS_DIR)
 
 
 def collect_inference_metrics(

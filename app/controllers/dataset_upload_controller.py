@@ -85,14 +85,14 @@ class DatasetUploadController:
             logger.warning(f"Failed to trigger retrain check: {e}")
 
             # 🔥 Логируем действие
-            if self.current_user:
-                ActivityService.log(
-                    db=self.db,
-                    user_id=self.current_user.id,
-                    action="upload_dataset",
-                    resource=f"batch_{batch_id}",
-                    details=f"Uploaded {file.filename}, records: {records_saved}"
-                )
+        if self.current_user:
+            ActivityService.log(
+                db=self.db,
+                user_id=self.current_user.id,
+                action="upload_dataset",
+                resource=f"batch_{batch_id}",
+                details=f"Uploaded {file.filename}, records: {records_saved}"
+            )
 
         return {
             "batch_id": str(batch_id),

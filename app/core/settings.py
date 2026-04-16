@@ -19,14 +19,19 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ===== ML FILE CONTRACT =====
+    ML_BASE_DIR: str = "/app/models"
     ML_MODEL_DIR: str = "/app/models/current"
     ML_META_PATH: str = "/app/models/current/cb_promo_v1.meta.json"
     # ============================
 
     # ===== ML LINEAGE ===========
     ML_LINEAGE_DIR: str = "/app/models/history"
-    # ============================
 
+    # === INFERENCE METRICS ======
+    METRICS_DIR: str = "/app/models/metrics"
+
+
+    # ===== DATABASE =============
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/promo"
     REDIS_URL: str = "redis://localhost:6379/0"
     SQLALCHEMY_ECHO: bool = Field(default=False, alias="SQLALCHEMY_ECHO")

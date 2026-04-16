@@ -21,6 +21,8 @@ services:
     volumes:
       - backend-logs:/app/logs
       - models:/app/models/current
+      - lineage:/app/models/history
+      - metrics:/app/models/metrics
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
 #    ports:
@@ -254,6 +256,8 @@ networks:
 # -------------------- VOLUMES --------------------
 
 volumes:
+  metrics:
+  lineage:
   postgres-data:
   postgres-logs:
   grafana-data:

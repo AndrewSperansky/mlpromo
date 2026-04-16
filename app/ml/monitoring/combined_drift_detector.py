@@ -10,9 +10,10 @@ from app.ml.monitoring.retrain_trigger import handle_retrain_if_needed  # ✨ NE
 
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from datetime import datetime, timezone
+from app.core.settings import settings
 
 
-MODELS_DIR = Path("models")
+MODELS_DIR = Path(settings.ML_BASE_DIR)
 
 
 def load_shap_summary() -> Dict[str, float]:
