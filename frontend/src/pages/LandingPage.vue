@@ -28,11 +28,11 @@
           </button>
         </div>
         <div class="mt-4 text-center">
-            <a href="/docs" target="_blank" class="text-white text-decoration-none opacity-75">
-              <i class="bi bi-file-text me-1"></i>
-              API Docs (Swagger UI)
-            </a>
-          </div>
+          <a href="/docs" target="_blank" class="text-white text-decoration-none opacity-75">
+            <i class="bi bi-file-text me-1"></i>
+            API Docs (Swagger UI)
+          </a>
+        </div>
       </div>
     </div>
 
@@ -78,26 +78,26 @@
         <div class="row text-center">
           <div class="col-md-3">
             <div class="stat-card">
-              <div class="stat-number">1174</div>
-              <div class="stat-label">Строк для обучения</div>
+              <div class="stat-number">{{ stats.total_trainings || '???' }}</div>
+              <div class="stat-label">Обучений</div>
             </div>
           </div>
           <div class="col-md-3">
             <div class="stat-card">
-              <div class="stat-number">95%</div>
-              <div class="stat-label">Доверительный интервал</div>
+              <div class="stat-number">{{ stats.total_predictions }}</div>
+              <div class="stat-label">Предсказаний</div>
             </div>
           </div>
           <div class="col-md-3">
             <div class="stat-card">
-              <div class="stat-number">10+</div>
+              <div class="stat-number">{{ stats.total_rows }}</div>
+              <div class="stat-label">Строк в датасете</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="stat-card">
+              <div class="stat-number">{{ stats.total_models }}</div>
               <div class="stat-label">Версий моделей</div>
-            </div>
-          </div>
-          <div class="col-md-3">
-            <div class="stat-card">
-              <div class="stat-number">24/7</div>
-              <div class="stat-label">Мониторинг</div>
             </div>
           </div>
         </div>
@@ -114,9 +114,34 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 const router = useRouter()
+
+const stats = ref({
+  total_models: 0,
+  total_predictions: 0,
+  total_trainings: 0,
+  total_rows: 0
+})
+
+async function loadStats() {
+  try {
+    console.log('🟢 Loading stats...')
+    const response = await axios.get('/api/v1/system/landing-stats')
+    console.log('🟢 Stats response:', response.data)
+    stats.value = response.data
+  } catch (error) {
+    console.error('🔴 Failed to load landing stats:', error)
+  }
+}
+
+onMounted(() => {
+  console.log('🟢 LandingPage mounted')
+  loadStats()
+})
 
 const goToLogin = () => {
   router.push('/login')

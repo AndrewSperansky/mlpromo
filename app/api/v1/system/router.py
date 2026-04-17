@@ -188,3 +188,35 @@ def get_containers_status():
     Возвращает статус Docker контейнеров проекта.
     """
     return docker_service.get_containers_status()
+
+# ==========================================================
+# LANDING PAGE STATISTICS
+# ==========================================================
+
+@router.get("/landing-stats")
+def get_landing_stats(db: Session = Depends(get_db)):
+    """
+    Возвращает статистику для Landing Page
+    """
+    from app.models.ml_model import MLModel
+    from app.models.user_activity import UserActivity
+    from app.services.dataset_service import DatasetService
+    from sqlalchemy import text
+
+    dataset_service = DatasetService()
+    dataset_stats = dataset_service.get_stats()
+
+    total_models = db.query(MLModel).filter(text("is_deleted = false")).count()
+    total_predictions = db.query(UserActivity).filter(text("action = 'predict'")).count()
+    total_trainings = db.query(UserActivity).filter(text("action = 'train_model'")).count()
+    total_activations = db.query(UserActivity).filter(text("action = 'activate_model'")).count()
+    total_uploads = db.query(UserActivity).filter(text("action = 'upload_dataset'")).count()
+
+    return {
+        "total_models": total_models,
+        "total_predictions": total_predictions,
+        "total_trainings": total_trainings,
+        "total_activations": total_activations,
+        "total_uploads": total_uploads,
+        "total_rows": dataset_stats.get("total_rows", 0),
+    }
