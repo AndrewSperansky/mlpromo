@@ -13,16 +13,13 @@ services:
     environment:
       ENV: prod
       LOG_LEVEL: INFO
-      ML_MODEL_DIR: /app/models
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/promo
       REDIS_URL: redis://redis:6379/0
 
 
     volumes:
       - backend-logs:/app/logs
-      - models:/app/models/current
-      - lineage:/app/models/history
-      - metrics:/app/models/metrics
+      - models:/app/models
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
 #    ports:

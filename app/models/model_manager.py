@@ -19,7 +19,7 @@ def _base_models_dir() -> Path:
     """
     Возвращает актуальный MODELS_DIR из окружения
     """
-    return Path(settings.ML_BASE_DIR)
+    return Path(settings.ML_MODEL_DIR)
 
 
 def ensure_dirs():

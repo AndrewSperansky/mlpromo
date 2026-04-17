@@ -9,14 +9,17 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+
     environment:
-      ML_MODEL_DIR: /app/models
-      ENV: prod
+      ENV: env
       LOG_LEVEL: INFO
+
     volumes:
       - backend-logs:/app/logs
       - ./models:/app/models
       - /var/run/docker.sock:/var/run/docker.sock:ro
+
+
     ports:
       - "8000:8000"
     depends_on:
@@ -253,6 +256,8 @@ networks:
 
 # -------------------- VOLUMES --------------------
 volumes:
+  lineage:
+  metrics:
   postgres-data:
   postgres-logs:
   grafana-data:

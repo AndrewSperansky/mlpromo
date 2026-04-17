@@ -19,10 +19,12 @@ INFO/
 lib/
 lib64/
 logs/
-models/_candidate/
+models/candidate/
 models/archive/
 models/current/
 models/_smoke/
+/models/metrics/
+/models/history/
 parts/
 sdist/
 var/
@@ -38,3 +40,4 @@ offline_wheels/
 .env
 .env.*
 docker-compose.override.yml
+

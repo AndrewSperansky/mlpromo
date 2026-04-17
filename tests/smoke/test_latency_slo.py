@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime, timezone
+from app.core.settings import settings
 
 
 def _get_metrics_dir() -> Path:
@@ -14,7 +15,7 @@ def _get_metrics_dir() -> Path:
     METRICS_DIR читается в момент вызова
     (test / CI / runtime safe)
     """
-    return Path(os.getenv("METRICS_DIR", "metrics"))
+    return Path(settings.ML_METRICS_DIR)
 
 
 def _load_latencies(metrics_file: Path) -> List[float]:

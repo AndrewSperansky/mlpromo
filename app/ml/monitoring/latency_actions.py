@@ -12,7 +12,7 @@ from app.core.settings import settings
 
 
 def _get_models_dir() -> Path:
-    return Path(settings.ML_BASE_DIR)
+    return Path(settings.ML_MODEL_DIR)
 
 
 def rollback_current_to_previous() -> Dict[str, Any]:

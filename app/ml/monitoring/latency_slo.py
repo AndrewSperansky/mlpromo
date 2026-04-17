@@ -5,7 +5,7 @@
 from pathlib import Path
 from typing import Dict, Any, List
 import json
-import os
+from app.core.settings import settings
 import numpy as np
 
 
@@ -13,7 +13,7 @@ def _get_metrics_dir() -> Path:
     """
     METRICS_DIR читается в runtime
     """
-    return Path(os.getenv("METRICS_DIR", "metrics"))
+    return Path(settings.ML_METRICS_DIR)
 
 
 def _load_latencies() -> List[float]:

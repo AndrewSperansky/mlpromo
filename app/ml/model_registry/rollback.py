@@ -32,10 +32,10 @@ def rollback_current_to_archive(
     Возвращает информацию о выполненном rollback.
     """
 
-    models_dir = Path(settings.ML_BASE_DIR)
+    models_dir = Path(settings.ML_MODEL_DIR)
 
-    current_dir = models_dir / "current"
-    archive_dir = models_dir / "archive"
+    current_dir = Path(settings.ML_CURRENT_DIR)
+    archive_dir = Path(settings.ML_ARCYIVE_DIR)
 
     if not archive_dir.exists():
         raise RuntimeError("Archive directory does not exist")

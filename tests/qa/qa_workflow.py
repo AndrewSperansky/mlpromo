@@ -138,9 +138,9 @@ if __name__ == "__main__":
     assert active_count == 1, "Ошибка: больше одной active версии!"
 
     # BLOCK 6: SHAP / files check
-    candidate_dir = "./models/_candidate"
+    candidate_dir = "./models/candidate"
     files = os.listdir(candidate_dir) if os.path.exists(candidate_dir) else []
-    print("\n[FILES in _candidate]:", files)
+    print("\n[FILES in candidate]:", files)
 
     # BLOCK 7: Lineage
     fetch_lineage()

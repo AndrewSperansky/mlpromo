@@ -33,7 +33,7 @@ class ModelLoader:
         Приоритет:
         1. Сохранённый путь в runtime state (model_path)
         2. Путь из БД для модели с ID (число)
-        3. Поиск в стандартных папках (current, archive, _candidate)
+        3. Поиск в стандартных папках (current, archive, candidate)
         4. Старая логика (прямой путь)
         """
 
@@ -80,15 +80,15 @@ class ModelLoader:
         # Пробуем разные варианты
         possible_paths = [
             Path(settings.ML_MODEL_DIR) / f"{model_id}.cbm",
-            Path(settings.ML_MODEL_DIR) / "current" / f"{model_id}.cbm",
-            Path(settings.ML_MODEL_DIR) / "archive" / f"{model_id}.cbm",
-            Path(settings.ML_MODEL_DIR) / "_candidate" / f"{model_id}.cbm",
+            Path(settings.ML_CURRENT_DIR) / f"{model_id}.cbm",
+            Path(settings.ML_ARCHIVE_DIR) / f"{model_id}.cbm",
+            Path(settings.ML_CANDIDATE_DIR) / f"{model_id}.cbm",
         ]
 
         # Также пробуем найти по дате, если model_id похож на дату
         if isinstance(model_id, str) and "T" in model_id:
-            # Ищем в _candidate файлы с похожей датой
-            candidate_dir = Path(settings.ML_MODEL_DIR) / "_candidate"
+            # Ищем в candidate файлы с похожей датой
+            candidate_dir = Path(settings.ML_CANDIDATE_DIR)
             if candidate_dir.exists():
                 # Ищем файлы, начинающиеся с даты (первые 10 символов)
                 date_part = model_id[:10] if len(model_id) >= 10 else ""

@@ -17,7 +17,7 @@ def _get_metrics_dir() -> Path:
     """
     METRICS_DIR читается в runtime
     """
-    return Path(settings.METRICS_DIR)
+    return Path(settings.ML_METRICS_DIR)
 
 
 def collect_inference_metrics(

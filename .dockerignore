@@ -40,16 +40,16 @@ docker/prometheus/data/ # ← добавить (локальные данные 
 .cache/                 # ← добавить (общий кэш)
 
 # модели
-models/_candidate/
+models/candidate/
 models/archive/
 models/current/
 models/_smoke/
-
+/models/metrics/
+/models/history/
 
 # Environment
 .env
-.env.local
-.env.prod               # ← добавить (секреты продакшена)
+
 
 
 INFO/

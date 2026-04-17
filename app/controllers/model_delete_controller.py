@@ -1,6 +1,7 @@
 # app/controllers/model_delete_controller.py
 
 import logging
+import shutil
 from pathlib import Path
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -9,6 +10,7 @@ from app.models.ml_model import MLModel
 from app.models.activation_history import ModelActivationHistory
 from app.services.activity_service import ActivityService
 from app.models.user import User
+from app.core.settings import settings
 
 logger = logging.getLogger("promo_ml")
 
@@ -21,66 +23,53 @@ class ModelDeleteController:
         self.current_user = current_user
 
     def delete_model(self, model_id: int) -> dict:
-        """
-        Полностью удаляет модель из БД и файловой системы.
-        Даже если файлы отсутствуют, запись из БД удаляется.
-        """
-        # Находим модель
+        """Полностью удаляет модель из БД и файловой системы."""
         model = self.db.get(MLModel, model_id)
         if not model:
             raise HTTPException(status_code=404, detail="Model not found")
 
-        # Если модель активна — ошибка (нельзя удалить активную)
         if model.is_active:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot delete active model. Deactivate it first."
             )
 
-        # ===== 1. УДАЛЯЕМ ФАЙЛЫ (ИГНОРИРУЕМ ОШИБКИ) =====
+        # ===== 1. УДАЛЯЕМ ФАЙЛЫ =====
         file_deletion_errors = []
-        model_file = None
 
-        if model.model_path:
+        # Удаляем из candidate (если есть)
+        candidate_path = Path(settings.ML_CANDIDATE_DIR) / f"{model.id}.cbm"
+        if candidate_path.exists():
             try:
-                model_path_str = str(model.model_path)
-                model_file = Path(model_path_str)
+                candidate_path.unlink()
+                logger.info(f"Deleted from candidate: {candidate_path}")
 
-                # Удаляем файл модели
-                if model_file.exists():
-                    model_file.unlink()
-                    logger.info(f"Deleted model file: {model_file}")
+                # Удаляем соответствующий .meta.json
+                meta_file = candidate_path.with_suffix('.meta.json')
+                if meta_file.exists():
+                    meta_file.unlink()
+                    logger.info(f"Deleted meta from candidate: {meta_file}")
             except Exception as e:
-                file_deletion_errors.append(f"Model file: {e}")
-                logger.warning(f"Could not delete model file: {e}")
+                file_deletion_errors.append(str(e))
+                logger.warning(f"Could not delete candidate files: {e}")
 
-            # Удаляем meta.json (только если model_file определён)
-            if model_file and model_file.exists():
-                try:
-                    meta_file = model_file.with_suffix('.meta.json')
-                    if meta_file.exists():
-                        meta_file.unlink()
-                        logger.info(f"Deleted meta file: {meta_file}")
-                except Exception as e:
-                    file_deletion_errors.append(f"Meta file: {e}")
-                    logger.warning(f"Could not delete meta file: {e}")
-
-            # Удаляем shap-файлы (только если model_file определён)
-            if model_file and model_file.exists():
-                try:
-                    model_dir = model_file.parent
-                    for shap_file in model_dir.glob("shap_*"):
-                        if shap_file.exists():
-                            shap_file.unlink()
-                            logger.info(f"Deleted shap file: {shap_file}")
-                except Exception as e:
-                    file_deletion_errors.append(f"Shap files: {e}")
-                    logger.warning(f"Could not delete shap files: {e}")
+        # Удаляем из archive (всю папку, содержащую модель)
+        archive_dir = Path(settings.ML_ARCHIVE_DIR)
+        try:
+            for f in archive_dir.glob(f"**/{model.id}.cbm"):
+                model_folder = f.parent
+                shutil.rmtree(model_folder)
+                logger.info(f"Deleted archive folder: {model_folder}")
+                break
+        except Exception as e:
+            file_deletion_errors.append(str(e))
+            logger.warning(f"Could not delete archive folder: {e}")
 
         # ===== 2. УДАЛЯЕМ ИСТОРИЮ АКТИВАЦИЙ =====
+        # 🔥 Исправлено: используем .__eq__() или просто == (SQLAlchemy понимает)
         try:
             self.db.query(ModelActivationHistory).filter(
-                ModelActivationHistory.model_id == model_id    # type: ignore
+                ModelActivationHistory.model_id == model_id  # type: ignore
             ).delete(synchronize_session=False)
             logger.info(f"Deleted activation history for model {model_id}")
         except Exception as e:
@@ -96,13 +85,6 @@ class ModelDeleteController:
             logger.error(f"Failed to delete model {model_id} from DB: {e}")
             raise HTTPException(status_code=500, detail="Failed to delete model from database")
 
-        # Формируем сообщение о результате
-        message = "Model removed from database"
-        if file_deletion_errors:
-            message += f". Note: some files could not be deleted: {', '.join(file_deletion_errors)}"
-        else:
-            message += " and filesystem"
-
         # Логируем действие
         ActivityService.log(
             db=self.db,
@@ -111,6 +93,10 @@ class ModelDeleteController:
             resource=f"model_{model_id}",
             details=f"Model {model_id} deleted by {self.current_user.username}"
         )
+
+        message = "Model removed from database and filesystem"
+        if file_deletion_errors:
+            message += f". Note: {', '.join(file_deletion_errors)}"
 
         return {
             "status": "deleted",

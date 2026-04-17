@@ -2,14 +2,17 @@
 
 import logging
 import shutil
+import json
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_
 
 from app.models.ml_model import MLModel
 from app.ml.model_registry.lineage import record_lineage_event
+from app.core.settings import settings
 
 logger = logging.getLogger("promo_ml")
 
@@ -35,11 +38,7 @@ class ModelRegistryService:
             model_path: Optional[Path] = None,
             trained_rows_count: int,
     ) -> MLModel:
-        """
-        Регистрирует новую модель в БД.
-
-        """
-
+        """Регистрирует новую модель в БД."""
         stmt = select(MLModel).where(
             and_(
                 MLModel.name == name,
@@ -47,9 +46,7 @@ class ModelRegistryService:
                 MLModel.is_deleted.is_(False),
             )
         )
-
         existing = self.db.execute(stmt).scalar_one_or_none()
-
         if existing:
             return existing
 
@@ -65,75 +62,42 @@ class ModelRegistryService:
             is_active=False,
             trained_rows_count=trained_rows_count,
         )
-
         self.db.add(model)
         self.db.commit()
         self.db.refresh(model)
-
         return model
 
     # =========================================
     # PROMOTE MODEL
     # =========================================
-
     def promote_model(self, model_id: int) -> MLModel:
         logger.info(f"🚀 Starting promotion process for model {model_id}")
 
-        # 1. Получаем новую модель (кандидата)
         new_model = self.get_model(model_id)
         if new_model is None:
-            logger.error(f"❌ Model {model_id} not found")
             raise ValueError(f"Model {model_id} not found")
 
-        logger.info(f"📦 Candidate model: {new_model.name}:{new_model.version} (id={new_model.id})")
-        logger.info(f"   Metrics: {new_model.metrics}")
-
-        # 2. Получаем текущую активную модель (Champion)
-        current_model: Optional[MLModel] = (
+        current_model = (
             self.db.query(MLModel)
-            .filter(
-                MLModel.is_active == True,
-                MLModel.is_deleted == False
-            )
+            .filter(MLModel.is_active == True, MLModel.is_deleted == False)
             .first()
         )
 
-        # 3. GOVERNANCE CHECK
+        # Governance check
         if current_model is not None:
-            logger.info(f"🏆 Current champion: {current_model.name}:{current_model.version} (id={current_model.id})")
-            logger.info(f"   Metrics: {current_model.metrics}")
-
             if current_model.id == new_model.id:
-                logger.warning(f"⚠️ Model {model_id} is already active, skipping promotion")
                 return new_model
+            self.validate_promotion(current_model, new_model)  # type: ignore
 
-            # Проверяем, можно ли продвигать
-            try:
-                self.validate_promotion(current_model, new_model)
-                logger.info(f"✅ Promotion validation passed")
-            except ValueError as e:
-                logger.error(f"❌ Promotion rejected: {e}")
-                raise
-        else:
-            logger.info("🎯 No active model found, this will be the first champion")
+        # Deactivate all active models
+        self.db.query(MLModel).filter(MLModel.is_active == True).update({"is_active": False})
 
-        # 4. Деактивируем ВСЕ активные модели
-        logger.info(f"📊 Deactivating all active models...")
-        deactivated = self.db.query(MLModel).filter(
-            MLModel.is_active == True
-        ).update({"is_active": False})
-        logger.info(f"🔴 Deactivated {deactivated} model(s)")
-        if deactivated:
-            logger.info(f"🔴 Deactivated {deactivated} existing model(s)")
-
-        # 5. Активируем новую модель
+        # Activate new model
         new_model.is_active = True
         self.db.commit()
         self.db.refresh(new_model)
 
-        logger.info(f"🟢 Activated new champion: {new_model.name}:{new_model.version} (id={new_model.id})")
-
-        # 6. После успешной активации делаем запись в Lineage
+        # Record lineage
         record_lineage_event(
             event_type="promoted",
             model_id=str(model_id),
@@ -144,97 +108,271 @@ class ModelRegistryService:
             }
         )
 
-        logger.info(f"🔥🔥🔥 LINEAGE EVENT RECORDED: promoted for model {model_id}")
+        # Archive old current model (move to archive)
+        self._archive_old_current_model()
 
-        # 7. После активации модели, обновляем meta.json в current директории
+        # Cleanup candidate models
+        self._cleanup_candidate_models(keep_last=3)
+
+        # Update meta in current directory
         self._update_current_meta(new_model)
 
-        # 8. Перемещаем файлы
+        # Move model files
         self._move_model_files(new_model)
 
         return new_model
 
+    def force_promote_model(self, model_id: int) -> MLModel:
+        """Принудительная активация без проверки метрик"""
+        new_model = self.get_model(model_id)
+        if new_model is None:
+            raise ValueError(f"Model {model_id} not found")
+
+        self.db.query(MLModel).filter(MLModel.is_active == True).update({"is_active": False})
+        new_model.is_active = True
+        self.db.commit()
+
+        # Archive old current model
+        self._archive_old_current_model()
+
+        # Cleanup candidate models
+        self._cleanup_candidate_models(keep_last=3)
+
+        return new_model
+
+    # =========================================
+    # CLEANUP METHODS
+    # =========================================
+
+    @staticmethod
+    def _cleanup_candidate_models(keep_last: int = 3):
+        """Оставляет только последние N моделей в candidate."""
+        base_dir = Path(settings.ML_MODEL_DIR)
+        candidate_dir = Path(settings.ML_CANDIDATE_DIR)
+
+        if not candidate_dir.exists():
+            return
+
+        # Получаем все .cbm файлы с их временем модификации
+        cbm_files = list(candidate_dir.glob("*.cbm"))
+        if not cbm_files:
+            return
+
+        # Сортируем по времени (новые первые)
+        cbm_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+        # Определяем, какие модели оставляем (первые keep_last)
+        to_keep = set(f.stem for f in cbm_files[:keep_last])
+        to_delete = cbm_files[keep_last:]
+
+        # Удаляем старые модели
+        for old_cbm in to_delete:
+            model_stem = old_cbm.stem
+
+            # Удаляем .cbm
+            old_cbm.unlink()
+            logger.info(f"Deleted: {old_cbm.name}")
+
+            # Удаляем соответствующий .meta.json
+            meta_file = candidate_dir / f"{model_stem}.meta.json"
+            if meta_file.exists():
+                meta_file.unlink()
+                logger.info(f"Deleted: {meta_file.name}")
+
+            # Удаляем SHAP-файлы
+            for shap_file in candidate_dir.glob(f"{model_stem}_shap*"):
+                shap_file.unlink()
+                logger.info(f"Deleted: {shap_file.name}")
+
+        # Удаляем orphan meta.json (только если нет соответствующего .cbm среди оставшихся)
+        # for meta_file in candidate_dir.glob("*.meta.json"):
+        #     model_stem = meta_file.stem
+        #     if model_stem not in to_keep:
+        #         cbm_file = candidate_dir / f"{model_stem}.cbm"
+        #         if not cbm_file.exists():
+        #             meta_file.unlink()
+        #             logger.info(f"Deleted orphan meta: {meta_file.name}")
+
+        # Очищаем общие shap-файлы (если нет моделей)
+        if not cbm_files:
+            for shap_file in candidate_dir.glob("shap_*"):
+                shap_file.unlink()
+            metrics_file = candidate_dir / "training_metrics.json"
+            if metrics_file.exists():
+                metrics_file.unlink()
+                logger.info("Deleted: training_metrics.json")
+
+        logger.info(f"✅ candidate cleanup completed, kept {len(to_keep)} models")
+
+
+
+    def _archive_old_current_model(self):
+        """
+        Перемещает старые модели из current в archive.
+        Создаёт поддиректорию с timestamp.
+        """
+        from pathlib import Path
+        import shutil
+        from datetime import datetime
+
+        models_dir = Path(settings.ML_MODEL_DIR)
+        current_dir = Path(settings.ML_CURRENT_DIR)
+        archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+        logger.info(f"📁 models_dir: {models_dir}")
+        logger.info(f"📁 current_dir: {current_dir}")
+        logger.info(f"📁 archive_dir: {archive_dir}")
+
+
+        # Находим активную модель в БД
+        active_model = (
+            self.db.query(MLModel)
+            .filter(MLModel.is_active == True, MLModel.is_deleted == False)
+            .first()
+        )
+
+        if not active_model:
+            logger.info("No active model found, skipping archive")
+            return
+
+        # Создаём архивную директорию с timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_dir = archive_dir / f"archive_{timestamp}"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        moved_count = 0
+        for f in current_dir.glob("*"):
+            if f.is_file():
+                # Не архивируем файлы активной модели
+                active_model_path = str(active_model.model_path) if active_model.model_path else None
+                if active_model_path and active_model_path in str(f):
+                    continue
+                # Не архивируем текущий meta.json активной модели
+                if f.name == "cb_promo_v1.meta.json" and active_model.model_path:
+                    continue
+
+                try:
+                    shutil.move(str(f), str(backup_dir / f.name))
+                    moved_count += 1
+                    logger.info(f"  Archived: {f.name} -> {backup_dir.name}")
+                except Exception as e:
+                    logger.warning(f"  Failed to archive {f.name}: {e}")
+
+        if moved_count > 0:
+            logger.info(f"✅ Archived {moved_count} files to {backup_dir}")
+        else:
+            # Если нечего архивировать — удаляем пустую директорию
+            try:
+                backup_dir.rmdir()
+            except:
+                pass
+
+    # =========================================
+    # HELPER METHODS
+    # =========================================
 
     def _update_current_meta(self, model: MLModel) -> None:
         """Обновляет meta.json в директории current"""
         try:
-            import json
             from pathlib import Path
+            current_dir = Path(settings.ML_MODEL_DIR)
 
-            models_dir = Path("/app/models")
-            current_dir = models_dir / "current"
-            meta_path = current_dir / "cb_promo_v1.meta.json"
+            # 🔥 Правильный путь — по ID модели
+            meta_path = current_dir / f"{model.id}.meta.json"
+
+            # 🔥 Для обратной совместимости — создаём симлинк или копию как cb_promo_v1.meta.json
+            legacy_path = current_dir / "cb_promo_v1.meta.json"
 
             if meta_path.exists():
                 with open(meta_path, 'r') as f:
                     meta = json.load(f)
 
-                # Добавляем conformal данные из метрик модели
                 if model.metrics and isinstance(model.metrics, dict):
                     conformal = model.metrics.get("conformal")
                     if conformal:
                         meta["conformal"] = conformal
                         meta["conformal_q_hat"] = conformal.get("q_hat")
 
+                        # Сохраняем в основной файл
                         with open(meta_path, 'w') as f:
                             json.dump(meta, f, indent=2)
 
-                        logger.info(f"✅ Updated meta.json with conformal data: q_hat={conformal.get('q_hat')}")
+                        # Копируем в legacy файл для совместимости
+                        import shutil
+                        shutil.copy2(meta_path, legacy_path)
+
+                        logger.info(f"✅ Updated meta.json: {meta_path} and {legacy_path}")
         except Exception as e:
             logger.warning(f"Failed to update meta.json: {e}")
 
-
+    # =========================================
+    # MOVE MODELS FILES
+    # =========================================
 
     def _move_model_files(self, model: MLModel) -> None:
         """Перемещает файлы модели в папку current"""
         try:
-            MODELS_DIR = Path("/app/models")
-            current_dir = MODELS_DIR / "current"
-            candidate_dir = MODELS_DIR / "_candidate"
-            archive_dir = MODELS_DIR / "archive"
+            from pathlib import Path
+            import shutil
 
-            current_dir.mkdir(exist_ok=True)
-            archive_dir.mkdir(exist_ok=True)
+            models_dir = Path(settings.ML_MODEL_DIR)
+            current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
+            candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
+            metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
 
-            if model.model_path and "_candidate" in model.model_path:
+            logger.info(f"📁 models_dir: {models_dir}")
+            logger.info(f"📁 current_dir: {current_dir}")
+            logger.info(f"📁 candidate_dir: {candidate_dir}")
+
+            current_dir.mkdir(parents=True, exist_ok=True)
+
+            # 🔥 ВСЕГДА копируем SHAP-файлы при активации
+            for f in candidate_dir.glob("shap_*"):
+                shutil.copy2(str(f), str(current_dir / f.name))
+                # .copy2 (копируем, оставляя в candidate для других моделей)
+                logger.info(f"Copied shap: {f.name}")
+
+            if model.model_path and "candidate" in model.model_path:
                 old_path = Path(model.model_path)
                 new_path = current_dir / old_path.name
 
-                logger.info(f"📁 Moving model files from {old_path} to {new_path}")
+                # 1. Копируем .cbm
+                shutil.move(old_path, new_path)
+                logger.info(f"Copied model: {old_path.name} -> {new_path}")
 
-                # Копируем файл модели
-                shutil.copy(old_path, new_path)
-
-                # Копируем meta.json если есть
+                # 2. Копируем .meta.json
                 meta_old = old_path.with_suffix('.meta.json')
                 if meta_old.exists():
-                    shutil.copy(meta_old, current_dir / meta_old.name)
+                    shutil.move(meta_old, current_dir / meta_old.name)
+                    logger.info(f"Copied meta: {meta_old.name}")
 
-                # Копируем shap-файлы
-                for f in candidate_dir.glob("shap_*"):
-                    shutil.copy(f, current_dir / f.name)
+                # 3. Копируем SHAP-файлы
+                # for f in candidate_dir.glob("shap_*"):
+                #     shutil.copy2(str(f), str(current_dir / f.name))
+                #     # .copy2 (копируем, оставляя в candidate для других моделей)
+                #     logger.info(f"Copied shap: {f.name}")
 
-                # ========== НОВОЕ: копируем training_metrics.json ==========
-                training_metrics_src = candidate_dir / "training_metrics.json"
-                if training_metrics_src.exists():
-                    shutil.copy(training_metrics_src, current_dir / "training_metrics.json")
-                    logger.info("✅ Copied training_metrics.json to current")
+                # 4. 🔥 Копируем training_metrics.json из metrics/ в current/
+                # metrics_src = metrics_dir / "training_metrics.json"
+                # if metrics_src.exists():
+                #     shutil.move(metrics_src, current_dir / "training_metrics.json")
+                #     logger.info(f"Copied training_metrics.json from {metrics_src}")
 
-                # Обновляем путь в БД
+                # 5. Обновляем путь в БД
                 model.model_path = str(new_path)
                 self.db.commit()
 
-                logger.info(f"✅ Model files moved successfully")
-            elif model.model_path and "current" in model.model_path:
-                logger.info(f"📁 Model already in current directory, no move needed")
+                logger.info(f"✅ Model files moved to {current_dir}")
+            else:
+                logger.info(f"Model already in current directory: {model.model_path}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to move model files: {e}")
-            # Не прерываем процесс — модель уже активирована
+            logger.error(f"Failed to move model files: {e}")
 
     # =========================================
-    # GET ANY MODEL
+    # CRUD METHODS
     # =========================================
+
     def get_model(self, model_id: int) -> MLModel | None:
         stmt = select(MLModel).where(
             and_(
@@ -244,9 +382,6 @@ class ModelRegistryService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    # =========================================
-    # GET ACTIVE MODEL
-    # =========================================
     def get_active_model(self, name: str) -> MLModel | None:
         stmt = select(MLModel).where(
             and_(
@@ -257,9 +392,6 @@ class ModelRegistryService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    # =========================================
-    # LIST MODEL
-    # =========================================
     def list_models(self):
         return (
             self.db.query(MLModel)
@@ -268,51 +400,28 @@ class ModelRegistryService:
             .all()
         )
 
-    # =========================================
-    # DEACTIVATE MODEL
-    # =========================================
     def deactivate_model(self, model_id: int) -> MLModel:
         model = self.get_model(model_id)
         if model is None:
             raise ValueError("Model not found")
-
         model.is_active = False
         self.db.commit()
         self.db.refresh(model)
-
-        logger.info(f"🔴 Model {model_id} deactivated")
+        logger.info(f"Model {model_id} deactivated")
         return model
 
-    # =========================================
-    # VALIDATE PROMOTION
-    # =========================================
     def validate_promotion(self, current_model: MLModel, new_model: MLModel) -> None:
-        """
-        Проверяет, можно ли продвигать новую модель.
-        Raises ValueError если новая модель хуже или равна текущей.
-        """
-
+        """Проверяет, можно ли продвигать новую модель."""
         current_metrics = current_model.metrics or {}
         new_metrics = new_model.metrics or {}
 
-        logger.info(f"📊 Validating promotion:")
-        logger.info(f"   Current metrics: {current_metrics}")
-        logger.info(f"   New metrics: {new_metrics}")
-
-        # 1. Проверяем наличие метрик
         if not current_metrics:
-            raise ValueError(
-                f"Current model {current_model.id} has no metrics, cannot compare"
-            )
+            raise ValueError(f"Current model {current_model.id} has no metrics")
 
         if not new_metrics:
-            raise ValueError(
-                f"New model {new_model.id} has no metrics, promotion rejected"
-            )
+            raise ValueError(f"New model {new_model.id} has no metrics")
 
-        # 2. Определяем метрику (приоритет: rmse -> mae -> r2 -> accuracy)
         possible_metrics = ["rmse", "mae", "mape", "r2", "accuracy"]
-
         metric_name = None
         for m in possible_metrics:
             if m in current_metrics and m in new_metrics:
@@ -320,75 +429,15 @@ class ModelRegistryService:
                 break
 
         if not metric_name:
-            raise ValueError(
-                f"No common metrics found. "
-                f"Current metrics: {list(current_metrics.keys())}, "
-                f"New metrics: {list(new_metrics.keys())}"
-            )
+            raise ValueError(f"No common metrics found")
 
-        # 3. Для метрик ошибки (RMSE, MAE, MAPE) — чем меньше, тем лучше
         lower_is_better_metrics = {"rmse", "mae", "mape"}
-
         current_value = current_metrics[metric_name]
         new_value = new_metrics[metric_name]
 
-        logger.info(f"   Comparing {metric_name}: current={current_value:.6f}, new={new_value:.6f}")
-
-        # 4. Сравниваем в зависимости от типа метрики
         if metric_name in lower_is_better_metrics:
-            # Чем меньше — тем лучше
             if new_value > current_value:
-                error_msg = (
-                    f"Promotion rejected: new model has worse {metric_name} "
-                    f"({new_value:.6f} > {current_value:.6f})"
-                )
-                logger.error(f"❌ {error_msg}")
-                raise ValueError(error_msg)
-            elif new_value == current_value:
-                error_msg = (
-                    f"Promotion rejected: new model has equal {metric_name} "
-                    f"({new_value:.6f} == {current_value:.6f}) - no improvement"
-                )
-                logger.warning(f"⚠️ {error_msg}")
-                raise ValueError(error_msg)
-            else:
-                improvement = (current_value - new_value) / current_value * 100
-                logger.info(f"   ✅ {metric_name} improved by {improvement:.4f}%")
+                raise ValueError(f"Promotion rejected: new model has worse {metric_name}")
         else:
-            # Чем больше — тем лучше (accuracy, r2, auc)
             if new_value < current_value:
-                error_msg = (
-                    f"Promotion rejected: new model has worse {metric_name} "
-                    f"({new_value:.6f} < {current_value:.6f})"
-                )
-                logger.error(f"❌ {error_msg}")
-                raise ValueError(error_msg)
-            elif new_value == current_value:
-                error_msg = (
-                    f"Promotion rejected: new model has equal {metric_name} "
-                    f"({new_value:.6f} == {current_value:.6f}) - no improvement"
-                )
-                logger.warning(f"⚠️ {error_msg}")
-            elif new_value == current_value:
-                logger.info(f"   ⚠️ {metric_name} is equal ({new_value:.6f} == {current_value:.6f})")
-                logger.info(f"   ✅ Promotion allowed (equal metrics, but may have other benefits)")
-            else:
-                improvement = (new_value - current_value) / current_value * 100
-                logger.info(f"   ✅ {metric_name} improved by {improvement:.4f}%")
-
-
-
-    def force_promote_model(self, model_id: int) -> MLModel:
-        """Принудительная активация без проверки метрик"""
-        new_model = self.get_model(model_id)
-        if new_model is None:
-            raise ValueError(f"Model {model_id} not found")
-
-        # Деактивируем все активные модели
-        self.db.query(MLModel).filter(MLModel.is_active == True).update({"is_active": False})
-
-        # Активируем новую
-        new_model.is_active = True
-        self.db.commit()
-
-        return new_model
+                raise ValueError(f"Promotion rejected: new model has worse {metric_name}")

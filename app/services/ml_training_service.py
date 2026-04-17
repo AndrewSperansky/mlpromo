@@ -12,6 +12,7 @@ from app.db.session import SessionLocal
 from app.ml.runtime_state import ML_RUNTIME_STATE
 from app.models.dataset_upload_history import DatasetUploadHistory
 from app.models.industrial_dataset import IndustrialDatasetRaw
+from app.services.registry_service import ModelRegistryService
 
 logger = logging.getLogger("promo_ml")
 
@@ -48,6 +49,8 @@ class MLTrainingService:
         # 🔥
         result = train_pipeline(promote=promote, trigger=trigger)
 
+
+
         # 🔥 Логируем что пришло из train_pipeline
         logger.info(f"🔍 train_pipeline result keys: {result.keys()}")
         logger.info(f"🔍 comparison in result: {result.get('comparison')}")
@@ -80,6 +83,16 @@ class MLTrainingService:
                 "total_rows": total_rows,
             },
         )
+
+        # db_cleanup = SessionLocal()
+        # try:
+        #     registry = ModelRegistryService(db_cleanup)
+        #     registry._cleanup_candidate_models(keep_last=3)
+        #     logger.info("✅ Cleaned up candidate models after training")
+        # except Exception as e:
+        #     logger.warning(f"Failed to cleanup candidate: {e}")
+        # finally:
+        #     db_cleanup.close()
 
         # ========== FINAL API RESPONSE ==========
         return {

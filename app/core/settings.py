@@ -20,15 +20,15 @@ class Settings(BaseSettings):
 
     # ===== ML FILE CONTRACT =====
     ML_BASE_DIR: str = "/app/models"
-    ML_MODEL_DIR: str = "/app/models/current"
-    ML_META_PATH: str = "/app/models/current/cb_promo_v1.meta.json"
-    # ============================
+    ML_MODEL_DIR: str = "/app/models"
 
-    # ===== ML LINEAGE ===========
+    ML_CURRENT_DIR: str = "/app/models/current"
+    ML_CANDIDATE_DIR: str = "/app/models/candidate"
     ML_LINEAGE_DIR: str = "/app/models/history"
+    ML_METRICS_DIR: str = "/app/models/metrics"
+    ML_ARCHIVE_DIR: str = "/app/models/archive"
 
-    # === INFERENCE METRICS ======
-    METRICS_DIR: str = "/app/models/metrics"
+    ML_META_PATH: str = "/app/models/current/cb_promo_v1.meta.json"
 
 
     # ===== DATABASE =============

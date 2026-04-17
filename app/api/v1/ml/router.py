@@ -68,10 +68,11 @@ logger = logging.getLogger("promo_ml")
 router = APIRouter(tags=["ml"])
 
 
-BASE_DIR = Path(settings.ML_MODEL_DIR)
-
-MODELS_DIR = BASE_DIR / "current"
-ARCHIVE_DIR = BASE_DIR / "archive"
+MODEL_DIR = Path(settings.ML_MODEL_DIR)
+CURRENT_DIR = Path(settings.ML_CURRENT_DIR)
+ARCHIVE_DIR = Path(settings.ML_ARCHIVE_DIR)
+CANDIDATE_DIR = Path(settings.ML_CANDIDATE_DIR)
+METRICS_DIR = Path(settings.ML_METRICS_DIR)
 
 
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -876,10 +877,8 @@ def get_training_metrics():
     """
 
 
-    # Сначала ищем в current, потом в _candidate
-    metrics_path = MODELS_DIR / "current" / "training_metrics.json"
-    if not metrics_path.exists():
-        metrics_path = MODELS_DIR / "_candidate" / "training_metrics.json"
+    # Сначала ищем в current, потом в candidate
+    metrics_path = METRICS_DIR / "training_metrics.json"
 
     if not metrics_path.exists():
         return {

@@ -33,9 +33,6 @@ logger = logging.getLogger("promo_ml")
 TARGET = "k_uplift"
 
 
-def _get_models_dir() -> Path:
-    return Path(settings.ML_MODEL_DIR)
-
 
 def load_full_dataset(db: Session) -> pd.DataFrame:
     """
@@ -89,14 +86,23 @@ def train_pipeline(
     """
     logger.info(f"🚀 Starting training pipeline (promote={promote}, trigger={trigger})")
 
-    MODELS_DIR = _get_models_dir()
-    candidate_dir = MODELS_DIR / "_candidate"
-    current_dir = MODELS_DIR / "current"
-    archive_dir = MODELS_DIR / "archive"
+    models_dir = Path(settings.ML_MODEL_DIR)
+
+    candidate_dir = Path(settings.ML_CANDIDATE_DIR)
+    current_dir = Path(settings.ML_CURRENT_DIR)
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
+    metrics_dir = Path(settings.ML_METRICS_DIR)
 
     candidate_dir.mkdir(parents=True, exist_ok=True)
     current_dir.mkdir(parents=True, exist_ok=True)
     archive_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"📁 models_dir: {models_dir}")
+    logger.info(f"📁 candidate_dir: {candidate_dir}")
+    logger.info(f"📁 current_dir: {current_dir}")
+    logger.info(f"📁 archive_dir: {archive_dir}")
+    logger.info(f"📁 metrics_dir: {metrics_dir}")
 
     # =========================
     # LOAD DATASET
@@ -202,8 +208,10 @@ def train_pipeline(
         "best_val_rmse": min(val_rmse)
     }
 
-    # Сохраняем в файл
-    metrics_path = candidate_dir / "training_metrics.json"
+    # Сохраняем training_metrics.json в metrics/
+
+
+    metrics_path = metrics_dir / "training_metrics.json"
     with open(metrics_path, "w") as f:
         json.dump(training_metrics, f, indent=2)
 
