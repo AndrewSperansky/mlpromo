@@ -807,51 +807,6 @@ def debug_batch(
         "batch_exists": batch_id in all_batches_str
     }
 
-# # =====================================
-# # TRAINING METRICS CHART
-# # =====================================
-#
-# @router.get("/training/metrics")
-# def get_training_metrics():
-#     """
-#     Возвращает метрики обучения для графика
-#     """
-#     import pandas as pd
-#     from pathlib import Path
-#
-#     # Путь к файлу с метриками CatBoost
-#     catboost_info_dir = Path("catboost_info")
-#     learn_error_path = catboost_info_dir / "learn_error.tsv"
-#
-#     if not learn_error_path.exists():
-#         return {
-#             "iterations": [],
-#             "rmse": [],
-#             "best_iteration": None,
-#             "message": "No training metrics available yet"
-#         }
-#
-#     try:
-#         df = pd.read_csv(learn_error_path, sep="\t")
-#
-#         # Находим лучшую итерацию
-#         best_idx = df["RMSE"].idxmin()
-#
-#         return {
-#             "iterations": df["iter"].tolist(),
-#             "rmse": df["RMSE"].tolist(),
-#             "best_iteration": int(df["iter"].iloc[best_idx]),
-#             "best_rmse": float(df["RMSE"].iloc[best_idx]),
-#             "total_iterations": len(df)
-#         }
-#     except Exception as e:
-#         return {
-#             "iterations": [],
-#             "rmse": [],
-#             "best_iteration": None,
-#             "error": str(e)
-#         }
-
 
 # ==============================
 # ОТЛАДОЧНЫЙ ENDPOINT
@@ -875,7 +830,6 @@ def get_training_metrics():
     """
     Возвращает метрики обучения для графика
     """
-
 
     # Сначала ищем в current, потом в candidate
     metrics_path = METRICS_DIR / "training_metrics.json"

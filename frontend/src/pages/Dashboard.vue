@@ -155,7 +155,7 @@
     <!-- Best iteration info -->
     <div v-if="trainingData?.best_iteration" class="text-muted small mb-4">
       <i class="bi bi-info-circle me-1"></i>
-      Best iteration: {{ trainingData.best_iteration }} (Best RMSE: {{ trainingData.best_rmse?.toFixed(6) }})
+      Best iteration: {{ trainingData.best_iteration }} (Best RMSE: {{ trainingData.best_val_rmse?.toFixed(6) }})
     </div>
 
     <!-- ===== PERFORMANCE CARDS ===== -->
@@ -290,9 +290,10 @@ let valChartInstance: any = null
 
 const trainingData = ref<{
   iterations: number[];
-  rmse: number[];
+  train_rmse: number[];
+  val_rmse: number[];
   best_iteration: number;
-  best_rmse: number;
+  best_val_rmse: number;
   message?: string;
   error?: string;
 } | null>(null)
@@ -467,7 +468,7 @@ function renderTrainingCharts() {
           labels: trainingData.value.iterations,
           datasets: [{
             label: 'Training RMSE',
-            data: trainingData.value.rmse,
+            data: trainingData.value.train_rmse,
             borderColor: 'rgb(54, 162, 235)',
             backgroundColor: 'rgba(54, 162, 235, 0.1)',
             fill: true,
@@ -485,10 +486,12 @@ function renderTrainingCharts() {
             }
           },
           scales: {
-            y: { 
+            y: {
               title: { display: true, text: 'RMSE' }
             },
-            x: { title: { display: true, text: 'Iteration' } }
+            x: {
+              title: { display: true, text: 'Iteration' }
+            }
           }
         }
       })
@@ -507,7 +510,7 @@ function renderTrainingCharts() {
           labels: trainingData.value.iterations,
           datasets: [{
             label: 'Validation RMSE',
-            data: trainingData.value.rmse,
+            data: trainingData.value.val_rmse,
             borderColor: 'rgb(75, 192, 192)',
             backgroundColor: 'rgba(75, 192, 192, 0.1)',
             fill: true,
@@ -525,10 +528,12 @@ function renderTrainingCharts() {
             }
           },
           scales: {
-            y: { 
+            y: {
               title: { display: true, text: 'RMSE' }
             },
-            x: { title: { display: true, text: 'Iteration' } }
+            x: {
+              title: { display: true, text: 'Iteration' }
+            }
           }
         }
       })
