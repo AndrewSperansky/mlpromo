@@ -107,7 +107,7 @@
     <!-- Footer -->
     <footer class="footer">
       <div class="container text-center">
-        <p>&copy; 2026 Promo ML. Все права защищены.</p>
+        <p>&copy; 2026 АПХ Мираторг. Все права защищены.</p>
       </div>
     </footer>
   </div>
