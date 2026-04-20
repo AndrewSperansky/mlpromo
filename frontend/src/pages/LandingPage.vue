@@ -28,6 +28,8 @@
           </button>
         </div>
         <div class="mt-4 text-center">
+          <!-- <a href="http://localhost:8000/docs" target="_blank" class="text-white text-decoration-none opacity-75"> -->
+          <!-- <a href="http://192.16818.73:8000/docs" target="_blank" class="text-white text-decoration-none opacity-75">  --> 
           <a href="/docs" target="_blank" class="text-white text-decoration-none opacity-75">
             <i class="bi bi-file-text me-1"></i>
             API Docs (Swagger UI)
@@ -126,6 +128,11 @@ const stats = ref({
   total_trainings: 0,
   total_rows: 0
 })
+
+
+//const isDev = import.meta.env.DEV  // true в dev режиме, false в prod
+
+//const docsUrl = isDev ? 'http://localhost:8000/docs' : '/docs'
 
 async function loadStats() {
   try {

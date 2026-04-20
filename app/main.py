@@ -171,7 +171,10 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="Promo ML API",
     lifespan=lifespan,
-    debug=True
+    debug=True,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # ------------------------------------------------------

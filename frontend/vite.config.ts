@@ -18,6 +18,14 @@ export default defineConfig({
         target: "http://backend:8000",
         changeOrigin: true,
       },
+      "/docs": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
+      "/openapi.json": {
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
     },
   },
 })
