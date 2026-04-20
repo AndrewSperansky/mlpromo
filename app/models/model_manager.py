@@ -15,37 +15,41 @@ ARTIFACT_FILES = [
 ]
 
 
-def _base_models_dir() -> Path:
-    """
-    Возвращает актуальный MODELS_DIR из окружения
-    """
-    return Path(settings.ML_MODEL_DIR)
-
 
 def ensure_dirs():
-    base = _base_models_dir()                        # ← NEW
-    (base / "current").mkdir(parents=True, exist_ok=True)
-    (base / "archive").mkdir(parents=True, exist_ok=True)
-    (base / "baseline").mkdir(parents=True, exist_ok=True)
+
+    current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
+    candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
+    metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+    current_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
 
 def archive_current_model():
     """
     Архивирует текущую модель (если она есть)
     """
-    base = _base_models_dir()                        # ← NEW
-    current = base / "current"
-    archive = base / "archive"
 
-    if not (current / "cb_promo_v1.cbm").exists():
+    ensure_dirs()
+
+    current_dir = Path(settings.ML_CURRENT_DIR)
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+
+
+    if not (current_dir / "cb_promo_v1.cbm").exists():
         return None
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
-    target_dir = archive / ts
+    target_dir = archive_dir / ts
     target_dir.mkdir(parents=True, exist_ok=True)
 
     for fname in ARTIFACT_FILES:
-        src = current / fname
+        src = current_dir / fname
         if src.exists():
             shutil.copy2(src, target_dir / fname)
 
@@ -58,12 +62,14 @@ def promote_candidate(candidate_dir: Path):
     """
     ensure_dirs()
 
-    base = _base_models_dir()                        # ← NEW
-    current = base / "current"
+
+    current_dir = Path(settings.ML_CURRENT_DIR)
+
+
 
     archive_current_model()
 
     for fname in ARTIFACT_FILES:
         src = candidate_dir / fname
         if src.exists():
-            shutil.copy2(src, current / fname)
+            shutil.copy2(src, current_dir / fname)

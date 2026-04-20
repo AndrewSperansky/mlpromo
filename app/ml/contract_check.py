@@ -63,7 +63,7 @@ def check_ml_contract() -> dict:
             "warnings": [],
         }
 
-    model_path = Path(settings.ML_MODEL_DIR) / "current" / f"{model_id}.cbm"
+    model_path = Path(settings.ML_CURRENT_DIR) / f"{model_id}.cbm"
 
     if not model_path.exists():
         errors.append(f"Model file not found: {model_path}")

@@ -33,6 +33,18 @@ logger = logging.getLogger("promo_ml")
 TARGET = "k_uplift"
 
 
+def ensure_dirs():
+
+    current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
+    candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
+    metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+    current_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
 
 def load_full_dataset(db: Session) -> pd.DataFrame:
     """
@@ -86,7 +98,6 @@ def train_pipeline(
     """
     logger.info(f"🚀 Starting training pipeline (promote={promote}, trigger={trigger})")
 
-    models_dir = Path(settings.ML_MODEL_DIR)
 
     candidate_dir = Path(settings.ML_CANDIDATE_DIR)
     current_dir = Path(settings.ML_CURRENT_DIR)
@@ -98,7 +109,7 @@ def train_pipeline(
     archive_dir.mkdir(parents=True, exist_ok=True)
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"📁 models_dir: {models_dir}")
+
     logger.info(f"📁 candidate_dir: {candidate_dir}")
     logger.info(f"📁 current_dir: {current_dir}")
     logger.info(f"📁 archive_dir: {archive_dir}")

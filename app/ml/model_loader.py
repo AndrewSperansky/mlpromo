@@ -25,6 +25,20 @@ class ModelLoader:
     _loaded_model_id = None
 
     @classmethod
+    def ensure_dirs(cls):
+
+        current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
+        candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
+        metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
+        archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+        current_dir.mkdir(parents=True, exist_ok=True)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        metrics_dir.mkdir(parents=True, exist_ok=True)
+
+
+    @classmethod
     def _resolve_model_path(cls) -> Path:
         """
         Динамически формирует путь к модели

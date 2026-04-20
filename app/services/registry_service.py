@@ -147,8 +147,9 @@ class ModelRegistryService:
     @staticmethod
     def _cleanup_candidate_models(keep_last: int = 3):
         """Оставляет только последние N моделей в candidate."""
-        base_dir = Path(settings.ML_MODEL_DIR)
+
         candidate_dir = Path(settings.ML_CANDIDATE_DIR)
+        candidate_dir.mkdir(parents=True, exist_ok=True)
 
         if not candidate_dir.exists():
             return
@@ -215,11 +216,14 @@ class ModelRegistryService:
         import shutil
         from datetime import datetime
 
-        models_dir = Path(settings.ML_MODEL_DIR)
+
         current_dir = Path(settings.ML_CURRENT_DIR)
         archive_dir = Path(settings.ML_ARCHIVE_DIR)
 
-        logger.info(f"📁 models_dir: {models_dir}")
+        current_dir.mkdir(parents=True, exist_ok=True)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+
         logger.info(f"📁 current_dir: {current_dir}")
         logger.info(f"📁 archive_dir: {archive_dir}")
 
@@ -275,7 +279,8 @@ class ModelRegistryService:
         """Обновляет meta.json в директории current"""
         try:
             from pathlib import Path
-            current_dir = Path(settings.ML_MODEL_DIR)
+            current_dir = Path(settings.ML_CURRENT_DIR)
+            current_dir.mkdir(parents=True, exist_ok=True)
 
             # 🔥 Правильный путь — по ID модели
             meta_path = current_dir / f"{model.id}.meta.json"
@@ -315,16 +320,20 @@ class ModelRegistryService:
             from pathlib import Path
             import shutil
 
-            models_dir = Path(settings.ML_MODEL_DIR)
+
             current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
             candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
             metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
 
-            logger.info(f"📁 models_dir: {models_dir}")
+
             logger.info(f"📁 current_dir: {current_dir}")
             logger.info(f"📁 candidate_dir: {candidate_dir}")
+            logger.info(f"📁 metrics_dir: {metrics_dir}")
 
             current_dir.mkdir(parents=True, exist_ok=True)
+            candidate_dir.mkdir(parents=True, exist_ok=True)
+            metrics_dir.mkdir(parents=True, exist_ok=True)
+
 
             # 🔥 ВСЕГДА копируем SHAP-файлы при активации
             for f in candidate_dir.glob("shap_*"):

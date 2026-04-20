@@ -13,11 +13,11 @@ from datetime import datetime, timezone
 from app.core.settings import settings
 
 
-MODELS_DIR = Path(settings.ML_MODEL_DIR)
+CURRENT_DIR = Path(settings.ML_CURRENT_DIR)
 
 
 def load_shap_summary() -> Dict[str, float]:
-    path = MODELS_DIR / "shap_summary.json"
+    path = CURRENT_DIR / "shap_summary.json"
     if not path.exists():
         return {}
     with open(path, "r") as f:

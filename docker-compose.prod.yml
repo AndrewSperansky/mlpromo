@@ -19,7 +19,11 @@ services:
 
     volumes:
       - backend-logs:/app/logs
-      - models:/app/models
+      - models-current:/app/models/current
+      - models-candidate:/app/models/candidate
+      - models-archive:/app/models/archive
+      - lineage:/app/models/history
+      - metrics:/app/models/metrics
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
 #    ports:
@@ -253,14 +257,17 @@ networks:
 # -------------------- VOLUMES --------------------
 
 volumes:
-  metrics:
+  backend-logs:
+  models-current:
+  models-candidate:
+  models-archive:
   lineage:
+  metrics:
   postgres-data:
   postgres-logs:
   grafana-data:
   loki-data:
   redis-data:
-  backend-logs:
   nginx-logs:
   prometheus-data:
   models:

@@ -6,7 +6,7 @@
 import logging
 from pathlib import Path
 import json
-import os
+# import os
 from typing import Optional, Dict, Any, Union
 from datetime import datetime, timezone
 from app.core.settings import settings
@@ -17,14 +17,29 @@ logger = logging.getLogger("promo_ml")
 # Static lineage (meta-level)
 # ==========================================================
 
+def ensure_dirs():
+
+    current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
+    candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
+    metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+    current_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
+
 def get_current_model_id() -> Optional[str]:
     """
     Возвращает model_id текущей активной модели.
     Читает из файла models/current/*.meta.json
     """
-    # Используем settings.ML_MODEL_DIR
-    models_dir = Path(settings.ML_MODEL_DIR).parent
-    current_dir = models_dir / "current"
+    # Используем settings.py
+
+    current_dir = Path(settings.ML_CURRENT_DIR)
+    current_dir.mkdir(parents=True, exist_ok=True)
+
 
     if not current_dir.exists():
         return None
@@ -75,7 +90,7 @@ def get_lineage_events_file() -> Path:
 
 def get_current_metrics() -> dict:
     """Возвращает текущие метрики активной модели"""
-    current_metrics_file = Path(settings.ML_MODEL_DIR).parent / "current.metrics.json"
+    current_metrics_file = Path(settings.ML_METRICS_DIR) / "training_metrics.json"
     if current_metrics_file.exists():
         with open(current_metrics_file) as f:
             return json.load(f)

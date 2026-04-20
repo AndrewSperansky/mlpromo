@@ -10,19 +10,28 @@ from typing import Dict, Any
 from app.core.settings import settings
 
 
+def ensure_dirs():
 
-def _get_models_dir() -> Path:
-    return Path(settings.ML_MODEL_DIR)
+    current_dir = Path(settings.ML_CURRENT_DIR)  # /app/models/current
+    candidate_dir = Path(settings.ML_CANDIDATE_DIR)  # /app/models/candidate
+    metrics_dir = Path(settings.ML_METRICS_DIR)  # /app/models/metrics
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
+
+    current_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
 
 def rollback_current_to_previous() -> Dict[str, Any]:
     """
     Rollback current → latest archive version
     """
+    current_dir = Path(settings.ML_CURRENT_DIR)
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
 
-    models_dir = _get_models_dir()
-    current_dir = models_dir / "current"
-    archive_dir = models_dir / "archive"
+    current_dir.mkdir(parents=True, exist_ok=True)
+    archive_dir.mkdir(parents=True, exist_ok=True)
 
     if not archive_dir.exists():
         return {"status": "no_archive"}

@@ -68,7 +68,7 @@ logger = logging.getLogger("promo_ml")
 router = APIRouter(tags=["ml"])
 
 
-MODEL_DIR = Path(settings.ML_MODEL_DIR)
+
 CURRENT_DIR = Path(settings.ML_CURRENT_DIR)
 ARCHIVE_DIR = Path(settings.ML_ARCHIVE_DIR)
 CANDIDATE_DIR = Path(settings.ML_CANDIDATE_DIR)
@@ -76,6 +76,9 @@ METRICS_DIR = Path(settings.ML_METRICS_DIR)
 
 
 ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+CURRENT_DIR.mkdir(parents=True, exist_ok=True)
+CANDIDATE_DIR.mkdir(parents=True, exist_ok=True)
+METRICS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ========== DEPENDENCIES ==========

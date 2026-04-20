@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # ===== ML FILE CONTRACT =====
-    ML_BASE_DIR: str = "/app/models"
-    ML_MODEL_DIR: str = "/app/models"
+
+    ML_MODEL_DIR: str = "/app/models"   # Используем только в model_loader.py!
 
     ML_CURRENT_DIR: str = "/app/models/current"
     ML_CANDIDATE_DIR: str = "/app/models/candidate"
