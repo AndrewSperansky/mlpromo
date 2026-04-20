@@ -489,7 +489,7 @@ docker images | grep promo-ml
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
 ### 6. Собрать образ Backend
-`docker build -t asperansky/promo-ml:stage5 . ` 
+`docker build -t asperansky/promo-ml:v1.2  . ` 
 `docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . `
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
