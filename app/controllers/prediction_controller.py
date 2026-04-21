@@ -67,7 +67,7 @@ class PredictionController:
             # =========================================================
             features_dict = {
                 # 🔥 Промо-акция
-                "promo_id": payload.promo_id or "Promo-#",
+                "promo_id": payload.promo_id or "",
 
                 # Временные параметры
                 "week": payload.week,
@@ -91,7 +91,7 @@ class PredictionController:
                 "adv_carrier": payload.adv_carrier or "",
                 "adv_material": payload.adv_material or "",
                 "promo_mechanics": payload.promo_mechanics or "",
-                "marketing_type": payload.marketing_type or "",
+                "marketing_type": payload.marketing_type or "Скидка по карте!",
 
                 # Справочные поля
                 "analog_sku": sku_data["features"].get("analog_sku") or payload.analog_sku or [],

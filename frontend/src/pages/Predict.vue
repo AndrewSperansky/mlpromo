@@ -75,8 +75,11 @@
                     <td>{{ row.promo_mechanics || 'Empty' }}</td>
                     <td>{{ row.marketing_type || 'Empty' }}</td>
                     <td>{{ row.baseline || 'Empty' }}</td>
-                    <td class="text-center">
 
+                    <td class="text-center">
+                      <button class="btn btn-info btn-sm me-1" @click="copyRow(idx)" title="Copy row">
+                        <i class="bi bi-files"></i> Copy
+                      </button>
                       <button class="btn btn-primary btn-sm me-1" @click="openEditForm(idx)" title="Edit">
                         <i class="bi bi-pencil"></i> Edit
                       </button>
@@ -318,6 +321,13 @@ function saveRow(row: RowData) {
   closeModal()
 }
 
+function copyRow(index: number) {
+  const originalRow = manualRows.value[index]
+  if (!originalRow) return
+  manualRows.value.push({ ...originalRow } as RowData)
+}
+
+
 function removeRow(index: number) {
   manualRows.value.splice(index, 1)
 }
@@ -354,7 +364,7 @@ async function runManualPrediction() {
     const response = await predictBatch(requests)
     const results = response.data.predictions || response.data
 
-    // ✅ ВОТ СЮДА — обновлённый map с interval
+    // ✅  обновлённый map с interval
     predictions.value = results.map((p: any) => ({
       k_uplift: p.k_uplift,
       baseline: p.baseline,

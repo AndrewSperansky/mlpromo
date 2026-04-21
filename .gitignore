@@ -41,3 +41,4 @@ offline_wheels/
 .env.*
 docker-compose.override.yml
 
+/models/_smoke/

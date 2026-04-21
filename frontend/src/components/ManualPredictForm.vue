@@ -11,7 +11,7 @@
       <div class="form-container">
         <div class="row">
           <div class="col-md-6 mb-3">
-            <label class="form-label fw-bold">Promo ID <span class="text-danger">*</span></label>
+            <label class="form-label fw-bold">Promo ID </label>
             <input v-model="formData.promo_id" class="form-control"
               :class="{ 'is-invalid': !formData.promo_id && touched }" placeholder="" />
           </div>
@@ -27,7 +27,81 @@
           </div>
         </div>
 
-        <!-- ... остальные поля формы (без изменений) ... -->
+        <!-- Строка 2: SKU, Category -->
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">SKU <span class="text-danger">*</span></label>
+            <input v-model="formData.sku" class="form-control" :class="{ 'is-invalid': !formData.sku && touched }" />
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Category <span class="text-danger">*</span></label>
+            <input v-model="formData.category" class="form-control" :class="{ 'is-invalid': !formData.category && touched }" />
+          </div>
+        </div>
+
+        <!-- Строка 3: Regular Price, Promo Price -->
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Regular Price <span class="text-danger">*</span></label>
+            <input v-model.number="formData.regular_price" type="number" step="0.01" class="form-control" :class="{ 'is-invalid': !formData.regular_price && touched }" />
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Promo Price <span class="text-danger">*</span></label>
+            <input v-model.number="formData.promo_price" type="number" step="0.01" class="form-control" :class="{ 'is-invalid': !formData.promo_price && touched }" />
+          </div>
+        </div>
+
+        <!-- Строка 4: Store ID, Region -->
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Store ID <span class="text-danger">*</span></label>
+            <input v-model="formData.store_id" class="form-control" :class="{ 'is-invalid': !formData.store_id && touched }" />
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Region <span class="text-danger">*</span></label>
+            <input v-model="formData.region" class="form-control" :class="{ 'is-invalid': !formData.region && touched }" />
+          </div>
+        </div>
+
+        <!-- Строка 5: Store Location Type, Format Assortment -->
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Store Location Type <span class="text-danger">*</span></label>
+            <input v-model="formData.store_location_type" class="form-control" :class="{ 'is-invalid': !formData.store_location_type && touched }" />
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Format Assortment</label>
+            <input v-model="formData.format_assortment" class="form-control" placeholder="na" />
+          </div>
+        </div>
+
+        <!-- Строка 6: Adv Carrier, Adv Material, Promo Mechanics -->
+        <div class="row">
+          <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold">Adv Carrier <span class="text-danger">*</span></label>
+            <input v-model="formData.adv_carrier" class="form-control" placeholder="ЖЦ" />
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold">Adv Material</label>
+            <input v-model="formData.adv_material" class="form-control" placeholder="na" />
+          </div>
+          <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold">Promo Mechanics</label>
+            <input v-model="formData.promo_mechanics" class="form-control" placeholder="na" />
+          </div>
+        </div>
+
+        <!-- Строка 7: Marketing Type, Baseline -->
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Marketing Type <span class="text-danger">*</span></label>
+            <input v-model="formData.marketing_type" class="form-control" :class="{ 'is-invalid': !formData.marketing_type && touched }" placeholder="Скидка по карте!" />
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Baseline (optional)</label>
+            <input v-model.number="formData.baseline" type="number" step="0.01" class="form-control" placeholder="Базовые продажи" />
+          </div>
+        </div>
 
       </div>
 
@@ -143,12 +217,15 @@ watch(() => props.row, (newRow) => {
   }
 }, { immediate: true })
 
+// Определяем какие поля будут обязательными
 const isValid = computed(() => {
-  return !!(formData.value.promo_id && 
+  return !!( 
     formData.value.sku && 
     formData.value.store_id && 
     formData.value.regular_price && 
-    formData.value.promo_price)
+    formData.value.promo_price &&
+    formData.value.marketing_type
+  )
 })
 
 // ===== COMPUTED для интервала =====
@@ -204,14 +281,26 @@ async function save() {
   if (!isValid.value) return
 
   const rowToSave = {
-    ...formData.value,
+    promo_id: formData.value.promo_id || 'void',
+    week: formData.value.week || 1,
+    month: formData.value.month || 1,
+    sku: formData.value.sku || '',
+    category: formData.value.category || '',
+    regular_price: formData.value.regular_price || 0,
+    promo_price: formData.value.promo_price || 0,
+    store_id: formData.value.store_id || '',
+    region: formData.value.region || '',
+    store_location_type: formData.value.store_location_type || '',
     format_assortment: formData.value.format_assortment || 'na',
     adv_carrier: formData.value.adv_carrier || 'ЖЦ',
     adv_material: formData.value.adv_material || 'na',
     promo_mechanics: formData.value.promo_mechanics || 'na',
     marketing_type: formData.value.marketing_type || 'Скидка по карте!',
+    baseline: formData.value.baseline !== undefined ? formData.value.baseline : 1
   }
 
+  console.log('🔍 Sending prediction request:', JSON.stringify(rowToSave, null, 2))
+  
   try {
     const result = await predictWithInterval(rowToSave)
 
@@ -228,8 +317,8 @@ async function save() {
     emit('save', {
       ...rowToSave,
       prediction: result.prediction,
-      interval: result.interval,
-      has_interval: result.has_interval
+      // interval: result.interval,
+      // has_interval: result.has_interval
     })
 
     closeModal()
