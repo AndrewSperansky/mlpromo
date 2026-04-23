@@ -1,4 +1,5 @@
 <!-- frontend/src/pages/Predict.vue -->
+ <!-- Используется -->
 
 <template>
   <div>
@@ -78,13 +79,13 @@
 
                     <td class="text-center">
                       <button class="btn btn-info btn-sm me-1" @click="copyRow(idx)" title="Copy row">
-                        <i class="bi bi-files"></i> Copy
+                        <i class="bi bi-files"></i>
                       </button>
                       <button class="btn btn-primary btn-sm me-1" @click="openEditForm(idx)" title="Edit">
-                        <i class="bi bi-pencil"></i> Edit
+                        <i class="bi bi-pencil"></i>
                       </button>
                       <button class="btn btn-danger btn-sm" @click="removeRow(idx)" title="Delete">
-                        <i class="bi bi-trash3"></i> Delete
+                        <i class="bi bi-trash3"></i>
                       </button>
 
                     </td>

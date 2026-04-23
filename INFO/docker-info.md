@@ -489,23 +489,23 @@ docker images | grep promo-ml
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
 ### 6. Собрать образ Backend
-`docker build -t asperansky/promo-ml:v1.2  . ` 
-`docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . `
+docker build -t asperansky/promo-ml:v1.2  .  
+docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . 
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
 
 ### 7. Отправить образ Backend на Docker Hub
-docker push asperansky/promo-ml:stage5
+
 docker push asperansky/promo-ml:v1.2
 
 
 # Собрать Frontend
-docker build -t asperansky/promo-ml-front:stage5 -f Dockerfile.frontend .
+
 docker build -t asperansky/promo-ml-front:v1.2 -f Dockerfile.frontend .
 
 # Запушить  Frontend на Docker Hub
-docker push asperansky/promo-ml-front:stage5
+
 docker push asperansky/promo-ml-front:v1.2
 
 

@@ -33,15 +33,31 @@
       <div v-if="compareResult" class="mt-3">
         <h6>Metrics</h6>
         <table class="table table-sm">
-          <tr v-for="(value, key) in compareResult.diff.metric_diff" :key="key">
-            <td><strong>{{ key }}</strong></td>
-            <td>{{ compareResult.model_a.metrics[key]?.toFixed(6) }}</td>
-            <td>→</td>
-            <td>{{ compareResult.model_b.metrics[key]?.toFixed(6) }}</td>
-            <td :class="value >= 0 ? 'text-success' : 'text-danger'">
-              {{ value >= 0 ? '+' : '' }}{{ value.toFixed(6) }}
-            </td>
-          </tr>
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Model A</th>
+              <th></th>
+              <th>Model B</th>
+              <th>Change</th>
+              <th>Better</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(value, key) in compareResult.diff.metric_diff" :key="key">
+              <td><strong>{{ String(key).toUpperCase() }}</strong></td>
+              <td>{{ compareResult.model_a.metrics[key]?.toFixed(6) || '—' }}</td>
+              <td>→</td>
+              <td>{{ compareResult.model_b.metrics[key]?.toFixed(6) || '—' }}</td>
+              <td :class="getMetricDiffClass(key as string, value)">
+                {{ value >= 0 ? '+' : '' }}{{ Number(value).toFixed(6) }}
+              </td>
+              <td>
+                <span v-if="isMetricBetter(key as string, value)" class="badge bg-success">✓</span>
+                <span v-else class="badge bg-secondary">✗</span>
+              </td>
+            </tr>
+          </tbody>
         </table>
 
         <!-- Рекомендация -->
@@ -78,8 +94,6 @@
             </ul>
           </div>
         </div>
-
-        <p><strong>Dataset equal:</strong> {{ compareResult.diff.dataset_equal ? 'Yes' : 'No' }}</p>
       </div>
 
       <div class="d-flex justify-content-end mt-3 pt-3 border-top">
@@ -105,6 +119,52 @@ const modelB = ref<number | null>(null)
 const compareResult = ref<any>(null)
 const comparing = ref(false)
 
+// Метрики, где меньше = лучше
+const lowerIsBetterMetrics = new Set(['rmse', 'mae', 'mape'])
+
+// Определяет, стала ли метрика лучше
+function isMetricBetter(metric: string, diff: number): boolean {
+  if (lowerIsBetterMetrics.has(metric)) {
+    return diff < 0  // отрицательная разница = улучшение
+  } else {
+    return diff > 0  // положительная разница = улучшение
+  }
+}
+
+// Возвращает класс для подсветки изменения
+function getMetricDiffClass(metric: string, diff: number): string {
+  if (isMetricBetter(metric, diff)) {
+    return 'text-success'
+  } else if (diff !== 0) {
+    return 'text-danger'
+  }
+  return ''
+}
+
+// Определяет, какая модель лучше в целом
+function getBetterModelId(): number | null {
+  if (!compareResult.value) return null
+  
+  const metricsDiff = compareResult.value.diff?.metric_diff || {}
+  let betterCount = { a: 0, b: 0 }
+  
+  for (const [metric, diff] of Object.entries(metricsDiff)) {
+    const diffNum = diff as number
+    if (isMetricBetter(metric, diffNum)) {
+      betterCount.b++
+    } else if (diffNum !== 0) {
+      betterCount.a++
+    }
+  }
+  
+  if (betterCount.b > betterCount.a) {
+    return compareResult.value.model_b.id
+  } else if (betterCount.a > betterCount.b) {
+    return compareResult.value.model_a.id
+  }
+  return null
+}
+
 async function fetchCompare() {
   if (!modelA.value || !modelB.value) {
     console.warn('Both models must be selected')
@@ -125,32 +185,21 @@ async function fetchCompare() {
   }
 }
 
-// Computed для рекомендации
 const recommendationText = computed(() => {
   if (!compareResult.value) return ''
   
-  const metricsDiff = compareResult.value.diff?.metric_diff || {}
-  let betterModel: 'A' | 'B' | null = null
+  const betterModelId = getBetterModelId()
+  const modelA = compareResult.value.model_a
+  const modelB = compareResult.value.model_b
   
-  for (const [metric, diff] of Object.entries(metricsDiff)) {
-    const diffNum = diff as number
-    if (metric === 'rmse' || metric === 'mae' || metric === 'mape') {
-      if (diffNum > 0) betterModel = 'B'
-      else if (diffNum < 0) betterModel = 'A'
-    } else {
-      if (diffNum > 0) betterModel = 'B'
-      else if (diffNum < 0) betterModel = 'A'
-    }
-  }
-  
-  if (betterModel === 'A') {
-    return `✅ Model A (${compareResult.value.model_a.version}) is better!`
-  } else if (betterModel === 'B') {
-    return `✅ Model B (${compareResult.value.model_b.version}) is better!`
-  } else if (compareResult.value.model_a.is_active && !compareResult.value.model_b.is_active) {
-    return `ℹ️ Model A is currently active. Consider comparing with newer models.`
-  } else if (!compareResult.value.model_a.is_active && compareResult.value.model_b.is_active) {
-    return `ℹ️ Model B is currently active. Consider comparing with newer models.`
+  if (betterModelId === modelA.id) {
+    return `✅ Model A (${modelA.version}) has better metrics overall!`
+  } else if (betterModelId === modelB.id) {
+    return `✅ Model B (${modelB.version}) has better metrics overall!`
+  } else if (modelA.is_active && !modelB.is_active) {
+    return `ℹ️ Model A is currently active. Compare with newer models.`
+  } else if (!modelA.is_active && modelB.is_active) {
+    return `ℹ️ Model B is currently active. Compare with newer models.`
   }
   
   return `⚖️ Models have similar performance. Review metrics in detail.`
@@ -159,42 +208,18 @@ const recommendationText = computed(() => {
 const recommendationClass = computed(() => {
   if (!compareResult.value) return 'alert-secondary'
   
-  const metricsDiff = compareResult.value.diff?.metric_diff || {}
-  let betterModel: 'A' | 'B' | null = null
-  
-  for (const [metric, diff] of Object.entries(metricsDiff)) {
-    const diffNum = diff as number
-    if (metric === 'rmse' || metric === 'mae' || metric === 'mape') {
-      if (diffNum > 0) betterModel = 'B'
-      else if (diffNum < 0) betterModel = 'A'
-    } else {
-      if (diffNum > 0) betterModel = 'B'
-      else if (diffNum < 0) betterModel = 'A'
-    }
+  const betterModelId = getBetterModelId()
+  if (betterModelId) {
+    return 'alert-success'
   }
-  
-  if (betterModel) return 'alert-success'
   return 'alert-info'
 })
 
 const recommendationIcon = computed(() => {
   if (!compareResult.value) return 'bi bi-question-circle'
   
-  const metricsDiff = compareResult.value.diff?.metric_diff || {}
-  let betterModel: 'A' | 'B' | null = null
-  
-  for (const [metric, diff] of Object.entries(metricsDiff)) {
-    const diffNum = diff as number
-    if (metric === 'rmse' || metric === 'mae' || metric === 'mape') {
-      if (diffNum > 0) betterModel = 'B'
-      else if (diffNum < 0) betterModel = 'A'
-    } else {
-      if (diffNum > 0) betterModel = 'B'
-      else if (diffNum < 0) betterModel = 'A'
-    }
-  }
-  
-  if (betterModel) return 'bi bi-star-fill'
+  const betterModelId = getBetterModelId()
+  if (betterModelId) return 'bi bi-star-fill'
   return 'bi bi-info-circle-fill'
 })
 
@@ -202,29 +227,25 @@ const recommendationDetails = computed(() => {
   if (!compareResult.value) return ''
   
   const metricsDiff = compareResult.value.diff?.metric_diff || {}
-  const details: string[] = []
+  const improvements: string[] = []
+  const degradations: string[] = []
   
   for (const [metric, diff] of Object.entries(metricsDiff)) {
     const diffNum = diff as number
-    
-    if (metric === 'rmse') {
-      if (diffNum > 0) {
-        details.push(`RMSE улучшился на ${diffNum.toFixed(6)}`)
-      } else if (diffNum < 0) {
-        details.push(`RMSE ухудшился на ${Math.abs(diffNum).toFixed(6)}`)
-      }
-    } else if (metric === 'mae') {
-      if (diffNum > 0) details.push(`MAE улучшился на ${diffNum.toFixed(6)}`)
-      else if (diffNum < 0) details.push(`MAE ухудшился на ${Math.abs(diffNum).toFixed(6)}`)
-    } else if (metric === 'r2') {
-      if (diffNum > 0) details.push(`R² улучшился на ${diffNum.toFixed(6)}`)
-      else if (diffNum < 0) details.push(`R² ухудшился на ${Math.abs(diffNum).toFixed(6)}`)
+    const metricStr = String(metric).toUpperCase()
+    if (isMetricBetter(metric, diffNum) && diffNum !== 0) {
+      improvements.push(`${metricStr} улучшился на ${Math.abs(diffNum).toFixed(6)}`)
+    } else if (diffNum !== 0) {
+      degradations.push(`${metricStr} ухудшился на ${Math.abs(diffNum).toFixed(6)}`)
     }
   }
   
-  return details.join('; ') || 'No significant differences detected.'
+  const parts = []
+  if (improvements.length) parts.push(`✅ ${improvements.join(', ')}`)
+  if (degradations.length) parts.push(`⚠️ ${degradations.join(', ')}`)
+  
+  return parts.join('; ') || 'Незначительные изменения метрик.'
 })
-
 </script>
 
 <style scoped>
@@ -249,9 +270,19 @@ const recommendationDetails = computed(() => {
 
 .text-success {
   color: #198754 !important;
+  font-weight: bold;
 }
 
 .text-danger {
   color: #dc3545 !important;
+  font-weight: bold;
+}
+
+.bg-success {
+  background-color: #198754 !important;
+}
+
+.bg-secondary {
+  background-color: #6c757d !important;
 }
 </style>
