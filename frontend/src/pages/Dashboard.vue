@@ -281,7 +281,34 @@ const overview = ref<OverviewResponse>({
   warnings: []
 })
 
-const containers = ref<Record<string, ContainerInfo>>({})
+
+const defaultContainer = {
+  status: 'running',
+  healthy: true,
+  state: 'running',
+  health: 'healthy',
+  running: true,
+  started_at: '',
+  image: ''
+}
+
+const containerNames = [
+  'promo_ml_backend',
+  'promo_ml_frontend',
+  'promo_nginx',
+  'promo_redis',
+  'promo_redis_exporter',
+  'promo_postgres',
+  'promo_postgres_exporter',
+  'promo_promtail',
+  'promo_prometheus',
+  'promo_grafana',
+  'promo_loki'
+]
+
+const containers = ref<Record<string, ContainerInfo>>(
+  Object.fromEntries(containerNames.map(name => [name, { ...defaultContainer }]))
+)
 const containersTimestamp = ref('')
 const trainChartRef = ref<HTMLCanvasElement | null>(null)
 const valChartRef = ref<HTMLCanvasElement | null>(null)
@@ -391,7 +418,7 @@ function getContainerIcon(container: ContainerInfo): string {
 }
 
 function getContainerUptime(container: ContainerInfo): string {
-  if (!container.running || !container.started_at) return ''
+  if (!container.running || !container.started_at) return 'Starting...'
   const startTime = new Date(container.started_at)
   const now = new Date()
   const diffMs = now.getTime() - startTime.getTime()
@@ -417,7 +444,9 @@ async function loadContainersStatus() {
   try {
     const response = await getContainersStatus()
     if (response.data.success) {
-      containers.value = response.data.containers
+      // Обновляем существующие контейнеры, сохраняя структуру
+      //containers.value = response.data.containers
+      containers.value = { ...containers.value, ...response.data.containers }
       containersTimestamp.value = response.data.timestamp
     } else {
       console.error('Failed to load containers:', response.data.error)
