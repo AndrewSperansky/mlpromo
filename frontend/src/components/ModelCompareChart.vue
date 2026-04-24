@@ -139,7 +139,11 @@ function render() {
 }
 
 watch(() => props.comparison, async (newVal) => {
-  console.log('🔍 ModelCompareChart received comparison:', newVal)
+  console.log('🔍 ModelCompareChart received comparison:', JSON.stringify(newVal, null, 2))
+  console.log('🔍 current_metrics:', newVal?.current_metrics)
+  console.log('🔍 candidate_metrics:', newVal?.candidate_metrics)
+  console.log('🔍 current_ci:', newVal?.current_metrics?.rmse_ci)
+  console.log('🔍 candidate_ci:', newVal?.candidate_metrics?.rmse_ci)
   await nextTick()
   if (newVal) {
     render()

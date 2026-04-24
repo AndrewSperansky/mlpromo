@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timezone
+from sqlalchemy import text
 
 from catboost import CatBoostRegressor
 from sklearn.metrics import mean_squared_error
@@ -45,6 +46,18 @@ def ensure_dirs():
     candidate_dir.mkdir(parents=True, exist_ok=True)
     metrics_dir.mkdir(parents=True, exist_ok=True)
 
+    logger.info(f"📁 candidate_dir: {candidate_dir}")
+    logger.info(f"📁 current_dir: {current_dir}")
+    logger.info(f"📁 archive_dir: {archive_dir}")
+    logger.info(f"📁 metrics_dir: {metrics_dir}")
+
+    return {
+        'current_dir': current_dir,
+        'candidate_dir': candidate_dir,
+        'archive_dir': archive_dir,
+        'metrics_dir': metrics_dir,
+    }
+
 
 def load_full_dataset(db: Session) -> pd.DataFrame:
     """
@@ -52,7 +65,7 @@ def load_full_dataset(db: Session) -> pd.DataFrame:
     """
     logger.info("📊 Loading full dataset from industrial_dataset_raw")
 
-    from sqlalchemy import text
+
 
     query = text("""
         SELECT 
@@ -99,21 +112,10 @@ def train_pipeline(
     logger.info(f"🚀 Starting training pipeline (promote={promote}, trigger={trigger})")
 
 
-    candidate_dir = Path(settings.ML_CANDIDATE_DIR)
-    current_dir = Path(settings.ML_CURRENT_DIR)
-    archive_dir = Path(settings.ML_ARCHIVE_DIR)
-    metrics_dir = Path(settings.ML_METRICS_DIR)
+    dirs = ensure_dirs()
+    candidate_dir = dirs['candidate_dir']  # /app/models/candidate
+    metrics_dir = dirs['metrics_dir']  # /app/models/metrics
 
-    candidate_dir.mkdir(parents=True, exist_ok=True)
-    current_dir.mkdir(parents=True, exist_ok=True)
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    metrics_dir.mkdir(parents=True, exist_ok=True)
-
-
-    logger.info(f"📁 candidate_dir: {candidate_dir}")
-    logger.info(f"📁 current_dir: {current_dir}")
-    logger.info(f"📁 archive_dir: {archive_dir}")
-    logger.info(f"📁 metrics_dir: {metrics_dir}")
 
     # =========================
     # LOAD DATASET
@@ -164,23 +166,6 @@ def train_pipeline(
     )
     logger.info(f"📊 Train size: {len(X_train)}, Validation size: {len(X_val)}")
 
-    # =========================
-    # TRAIN
-    # =========================
-    # model = CatBoostRegressor(
-    #     iterations=300,
-    #     depth=6,
-    #     learning_rate=0.05,
-    #     loss_function="RMSE",
-    #     random_seed=42,
-    #     verbose=False,
-    # )
-    #
-    # model.fit(X, y)
-    #
-    # preds = model.predict(X)
-    # rmse_value = float(mean_squared_error(y, preds, squared=False))
-    # logger.info(f"📈 Training RMSE: {rmse_value:.6f}")
 
     # =========================
     # TRAIN WITH VALIDATION
@@ -236,10 +221,133 @@ def train_pipeline(
     val_rmse_final = float(mean_squared_error(y_val, preds_val, squared=False))
     logger.info(f"📊 Validation RMSE (hold-out): {val_rmse_final:.6f}")
 
+    # =========================================================================
+    # META + LINEAGE (начальный)  ФОРМИРУЕМ meta СО ВСЕМИ МЕТРИКАМИ (БЕЗ ID)
+    # =========================================================================
+    meta = {
+        "model_id": None,
+        "model_name": "promo_uplift",
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "features": FEATURES,
+        "stage": "candidate",
+        "metrics": {
+            "rmse": rmse_value,
+        },
+        "total_rows": rows_used,
+    }
 
-    # =========================
-    # REGISTRATION
-    # =========================
+    meta = enrich_meta_with_lineage(meta=meta, trigger=trigger)
+
+    # ========== СТАТИСТИЧЕСКИЕ МЕТРИКИ (БЕЗ DATA LEAKAGE) ==========
+
+    # Получаем текущую активную модель для сравнения
+    db_local = SessionLocal()
+
+    try:
+        registry_local = ModelRegistryService(db_local)
+        current_model = registry_local.get_active_model("promo_uplift")
+
+        # Массив ошибок
+        errors_array = np.array(y - preds)
+
+        # 1. Confidence Interval для RMSE
+        ci = StatisticalMetrics.calculate_confidence_interval(errors_array)
+
+        # 2. Uplift (бизнес-метрика)
+        uplift = StatisticalMetrics.calculate_uplift(y, preds)
+
+        # 3. Accuracy с допуском
+        accuracy_eps = StatisticalMetrics.accuracy_with_tolerance(y, preds, epsilon=5.0)
+
+        # ========== CONFORMAL PREDICTION (С РАЗДЕЛЕНИЕМ НА CALIBRATION/TEST) ==========
+
+        # Разделяем данные для калибровки и тестирования
+        indices = np.random.permutation(len(y))
+        calib_size = int(len(y) * 0.2)
+
+        calib_indices = indices[:calib_size]
+        test_indices = indices[calib_size:]
+
+        # Преобразуем в numpy если нужно
+        if hasattr(y, 'values'):
+            y_array = y.values
+            preds_array = preds if isinstance(preds, np.ndarray) else np.array(preds)
+        else:
+            y_array = np.array(y)
+            preds_array = np.array(preds)
+
+        y_calib = y_array[calib_indices]
+        preds_calib = preds_array[calib_indices]
+
+        y_test = y_array[test_indices]
+        preds_test = preds_array[test_indices]
+
+        # Калибровка на отдельной выборке
+        cp = ConformalPredictor(alpha=0.05)
+        cp.fit(y_calib, preds_calib)
+
+        # Prediction interval для тестовых данных
+        lower_test, upper_test = cp.predict(preds_test)
+
+        # Coverage считаем ТОЛЬКО на тестовых данных
+        coverage = cp.coverage(y_test, lower_test, upper_test)
+
+        # 4. Статистическое сравнение с предыдущей моделью
+        statistical_comparison = None
+        if current_model and current_model.metrics:
+            statistical_comparison = {
+                "note": "Requires previous model errors for paired t-test",
+                "test_used": "paired t-test (requires saved errors)",
+                "current_model_id": current_model.id,
+                "current_model_version": current_model.version
+            }
+
+        # Добавляем все метрики в meta
+        meta["conformal_q_hat"] = cp.q_hat
+        meta["conformal"] = cp.to_dict()
+        meta["metrics"].update({
+            "rmse": val_rmse_final,  # ← validation RMSE (честная оценка)
+
+            # Дополнительные метрики для анализа
+            "train_rmse": float(train_rmse[-1]),  # ← финальный train RMSE
+            "val_rmse": val_rmse_final,  # ← дубль для ясности
+
+            # Информация об обучении
+            "best_iteration": model.get_best_iteration(),
+            "total_iterations": len(train_rmse),
+
+            # Статистические метрики
+            "rmse_ci": ci,
+            "uplift": uplift,
+            "accuracy_eps": accuracy_eps,
+
+            # Conformal prediction
+            "coverage": coverage,
+            "coverage_target": 0.95,
+            "is_calibrated": abs(coverage - 0.95) <= 0.03,
+
+            # Информация о выборках
+            "sample_size": len(y),
+            "train_size": len(X_train),
+            "validation_size": len(X_val),
+            "calibration_size": calib_size,
+            "test_size": len(y_test),
+        })
+
+        if statistical_comparison:
+            meta["metrics"]["statistical_comparison"] = statistical_comparison
+
+        logger.info(
+            f"📊 Statistical metrics added: RMSE_CI={ci['rmse']:.6f}, coverage={coverage:.3f}, uplift={uplift:.4f}")
+
+    finally:
+        db_local.close()
+
+
+    # ========================================
+    # REGISTRATION  РЕГИСТРАЦИЯ МОДЕЛИ В БД
+    # ========================================
+
     db = SessionLocal()
     try:
         registry = ModelRegistryService(db)
@@ -252,12 +360,24 @@ def train_pipeline(
             model_type="regression",
             target=TARGET,
             features=FEATURES,
-            metrics={"rmse": val_rmse_final},
+            metrics=meta["metrics"],
             trained_rows_count=rows_used,
         )
 
         logger.info(f"✅ Model registered with id={db_model.id}")
 
+        # Обновляем meta с ID
+        meta["model_id"] = db_model.id
+
+        # ===== СОХРАНЯЕМ META В ФАЙЛ (ПОСЛЕ ДОБАВЛЕНИЯ ВСЕХ МЕТРИК) =====
+        meta_path = candidate_dir / f"{db_model.id}.meta.json"
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+
+        q_hat_value = meta.get("conformal_q_hat", "unknown")
+        logger.info(f"✅ Meta saved to {meta_path} with conformal_q_hat={q_hat_value}")
+
+        # ===== ЗАПИСЫВАЕМ LINEAGE СОБЫТИЯ =====
         record_lineage_event(
             event_type="trained",
             model_id=str(db_model.id),
@@ -299,134 +419,6 @@ def train_pipeline(
         )
 
         # =========================
-        # META + LINEAGE (начальный)
-        # =========================
-        meta = {
-            "model_id": db_model.id,
-            "model_name": "promo_uplift",
-            "trained_at": datetime.now(timezone.utc).isoformat(),
-            "features": FEATURES,
-            "stage": "candidate",
-            "metrics": {
-                "rmse": rmse_value,
-            },
-            "total_rows": rows_used,
-        }
-
-        meta = enrich_meta_with_lineage(meta=meta, trigger=trigger)
-
-        # ========== СТАТИСТИЧЕСКИЕ МЕТРИКИ (БЕЗ DATA LEAKAGE) ==========
-
-        # Получаем текущую активную модель для сравнения
-        db_local = SessionLocal()
-
-        try:
-            registry_local = ModelRegistryService(db_local)
-            current_model = registry_local.get_active_model("promo_uplift")
-
-            # Массив ошибок
-            errors_array = np.array(y - preds)
-
-            # 1. Confidence Interval для RMSE
-            ci = StatisticalMetrics.calculate_confidence_interval(errors_array)
-
-            # 2. Uplift (бизнес-метрика)
-            uplift = StatisticalMetrics.calculate_uplift(y, preds)
-
-            # 3. Accuracy с допуском
-            accuracy_eps = StatisticalMetrics.accuracy_with_tolerance(y, preds, epsilon=5.0)
-
-            # ========== CONFORMAL PREDICTION (С РАЗДЕЛЕНИЕМ НА CALIBRATION/TEST) ==========
-
-            # Разделяем данные для калибровки и тестирования
-            indices = np.random.permutation(len(y))
-            calib_size = int(len(y) * 0.2)
-
-            calib_indices = indices[:calib_size]
-            test_indices = indices[calib_size:]
-
-            # Преобразуем в numpy если нужно
-            if hasattr(y, 'values'):
-                y_array = y.values
-                preds_array = preds if isinstance(preds, np.ndarray) else np.array(preds)
-            else:
-                y_array = np.array(y)
-                preds_array = np.array(preds)
-
-            y_calib = y_array[calib_indices]
-            preds_calib = preds_array[calib_indices]
-
-            y_test = y_array[test_indices]
-            preds_test = preds_array[test_indices]
-
-            # Калибровка на отдельной выборке
-            cp = ConformalPredictor(alpha=0.05)
-            cp.fit(y_calib, preds_calib)
-
-            # Prediction interval для тестовых данных
-            lower_test, upper_test = cp.predict(preds_test)
-
-            # Coverage считаем ТОЛЬКО на тестовых данных
-            coverage = cp.coverage(y_test, lower_test, upper_test)
-
-            # 4. Статистическое сравнение с предыдущей моделью
-            statistical_comparison = None
-            if current_model and current_model.metrics:
-                statistical_comparison = {
-                    "note": "Requires previous model errors for paired t-test",
-                    "test_used": "paired t-test (requires saved errors)",
-                    "current_model_id": current_model.id,
-                    "current_model_version": current_model.version
-                }
-
-            # Добавляем все метрики в meta
-            meta["conformal_q_hat"] = cp.q_hat
-            meta["conformal"] = cp.to_dict()
-            meta["metrics"].update({
-                "rmse": val_rmse_final,  # ← validation RMSE (честная оценка)
-
-                # Дополнительные метрики для анализа
-                "train_rmse": float(train_rmse[-1]),  # ← финальный train RMSE
-                "val_rmse": val_rmse_final,  # ← дубль для ясности
-
-                # Информация об обучении
-                "best_iteration": model.get_best_iteration(),
-                "total_iterations": len(train_rmse),
-
-                # Статистические метрики
-                "rmse_ci": ci,
-                "uplift": uplift,
-                "accuracy_eps": accuracy_eps,
-
-                # Conformal prediction
-                "coverage": coverage,
-                "coverage_target": 0.95,
-                "is_calibrated": abs(coverage - 0.95) <= 0.03,
-
-                # Информация о выборках
-                "sample_size": len(y),
-                "train_size": len(X_train),
-                "validation_size": len(X_val),
-                "calibration_size": calib_size,
-                "test_size": len(y_test),
-            })
-
-            if statistical_comparison:
-                meta["metrics"]["statistical_comparison"] = statistical_comparison
-
-            logger.info(
-                f"📊 Statistical metrics added: RMSE_CI={ci['rmse']:.6f}, coverage={coverage:.3f}, uplift={uplift:.4f}")
-
-        finally:
-            db_local.close()
-
-        # ===== СОХРАНЯЕМ META В ФАЙЛ (ПОСЛЕ ДОБАВЛЕНИЯ ВСЕХ МЕТРИК) =====
-        meta_path = candidate_dir / f"{db_model.id}.meta.json"
-        with open(meta_path, "w") as f:
-            json.dump(meta, f, indent=2)
-        logger.info(f"✅ Meta saved to {meta_path} with conformal_q_hat={cp.q_hat}")
-
-        # =========================
         # PROMOTION
         # =========================
         promoted = False
@@ -456,9 +448,7 @@ def train_pipeline(
 
     logger.info(f"✅ Training pipeline completed: model_id={db_model.id}, promoted={promoted}")
 
-    # ========== ВЫЧИСЛЯЕМ COMPARISON ДЛЯ UI ВСЕГДА !!!! ==========
-
-    # if promote is False:   <--  Удалили
+    # ========== ВЫЧИСЛЯЕМ COMPARISON ДЛЯ UI ==========
 
     comparison = None
     db_local = SessionLocal()
@@ -476,6 +466,12 @@ def train_pipeline(
 
         new_metrics_dict = meta.get("metrics") if isinstance(meta.get("metrics"), dict) else None
 
+        # 🔥 ВСТАВЬ ЭТОТ БЛОК СЮДА (ПЕРЕД if current_model...)
+        logger.info(f"🔍 current_metrics keys: {list(current_metrics_dict.keys()) if current_metrics_dict else 'None'}")
+        logger.info(f"🔍 new_metrics keys: {list(new_metrics_dict.keys()) if new_metrics_dict else 'None'}")
+        logger.info(f"🔍 current_rmse_ci: {current_metrics_dict.get('rmse_ci') if current_metrics_dict else 'None'}")
+        logger.info(f"🔍 new_rmse_ci: {new_metrics_dict.get('rmse_ci') if new_metrics_dict else 'None'}")
+
         if current_model and current_metrics_dict and new_metrics_dict:
             current_rmse = current_metrics_dict.get("rmse")
             new_rmse = new_metrics_dict.get("rmse")
@@ -485,6 +481,7 @@ def train_pipeline(
                 rmse_delta = current_rmse - new_rmse
                 improvement_percent = (rmse_delta / current_rmse) * 100 if current_rmse != 0 else 0
 
+                # 🔥 Для metrics_diff оставляем только числовые метрики
                 metrics_diff = {}
                 all_metrics = set(current_metrics_dict.keys()) | set(new_metrics_dict.keys())
 
@@ -492,17 +489,22 @@ def train_pipeline(
                     curr = current_metrics_dict.get(metric)
                     new = new_metrics_dict.get(metric)
 
+                    # Пропускаем нечисловые метрики
+                    if not isinstance(curr, (int, float)) or not isinstance(new, (int, float)):
+                        continue
+
                     if curr is not None and new is not None:
                         if metric in ["rmse", "mae", "mape"]:
                             metrics_diff[metric] = round(curr - new, 6)
                         else:
                             metrics_diff[metric] = round(new - curr, 6)
 
+                # 🔥 Сохраняем ВСЕ метрики (включая rmse_ci) для графика
                 comparison = {
                     "current_model_id": current_model.id,
                     "candidate_model_id": db_model.id,
-                    "current_metrics": current_metrics_dict,
-                    "candidate_metrics": new_metrics_dict,
+                    "current_metrics": current_metrics_dict,  # ← сохраняем все метрики
+                    "candidate_metrics": new_metrics_dict,  # ← сохраняем все метрики
                     "is_better": is_better,
                     "rmse_delta": round(rmse_delta, 6),
                     "improvement_percent": round(improvement_percent, 2),
