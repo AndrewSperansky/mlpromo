@@ -401,6 +401,26 @@ class ModelRegistryService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+
+
+    def get_active_model_by_algorithm(self, algorithm: str) -> Optional[MLModel]:
+        """
+        Возвращает активную модель с указанным алгоритмом.
+
+        Args:
+            algorithm: 'catboost', 'pytorch_lstm', 'pytorch_mlp'
+        """
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.algorithm == algorithm,
+                MLModel.is_active == True,
+                MLModel.is_deleted == False,
+            )
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+
+
     def list_models(self):
         return (
             self.db.query(MLModel)
@@ -418,6 +438,8 @@ class ModelRegistryService:
         self.db.refresh(model)
         logger.info(f"Model {model_id} deactivated")
         return model
+
+
 
     def validate_promotion(self, current_model: MLModel, new_model: MLModel) -> None:
         """Проверяет, можно ли продвигать новую модель."""

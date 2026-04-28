@@ -1,0 +1,4 @@
+{"operation":"batch_start","batch_id":"test-001","total_count":2}
+{"operation":"record","data":{"promo_id":"Промо-1-2026","week":26,"month":6,"sku":"РН229840","category":"Охлажденка","regular_price":259.99,"promo_price":229.99,"store_id":"МГЗ №271","region":"МСК","store_location_type":"Спальный","format_assortment":"na","adv_carrier":"ЖЦ","adv_material":"na","promo_mechanics":"na","marketing_type":"Скидка по карте!","is_new_sku":false,"analog_sku":[],"k_uplift":1.25,"extra_features":{}}}
+{"operation":"record","data":{"promo_id":"Промо-1-2026","week":26,"month":6,"sku":"РН235555","category":"Охлажденка","regular_price":269.99,"promo_price":209.99,"store_id":"МГЗ №287","region":"МСК","store_location_type":"ТЦ","format_assortment":"na","adv_carrier":"ЖЦ","adv_material":"na","promo_mechanics":"na","marketing_type":"Скидка по карте!","is_new_sku":false,"analog_sku":[],"k_uplift":1.35,"extra_features":{}}}
+{"operation":"batch_end","batch_id":"test-001"}
