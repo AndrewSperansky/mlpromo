@@ -195,3 +195,22 @@ curl -N -X POST "http://localhost:8000/api/v1/ml/dataset/stream"   -H "Content-T
  
 
 curl http://localhost:8000/api/v1/ml/dataset/stats | jq
+
+
+
+curl -X POST http://localhost:8000/api/v1/ml/torch/push/average-cheque \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batch_id": "550e8400-e29b-41d4-a716-446655440000",
+    "records": [
+        {
+            "date": "2026-05-04",
+            "store_code": "00-000057",
+            "store_name": "БРН №206 Брянск Выгоничи",
+            "cheque_count": 634,
+            "total_amount": 445397.95,
+            "average_amount": 702.52,
+            "is_total": false
+        }
+    ]
+}'

@@ -1,0 +1,264 @@
+# . docker-compose.yml
+services:
+
+  # -------------------- BACKEND --------------------
+  backend:
+    container_name: promo_ml_backend
+    image: promo-ml:latest
+    build: .
+
+    environment:
+      ENV: env
+      LOG_LEVEL: INFO
+
+    volumes:
+      - ./app:/app  # монтируем код, не нужно пересобирать
+
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - promo_net
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "curl -f http://localhost:8000/api/v1/system/health || exit 1"
+      ]
+      interval: 30s          # проверять каждые 30 секунд
+      timeout: 10s         # ждать ответа не более 10 секунд
+      retries: 3          # после 3 неудач считать контейнер unhealthy
+      start_period: 30s   # игнорировать проверки первые 60 секунд после старта
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1024M
+        reservations:
+          cpus: "0.3"
+          memory: 256M
+
+  # -------------------- POSTGRES --------------------
+  postgres:
+    image: postgres:15
+    container_name: promo_postgres
+    restart: unless-stopped
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+
+    environment:
+      POSTGRES_DB: promo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    volumes:
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-logs:/var/log/postgresql
+    ports:
+      - "5432:5432"
+    networks:
+      - promo_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # ------------ POSTGRES EXPORTER ------------------
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: promo_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://promo:promo@postgres:5432/promo?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+
+
+  # -------------------- REDIS --------------------
+  redis:
+    image: redis:latest
+    container_name: promo_redis
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - promo_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ------------- REDIS EXPORTER ----------------
+
+  redis-exporter:
+    image: oliver006/redis_exporter
+    container_name: promo_redis_exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://promo_redis:6379
+    ports:
+      - "9121:9121"
+
+  # -------------------- NGINX --------------------
+  nginx:
+    image: nginx:latest
+    container_name: promo_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - promo_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost || exit 1"]
+      interval: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # -------------------- LOKI --------------------
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: promo_loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./docker/loki/loki-config.yml:/etc/loki/loki-config.yml
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - promo_net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # -------------------- PROMTAIL --------------------
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: promo_promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - backend-logs:/app/logs
+      - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
+      - postgres-logs:/var/log/postgresql:ro
+      - nginx-logs:/var/log/nginx:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro  # ✅ ОБЯЗАТЕЛЬНО
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - promo_net
+
+  # -------------------- GRAFANA --------------------
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: promo_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - promo_net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # -------------------- PROMETHEUS --------------------
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: promo_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+    networks:
+      - promo_net
+
+  # -------------------- FRONTEND --------------------
+
+  frontend:
+    container_name: promo_ml_frontend
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+
+    environment:
+      - VITE_GRAFANA_URL=http://localhost:3000
+
+    depends_on:
+      - backend
+    networks:
+      - promo_net
+
+# -------------------- NETWORKS --------------------
+networks:
+  promo_net:
+    driver: bridge
+
+# -------------------- VOLUMES --------------------
+volumes:
+  lineage:
+  metrics:
+  postgres-data:
+  postgres-logs:
+  grafana-data:
+  loki-data:
+  redis-data:
+  backend-logs:
+  nginx-logs:
+  prometheus-data:

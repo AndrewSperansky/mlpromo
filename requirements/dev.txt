@@ -1,0 +1,8 @@
+
+-r base.txt
+-r ml.txt
+pytest>=7.0.0
+pytest-asyncio
+black
+flake8
+mypy

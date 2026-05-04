@@ -68,6 +68,9 @@ class PredictLSTMRequest(BaseModel):
     days_ahead: int = Field(1, ge=1, le=30, description="На сколько дней вперёд прогноз")
 
 
+
+
+
 # ============================================
 # ОТВЕТЫ (RESPONSE)
 # ============================================
@@ -94,6 +97,21 @@ class TrainLSTMResponse(BaseModel):
     epochs_completed: int = Field(0, description="Количество завершённых эпох")
     promoted: bool = Field(False, description="Была ли модель активирована")
     message: Optional[str] = Field(None, description="Дополнительное сообщение")
+
+
+class AverageChequeRecord(BaseModel):
+    date: date
+    store_code: str
+    store_name: str
+    cheque_count: int
+    total_amount: float
+    average_amount: float
+    is_total: int  # 0 или 1
+
+class AverageChequePushRequest(BaseModel):
+    """Формат данных, который 1С отправляет в Promo-ML"""
+    batch_id: str
+    records: List[AverageChequeRecord]
 
 
 class PredictLSTMResponse(BaseModel):

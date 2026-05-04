@@ -1,11 +1,15 @@
 # app/api/v1/ml_torch/router.py
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pathlib import Path
+
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.ml_torch.train.train_pipeline import train_lstm_pipeline
 from app.services.price_history_service import PriceHistoryService
+from app.services.average_cheque_service import AverageChequeService
 from app.ml_torch.inference.predictor import TorchPredictor
 from app.services.registry_service import ModelRegistryService
 from app.models.user import User
@@ -18,6 +22,7 @@ from app.schemas.torch_schema import (
     PredictLSTMResponse,
     PriceHistoryResponse,
     PriceHistoryItem,
+    AverageChequePushRequest,
 )
 
 router = APIRouter(tags=["ml_torch"])
@@ -135,3 +140,53 @@ def predict_lstm(
         predictions=predictions,
         model_id=lstm_model.id
     )
+
+# ============================================================
+# Pull запрос на http сервис 1С для скачивания среднего чека
+# ============================================================
+@router.post("/sync/average-cheque")
+async def sync_average_cheque(
+        start_date: str,
+        end_date: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Синхронизирует данные о среднем чеке из 1С.
+
+    Для каждого магазина:
+    - количество чеков
+    - общая сумма
+    - средний чек
+
+    Плюс итоговая строка "Общий средний чек"
+    """
+    service = AverageChequeService()
+
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+
+    result = await service.sync_from_1c(db, start, end)
+
+    return result
+
+# ================================================
+# POST запрос от 1С для приема среднего чека
+# ================================================
+
+@router.post("/push/average-cheque")
+async def push_average_cheque(
+        request: AverageChequePushRequest,
+        db: Session = Depends(get_db),
+        # Временно без авторизации для теста
+):
+    """
+    PUSH-приём данных о среднем чеке из 1С.
+    """
+    # Pydantic V2: используем model_dump() вместо dict()
+    records = [r.model_dump() for r in request.records]
+
+    service = AverageChequeService()
+    result = await service.process_push_data(db, records, request.batch_id)
+
+    return result
