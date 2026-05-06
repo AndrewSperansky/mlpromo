@@ -139,6 +139,23 @@ class SalesFactPushRequest(BaseModel):
     batch_id: str
     records: List[SalesFactRecord]
 
+# ============================================
+# Курсы валют
+# ============================================
+
+class ExchangeRateRecord(BaseModel):
+    date: date
+    currency: str  # USD, EUR, CNY
+    rate: float
+
+
+class ExchangeRatePushRequest(BaseModel):
+    records: List[ExchangeRateRecord]
+
+
+# ============================================
+# LSTM Model Prediction
+# ============================================
 
 class PredictLSTMResponse(BaseModel):
     """Ответ с прогнозом LSTM модели"""

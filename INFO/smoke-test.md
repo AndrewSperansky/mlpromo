@@ -233,3 +233,14 @@ curl -X POST http://localhost:8000/api/v1/ml/torch/push/average-cheque \
         }
     ]
 }'
+
+
+curl -X POST http://localhost:8000/api/v1/ml/torch/push/exchange-rates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+        {"date": "2026-05-01", "currency": "USD", "rate": 75.34},
+        {"date": "2026-05-01", "currency": "EUR", "rate": 88.35},
+        {"date": "2026-05-01", "currency": "CNY", "rate": 11.02}
+    ]
+}'

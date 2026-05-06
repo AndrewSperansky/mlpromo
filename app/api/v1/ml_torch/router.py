@@ -11,6 +11,7 @@ from app.ml_torch.train.train_pipeline import train_lstm_pipeline
 from app.services.price_history_service import PriceHistoryService
 from app.services.average_cheque_service import AverageChequeService
 from app.services.sales_fact_service import SalesFactService
+from app.services.exchange_rate_service import ExchangeRateService
 from app.ml_torch.inference.predictor import TorchPredictor
 from app.services.registry_service import ModelRegistryService
 from app.models.user import User
@@ -25,6 +26,7 @@ from app.schemas.torch_schema import (
     PriceHistoryItem,
     AverageChequePushRequest,
     SalesFactPushRequest,
+    ExchangeRatePushRequest,
 )
 
 router = APIRouter(tags=["ml_torch"])
@@ -194,7 +196,7 @@ async def push_average_cheque(
     return result
 
 # ================================================
-# POST запрос от 1С для продаж
+# POST запрос от 1С ПРОДАЖИ
 # ================================================
 
 @router.post("/push/sales-fact")
@@ -208,4 +210,18 @@ async def push_sales_fact(
     """
     service = SalesFactService()
     result = await service.process_push_data(db, request.records, request.batch_id)
+    return result
+
+
+# ================================================
+# POST запрос от 1С КУРСЫ ВАЛЮТ
+# ================================================
+
+@router.post("/push/exchange-rates")
+async def push_exchange_rates(
+    request: ExchangeRatePushRequest,
+    db: Session = Depends(get_db),
+):
+    service = ExchangeRateService()
+    result = await service.process_push_data(db, request.records)
     return result
