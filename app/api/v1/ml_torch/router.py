@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.ml_torch.train.train_pipeline import train_lstm_pipeline
 from app.services.price_history_service import PriceHistoryService
 from app.services.average_cheque_service import AverageChequeService
+from app.services.sales_fact_service import SalesFactService
 from app.ml_torch.inference.predictor import TorchPredictor
 from app.services.registry_service import ModelRegistryService
 from app.models.user import User
@@ -23,6 +24,7 @@ from app.schemas.torch_schema import (
     PriceHistoryResponse,
     PriceHistoryItem,
     AverageChequePushRequest,
+    SalesFactPushRequest,
 )
 
 router = APIRouter(tags=["ml_torch"])
@@ -189,4 +191,21 @@ async def push_average_cheque(
     service = AverageChequeService()
     result = await service.process_push_data(db, records, request.batch_id)
 
+    return result
+
+# ================================================
+# POST запрос от 1С для продаж
+# ================================================
+
+@router.post("/push/sales-fact")
+async def push_sales_fact(
+    request: SalesFactPushRequest,
+    db: Session = Depends(get_db),
+    # current_user: User = Depends(get_current_user)  # временно отключаем
+):
+    """
+    PUSH-приём данных о продажах из 1С.
+    """
+    service = SalesFactService()
+    result = await service.process_push_data(db, request.records, request.batch_id)
     return result

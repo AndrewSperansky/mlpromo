@@ -99,6 +99,10 @@ class TrainLSTMResponse(BaseModel):
     message: Optional[str] = Field(None, description="Дополнительное сообщение")
 
 
+# ============================================
+# Средний чек
+# ============================================
+
 class AverageChequeRecord(BaseModel):
     date: date
     store_code: str
@@ -112,6 +116,28 @@ class AverageChequePushRequest(BaseModel):
     """Формат данных, который 1С отправляет в Promo-ML"""
     batch_id: str
     records: List[AverageChequeRecord]
+
+
+# ============================================
+# Продажи
+# ============================================
+
+class SalesFactRecord(BaseModel):
+    """Одна запись продаж"""
+    date: date
+    sku_code: str
+    sku_name: Optional[str] = None
+    store_code: str
+    store_name: Optional[str] = None
+    region: Optional[str] = None
+    quantity: int
+    revenue: float
+
+
+class SalesFactPushRequest(BaseModel):
+    """PUSH-запрос продаж из 1С"""
+    batch_id: str
+    records: List[SalesFactRecord]
 
 
 class PredictLSTMResponse(BaseModel):

@@ -214,3 +214,22 @@ curl -X POST http://localhost:8000/api/v1/ml/torch/push/average-cheque \
         }
     ]
 }'
+
+
+ curl -X POST http://localhost:8000/api/v1/ml/torch/push/sales-fact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batch_id": "550e8400-e29b-41d4-a716-446655440000",
+    "records": [
+        {
+            "date": "2026-05-01",
+            "sku_code": "РН012912",
+            "sku_name": "Кофе в зернах",
+            "store_code": "00-000001",
+            "store_name": "МОС №1 Домодедово",
+            "region": "Московская область",
+            "quantity": 50,
+            "revenue": 24950.00
+        }
+    ]
+}'
