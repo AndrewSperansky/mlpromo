@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pathlib import Path
-
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.ml_torch.train.train_pipeline import train_lstm_pipeline
@@ -48,6 +48,9 @@ def get_retail_price_history(
     history = service.get_retail_price_history(sku, days)
     return {"sku": sku, "days": days, "history": history}
 
+# ============================================================
+# ОБУЧЕНИЕ МОДЕЛИ
+# ============================================================
 
 @router.post("/train/lstm")
 def train_lstm(
@@ -78,6 +81,10 @@ def train_lstm(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ============================================================
+# ПРОГНОЗ
+# ============================================================
 
 @router.post("/predict/lstm", response_model=PredictLSTMResponse)
 def predict_lstm(
@@ -250,5 +257,49 @@ async def push_calendar(
     """
     service = CalendarService()
     result = await service.process_push_data(db, request.records)
+    return result
+
+# ================================================
+# Эндпоинт для обучения LSTM
+# ================================================
+
+class TrainLSTMRequest(BaseModel):
+    sku: str = Field(..., description="SKU товара")
+    days: int = Field(365, ge=30, le=730)
+    seq_len: int = Field(30, ge=7, le=90)
+    hidden_size: int = Field(64, ge=16, le=256)
+    num_layers: int = Field(2, ge=1, le=4)
+    learning_rate: float = Field(0.001, gt=0, le=0.1)
+    batch_size: int = Field(32, ge=8, le=128)
+    epochs: int = Field(50, ge=10, le=200)
+    promote: bool = Field(False)
+
+
+@router.post("/train/lstm")
+async def train_lstm(
+        request: TrainLSTMRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Обучает LSTM модель для прогнозирования цен на основе истории.
+    """
+    from app.ml_torch.train.train_pipeline import train_lstm_pipeline
+
+    result = train_lstm_pipeline(
+        sku=request.sku,
+        days=request.days,
+        seq_len=request.seq_len,
+        hidden_size=request.hidden_size,
+        num_layers=request.num_layers,
+        learning_rate=request.learning_rate,
+        batch_size=request.batch_size,
+        epochs=request.epochs,
+        promote=request.promote
+    )
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
     return result
 

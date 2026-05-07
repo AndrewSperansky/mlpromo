@@ -1,20 +1,27 @@
 # app/ml_torch/train/train_pipeline.py
 
+"""
+LSTM training pipeline — обучение нейросети на временных рядах.
+"""
+
 import json
 import logging
 import torch
-from torch.utils.data import DataLoader, random_split
-from datetime import datetime, timezone
+import numpy as np
+import pandas as pd
 from pathlib import Path
+from datetime import datetime, timezone
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+from torch.utils.data import DataLoader, random_split
 
 from app.db.session import SessionLocal
 from app.core.settings import settings
+from app.services.registry_service import ModelRegistryService
 from app.services.price_history_service import PriceHistoryService
-from app.ml_torch.data.dataset import UpliftTimeSeriesDataset
 from app.ml_torch.models.lstm import LSTMUpliftModel
 from app.ml_torch.train.trainer import TorchTrainer
-from app.services.registry_service import ModelRegistryService
+from app.ml_torch.data.dataset import UpliftTimeSeriesDataset
 
 logger = logging.getLogger("promo_ml")
 
@@ -32,17 +39,6 @@ def train_lstm_pipeline(
 ) -> dict:
     """
     Обучает LSTM модель для конкретного SKU.
-
-    Args:
-        sku: артикул товара
-        days: сколько дней истории брать
-        seq_len: длина окна (сколько дней подаём на вход)
-        hidden_size: размер скрытого состояния LSTM
-        num_layers: количество слоёв LSTM
-        learning_rate: скорость обучения
-        batch_size: размер батча
-        epochs: количество эпох
-        promote: активировать ли модель сразу после обучения
     """
     logger.info(f"🚀 Запуск LSTM обучения для SKU={sku}")
 
@@ -58,13 +54,12 @@ def train_lstm_pipeline(
                 f"нужно {seq_len + 1} дней, есть {len(price_history)}"
             )
 
-        # ===== 2. ГОТОВИМ DATAFRAME ДЛЯ ДАТАСЕТА =====
-        import pandas as pd
+        # ===== 2. ГОТОВИМ DATAFRAME =====
         df = pd.DataFrame(price_history)
         df['date'] = pd.to_datetime(df['date'])
         df = df.sort_values('date')
 
-        # Создаём целевую переменную (здесь — next_day_price)
+        # Создаём целевую переменную (next_day_price)
         df['next_day_price'] = df['price'].shift(-1)
         df = df.dropna()
 
@@ -99,7 +94,6 @@ def train_lstm_pipeline(
             learning_rate=learning_rate,
             batch_size=batch_size
         )
-
 
         # ===== 6. ОБУЧАЕМ =====
         trainer = TorchTrainer(
@@ -158,7 +152,8 @@ def train_lstm_pipeline(
             "model_config": model_config,
             "metrics": {"val_loss": train_result["best_val_loss"]},
             "trained_at": datetime.now(timezone.utc).isoformat(),
-            "total_rows": len(dataset)
+            "total_rows": len(dataset),
+            "sku_code": sku
         }
 
         meta_path = candidate_dir / f"{db_model.id}.meta.json"
@@ -181,5 +176,12 @@ def train_lstm_pipeline(
             "promoted": promoted
         }
 
+    except Exception as e:
+        logger.error(f"Ошибка обучения LSTM для SKU {sku}: {e}")
+        return {
+            "status": "error",
+            "sku": sku,
+            "error": str(e)
+        }
     finally:
         db.close()

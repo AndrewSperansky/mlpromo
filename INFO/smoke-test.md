@@ -1,3 +1,9 @@
+✅curl -X POST http://localhost:8000/api/v1/auth/login   -H "Content-Type: application/json"   -d '{
+    "email": "a.shigaev@agrohold.ru",
+    "password": "admin123"
+  }'
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MjMyNzQ3fQ.jd2ihUJ-RaKYV4IhamKjvps-1DGW7pqimTME9ERNRP8
+
 ✅ 1. Health
 curl http://localhost:8000/api/v1/system/health
 
@@ -186,14 +192,15 @@ curl http://localhost:8000/api/v1/system/status | jq
   "IsAnalogSKU"
 ]
 
+✅
 curl http://localhost:8000/api/v1/system/runtime-state | jq '.ml_model_id'
 
 42
 
-
+✅
 curl -N -X POST "http://localhost:8000/api/v1/ml/dataset/stream"   -H "Content-Type: application/x-ndjson"   --data-binary @data/test_real_record.ndjson | jq .
  
-
+✅
 curl http://localhost:8000/api/v1/ml/dataset/stats | jq
 
 
@@ -257,3 +264,45 @@ curl -X POST http://localhost:8000/api/v1/ml/torch/push/calendar \
         {"date": "2026-05-12", "day_type": "Рабочий", "week": 20, "year": 2026}
     ]
 }'
+
+## ✅ REQUEST TRAIN
+
+ curl -X POST http://localhost:8000/api/v1/ml/torch/train/lstm   -H "Content-Type: application/json"  \
+ -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MjMyNzQ3fQ.jd2ihUJ-RaKYV4IhamKjvps-1DGW7pqimTME9ERNRP8"  \
+ -d '{
+    "sku": "РН012912",
+    "days": 30,                        
+    "seq_len": 7,
+    "hidden_size": 16,
+    "num_layers": 1,
+    "learning_rate": 0.001,
+    "batch_size": 8,
+    "epochs": 10,
+    "promote": false
+  }'
+
+## RESPONSE:
+{"status":"success","model_id":336,"sku":"РН012912","val_loss":12954.0634765625,"epochs_completed":10,"promoted":false}
+
+
+
+
+## ✅ REQUEST FOR ACTIVE MODELS
+
+ curl -X GET http://localhost:8000/api/v1/ml/models \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MjMyNzQ3fQ.jd2ihUJ-RaKYV4IhamKjvps-1DGW7pqimTME9ERNRP8" \
+  | jq '.[] | {id, name, algorithm, is_active}'
+ 
+## RESPONSE:
+{
+  "id": 336,
+  "name": "lstm_uplift_РН012912",
+  "algorithm": "pytorch_lstm",
+  "is_active": false
+}
+{
+  "id": 335,
+  "name": "promo_uplift",
+  "algorithm": "catboost",
+  "is_active": false
+}
