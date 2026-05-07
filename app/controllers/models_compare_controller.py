@@ -2,8 +2,9 @@
 
 import logging
 from sqlalchemy.orm import Session
-
 from app.services.registry_service import ModelRegistryService
+
+logger = logging.getLogger("promo_ml")
 
 
 class ModelsCompareController:
@@ -17,11 +18,17 @@ class ModelsCompareController:
         if not model_a or not model_b:
             raise ValueError("One of models not found")
 
+        # ===== ДОБАВЛЯЕМ ИНФОРМАЦИЮ ОБ АЛГОРИТМАХ =====
+        algorithm_a = model_a.algorithm if hasattr(model_a, 'algorithm') else 'unknown'
+        algorithm_b = model_b.algorithm if hasattr(model_b, 'algorithm') else 'unknown'
+        same_algorithm = algorithm_a == algorithm_b
+
         comparison = {
             "model_a": {
                 "id": model_a.id,
                 "version": model_a.version,
                 "is_active": model_a.is_active,
+                "algorithm": algorithm_a,           # ← добавить
                 "metrics": model_a.metrics,
                 "features_count": len(model_a.features or []),
             },
@@ -29,9 +36,11 @@ class ModelsCompareController:
                 "id": model_b.id,
                 "version": model_b.version,
                 "is_active": model_b.is_active,
+                "algorithm": algorithm_b,           # ← добавить
                 "metrics": model_b.metrics,
                 "features_count": len(model_b.features or []),
             },
+            "same_algorithm": same_algorithm,       # ← добавить
             "diff": {
                 "metric_diff": self._compare_metrics(model_a.metrics or {}, model_b.metrics or {}),
                 "features_diff": self._compare_features(model_a.features, model_b.features),
@@ -39,7 +48,6 @@ class ModelsCompareController:
         }
 
         return comparison
-
 
     def _compare_metrics(self, m1: dict, m2: dict) -> dict:
         result = {}
@@ -53,7 +61,6 @@ class ModelsCompareController:
             result[k] = m2[k] - m1[k]
 
         return result
-
 
     def _compare_features(self, f1, f2) -> dict:
         f1 = set(f1 or [])

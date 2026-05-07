@@ -4,7 +4,7 @@ import logging
 import shutil
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -420,6 +420,23 @@ class ModelRegistryService:
         return self.db.execute(stmt).scalar_one_or_none()
 
 
+    def get_active_models_by_type(self, model_type: str) -> List[MLModel]:
+        """
+        Возвращает список активных моделей указанного типа.
+
+        Args:
+            model_type: 'tabular', 'time_series'
+        """
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.model_type == model_type,
+                MLModel.is_active == True,
+                MLModel.is_deleted == False,
+            )
+        )
+        return self.db.execute(stmt).scalars().all()    # type: ignore
+
+
 
     def list_models(self):
         return (
@@ -472,3 +489,5 @@ class ModelRegistryService:
         else:
             if new_value < current_value:
                 raise ValueError(f"Promotion rejected: new model has worse {metric_name}")
+
+
