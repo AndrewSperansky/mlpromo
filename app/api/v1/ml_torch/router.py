@@ -12,6 +12,7 @@ from app.services.price_history_service import PriceHistoryService
 from app.services.average_cheque_service import AverageChequeService
 from app.services.sales_fact_service import SalesFactService
 from app.services.exchange_rate_service import ExchangeRateService
+from app.services.calendar_service import CalendarService
 from app.ml_torch.inference.predictor import TorchPredictor
 from app.services.registry_service import ModelRegistryService
 from app.models.user import User
@@ -27,6 +28,7 @@ from app.schemas.torch_schema import (
     AverageChequePushRequest,
     SalesFactPushRequest,
     ExchangeRatePushRequest,
+    CalendarPushRequest,
 )
 
 router = APIRouter(tags=["ml_torch"])
@@ -225,3 +227,28 @@ async def push_exchange_rates(
     service = ExchangeRateService()
     result = await service.process_push_data(db, request.records)
     return result
+
+
+# ================================================
+# POST запрос от 1С КАЛЕНДАРЬ
+# ================================================
+
+
+@router.post("/push/calendar")
+async def push_calendar(
+        request: CalendarPushRequest,
+        db: Session = Depends(get_db),
+):
+    """
+    PUSH-приём данных производственного календаря из 1С.
+
+    Ожидает записи с полями:
+    - date: дата
+    - day_type: тип дня (Праздник, Суббота, Воскресенье, Рабочий, Предпраздничный)
+    - week: номер недели в году
+    - year: год
+    """
+    service = CalendarService()
+    result = await service.process_push_data(db, request.records)
+    return result
+

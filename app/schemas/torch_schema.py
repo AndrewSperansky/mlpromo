@@ -154,6 +154,22 @@ class ExchangeRatePushRequest(BaseModel):
 
 
 # ============================================
+# Календарь
+# ============================================
+
+class CalendarRecord(BaseModel):
+    date: date
+    day_type: str      # Праздник, Суббота, Воскресенье, Рабочий, Предпраздничный
+    week: int          # номер недели
+    year: int
+
+
+class CalendarPushRequest(BaseModel):
+    records: List[CalendarRecord]
+
+
+
+# ============================================
 # LSTM Model Prediction
 # ============================================
 

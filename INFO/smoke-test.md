@@ -244,3 +244,16 @@ curl -X POST http://localhost:8000/api/v1/ml/torch/push/exchange-rates \
         {"date": "2026-05-01", "currency": "CNY", "rate": 11.02}
     ]
 }'
+
+
+curl -X POST http://localhost:8000/api/v1/ml/torch/push/calendar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+        {"date": "2026-05-08", "day_type": "Предпраздничный", "week": 19, "year": 2026},
+        {"date": "2026-05-09", "day_type": "Праздник", "week": 19, "year": 2026},
+        {"date": "2026-05-10", "day_type": "Воскресенье", "week": 19, "year": 2026},
+        {"date": "2026-05-11", "day_type": "Суббота", "week": 20, "year": 2026},
+        {"date": "2026-05-12", "day_type": "Рабочий", "week": 20, "year": 2026}
+    ]
+}'
