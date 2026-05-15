@@ -200,7 +200,7 @@ async def push_average_cheque(
     records = [r.model_dump() for r in request.records]
 
     service = AverageChequeService()
-    result = await service.process_push_data(db, records, request.batch_id)
+    result = await service.process_push_data(db, records)
 
     return result
 

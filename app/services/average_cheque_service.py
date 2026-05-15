@@ -19,13 +19,11 @@ class AverageChequeService:
             self,
             db: Session,
             start_date: date,
-            end_date: date,
-            batch_id: str = None
+            end_date: date
     ) -> dict:
         """
         Загружает средние чеки из 1С за период.
         """
-        batch_id = batch_id or str(uuid.uuid4())
 
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
@@ -55,10 +53,10 @@ class AverageChequeService:
                 text("""
                     INSERT INTO average_cheque (
                         date, store_code, store_name, cheque_count,
-                        total_amount, average_amount, is_total, batch_id
+                        total_amount, average_amount, is_total
                     ) VALUES (
                         :date, :store_code, :store_name, :cheque_count,
-                        :total_amount, :average_amount, :is_total, :batch_id
+                        :total_amount, :average_amount, :is_total
                     )
                 """),
                 {
@@ -68,8 +66,7 @@ class AverageChequeService:
                     "cheque_count": rec["cheque_count"],
                     "total_amount": rec["total_amount"],
                     "average_amount": rec["average_amount"],
-                    "is_total": rec.get("is_total", False),
-                    "batch_id": batch_id
+                    "is_total": rec.get("is_total", False)
                 }
             )
 
@@ -79,8 +76,7 @@ class AverageChequeService:
             "status": "success",
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
-            "records_loaded": len(records),
-            "batch_id": batch_id
+            "records_loaded": len(records)
         }
 
 
@@ -88,8 +84,7 @@ class AverageChequeService:
     async def process_push_data(
             self,
             db: Session,
-            records: List[dict],
-            batch_id: str = None
+            records: List[dict]
     ) -> dict:
         """
         Обрабатывает PUSH-данные от 1С.
@@ -101,7 +96,6 @@ class AverageChequeService:
         if not records:
             return {"status": "error", "message": "No records provided"}
 
-        batch_id = batch_id or str(uuid.uuid4())
         records_loaded = 0
 
         # Опционально: удалить старые данные за эти даты
@@ -122,10 +116,10 @@ class AverageChequeService:
                 text("""
                     INSERT INTO average_cheque (
                         date, store_code, store_name, cheque_count,
-                        total_amount, average_amount, is_total, batch_id
+                        total_amount, average_amount, is_total
                     ) VALUES (
                         :date, :store_code, :store_name, :cheque_count,
-                        :total_amount, :average_amount, :is_total, :batch_id
+                        :total_amount, :average_amount, :is_total
                     )
                 """),
                 {
@@ -135,8 +129,7 @@ class AverageChequeService:
                     "cheque_count": rec["cheque_count"],
                     "total_amount": rec["total_amount"],
                     "average_amount": rec["average_amount"],
-                    "is_total": bool(rec.get("is_total", False)),
-                    "batch_id": batch_id
+                    "is_total": bool(rec.get("is_total", False))
                 }
             )
             records_loaded += 1
@@ -145,7 +138,6 @@ class AverageChequeService:
 
         return {
             "status": "success",
-            "batch_id": batch_id,
             "records_loaded": records_loaded,
             "message": f"Загружено {records_loaded} записей о среднем чеке"
         }

@@ -114,7 +114,6 @@ class AverageChequeRecord(BaseModel):
 
 class AverageChequePushRequest(BaseModel):
     """Формат данных, который 1С отправляет в Promo-ML"""
-    batch_id: str
     records: List[AverageChequeRecord]
 
 
