@@ -1,6 +1,5 @@
 # app/services/sales_fact_service.py
 
-import uuid
 from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -14,12 +13,10 @@ class SalesFactService:
         self,
         db: Session,
         records: List[SalesFactRecord],
-        batch_id: str = None
     ) -> dict:
         if not records:
             return {"status": "error", "message": "No records provided"}
 
-        batch_id = batch_id or str(uuid.uuid4())
         records_loaded = 0
 
         # Удаляем старые данные за эти даты (опционально)
@@ -36,10 +33,10 @@ class SalesFactService:
                 text("""
                     INSERT INTO sales_fact (
                         date, sku_code, sku_name, store_code, store_name,
-                        region, quantity, revenue, batch_id
+                        region, oblast, uom, quantity, revenue
                     ) VALUES (
                         :date, :sku_code, :sku_name, :store_code, :store_name,
-                        :region, :quantity, :revenue, :batch_id
+                        :region, :oblast, :uom, :quantity, :revenue
                     )
                 """),
                 {
@@ -49,9 +46,10 @@ class SalesFactService:
                     "store_code": rec.store_code,
                     "store_name": rec.store_name,
                     "region": rec.region,
+                    "oblast": rec.oblast,      # ← добавить
+                    "uom": rec.uom,            # ← добавить
                     "quantity": rec.quantity,
-                    "revenue": rec.revenue,
-                    "batch_id": batch_id
+                    "revenue": rec.revenue
                 }
             )
             records_loaded += 1
@@ -60,7 +58,6 @@ class SalesFactService:
 
         return {
             "status": "success",
-            "batch_id": batch_id,
             "records_loaded": records_loaded,
             "message": f"Загружено {records_loaded} записей продаж"
         }

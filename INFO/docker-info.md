@@ -561,3 +561,9 @@ docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml up -d
 
 
+### 2. Очистить build cache
+docker builder prune -a
+
+
+### Запуск нестандартного Dockerfile
+docker build -t promo-ml:latest -f Dockerfile.simple . 

@@ -129,13 +129,14 @@ class SalesFactRecord(BaseModel):
     store_code: str
     store_name: Optional[str] = None
     region: Optional[str] = None
+    oblast: Optional[str] = None
+    uom: Optional[str] = None
     quantity: int
     revenue: float
 
 
 class SalesFactPushRequest(BaseModel):
     """PUSH-запрос продаж из 1С"""
-    batch_id: str
     records: List[SalesFactRecord]
 
 # ============================================
