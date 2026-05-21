@@ -502,11 +502,16 @@ docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-ow
 `docker exec -t promo_postgres pg_dump -U postgres -Fc promo > backup/promo_backup_$(date +%Y%m%d_%H%M).dump`
 
 ## Создание Backup.sql  
-`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_v1.2_$(date +%Y%m%d_%H%M).sql`
+`docker exec -t promo_postgres pg_dump -U postgres promo > backup/schema_v1.5_$(date +%Y%m%d_%H%M).sql`
 
 
 ## Восстановление < Backup.dump
 docker exec -i promo_postgres pg_restore -U postgres -d promo < dump/promo_backup.dump
+
+### Восстановление < schema.sql
+
+docker cp ./backup/schema_v1.2.sql promo_postgres:/tmp/schema.sql
+docker exec -it promo_postgres psql -U postgres -d promo -f /tmp/schema.sql
 
 
 ## Создание юзера с ролью 'admin' и паролем 'admin123' 

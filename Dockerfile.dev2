@@ -1,10 +1,10 @@
-# Dockerfile.dev
+# Dockerfile.dev2
 
 FROM python:3.10-slim AS builder
 
 # Замена репозиториев на российские зеркала
-# RUN sed -i 's/deb.debian.org/mirror.yandex.ru/g' /etc/apt/sources.list.d/debian.sources && \
-#    sed -i 's/security.debian.org/mirror.yandex.ru/g' /etc/apt/sources.list.d/debian.sources
+RUN sed -i 's/deb.debian.org/mirror.yandex.ru/g' /etc/apt/sources.list.d/debian.sources && \
+   sed -i 's/security.debian.org/mirror.yandex.ru/g' /etc/apt/sources.list.d/debian.sources
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -18,11 +18,11 @@ RUN apt-get update && apt-get install -y \
 
 # Сначала base (лёгкие, редко меняются)
 COPY requirements/base.txt .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r base.txt
+RUN pip install --upgrade pip && pip install -r base.txt
 
 # Потом ml (тяжёлые, редко меняются)
 COPY requirements/ml.txt .
-RUN pip install --no-cache-dir -r ml.txt
+RUN pip install -r ml.txt
 
 # --- Финальный образ ---
 FROM python:3.10-slim

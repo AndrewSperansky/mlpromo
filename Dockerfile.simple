@@ -1,32 +1,10 @@
 # Dockerfile.simple
 
-#  образ Debian Linux + Python в контейнере
-FROM python:3.10-slim
+FROM promo-ml-backend:latest AS base
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Твой код монтируем через volumes, не пересобираем
+#ENV PYTHONPATH=/app
 
-
-# 🔥 МЕНЯЕМ РЕПОЗИТОРИИ НА РОССИЙСКИЕ (Яндекс)
-RUN sed -i 's|deb.debian.org|mirror.yandex.ru|g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's|security.debian.org|mirror.yandex.ru|g' /etc/apt/sources.list.d/debian.sources
-
-WORKDIR /app
-
-# Системные зависимости (один раз)
-RUN apt-get update && apt-get install -y \
-    libgomp1 libstdc++6 curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Копируем один requirements
-COPY requirements/requirements.txt .
-
-# Устанавливаем зависимости (кэшируется, пока не изменится requirements.txt)
-RUN --mount=type=cache,target=/root/.cache/pip pip install --upgrade pip && pip install -r requirements.txt
-
-ENV PYTHONPATH=/app
-
-# Копируем код
 COPY . /app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

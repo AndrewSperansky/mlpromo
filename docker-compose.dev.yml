@@ -2,6 +2,7 @@
 services:
 
   backend:
+    image: promo-ml:latest
     container_name: promo_ml_backend
     build:
       context: .
