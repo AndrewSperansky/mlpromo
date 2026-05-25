@@ -10,7 +10,7 @@ Pydantic схемы для PyTorch модуля (ml_torch)
 
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
-from datetime import date
+from datetime import date as date_type
 
 
 # ============================================
@@ -104,7 +104,7 @@ class TrainLSTMResponse(BaseModel):
 # ============================================
 
 class AverageChequeRecord(BaseModel):
-    date: date
+    date: date_type
     store_code: str
     store_name: str
     cheque_count: int
@@ -123,7 +123,8 @@ class AverageChequePushRequest(BaseModel):
 
 class SalesFactRecord(BaseModel):
     """Одна запись продаж"""
-    date: date
+    date: date_type
+    week: int
     sku_code: str
     sku_name: Optional[str] = None
     store_code: str
@@ -133,6 +134,7 @@ class SalesFactRecord(BaseModel):
     uom: Optional[str] = None
     quantity: int
     revenue: float
+    category: Optional[str] = None
 
 
 class SalesFactPushRequest(BaseModel):
@@ -144,7 +146,7 @@ class SalesFactPushRequest(BaseModel):
 # ============================================
 
 class ExchangeRateRecord(BaseModel):
-    date: date
+    date: date_type
     currency: str  # USD, EUR, CNY
     rate: float
 
@@ -158,7 +160,7 @@ class ExchangeRatePushRequest(BaseModel):
 # ============================================
 
 class CalendarRecord(BaseModel):
-    date: date
+    date: date_type
     day_type: str      # Праздник, Суббота, Воскресенье, Рабочий, Предпраздничный
     week: int          # номер недели
     year: int
@@ -168,10 +170,37 @@ class CalendarPushRequest(BaseModel):
     records: List[CalendarRecord]
 
 
+# ============================================================
+# PUSH запросы для загрузки цен
+# ============================================================
+
+class RetailPriceRecord(BaseModel):
+    date: date_type = Field(..., description="Дата (конец недели)")
+    week: int = Field(..., ge=1, le=53, description="Номер недели")
+    sku_code: str = Field(..., description="SKU товара")
+    sku_name: Optional[str] = Field(None, description="Наименование товара")
+    category: Optional[str] = Field(None, description="Категория 2-го уровня")
+    price: float = Field(..., gt=0, description="Цена")
+
+class RetailPricePushRequest(BaseModel):
+    records: List[RetailPriceRecord] = Field(..., description="Список записей цен")
+
+class PurchasePriceRecord(BaseModel):
+    date: date_type = Field(..., description="Дата")
+    sku: str = Field(..., description="SKU товара")
+    supplier: str = Field(..., description="Поставщик")
+    price: float = Field(..., gt=0, description="Закупочная цена")
+
+class PurchasePricePushRequest(BaseModel):
+    records: List[PurchasePriceRecord] = Field(..., description="Список записей закупочных цен")
+
+
+
 
 # ============================================
 # LSTM Model Prediction
 # ============================================
+
 
 class PredictLSTMResponse(BaseModel):
     """Ответ с прогнозом LSTM модели"""

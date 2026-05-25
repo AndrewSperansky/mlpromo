@@ -567,3 +567,12 @@ docker builder prune -a
 
 ### Запуск нестандартного Dockerfile
 docker build -t promo-ml:latest -f Dockerfile.simple . 
+
+### Удаление зависших имиджей
+#### сначала контейнер    
+docker rm ca6849b6960b  
+
+#### затем имидж 
+docker rmi 9c7bf4362851
+#### принудительно
+docker rmi -f 9c7bf4362851

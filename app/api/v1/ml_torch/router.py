@@ -1,7 +1,7 @@
 # app/api/v1/ml_torch/router.py
 
 from datetime import date
-
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -29,6 +29,8 @@ from app.schemas.torch_schema import (
     SalesFactPushRequest,
     ExchangeRatePushRequest,
     CalendarPushRequest,
+    RetailPricePushRequest,
+    PurchasePricePushRequest,
 )
 
 router = APIRouter(tags=["ml_torch"])
@@ -61,7 +63,7 @@ def train_lstm(
     """
     Обучает LSTM модель для прогнозирования цен на основе истории.
 
-    Требует наличия данных в таблице retail_price_history.
+    Требует наличия данных в таблице retail_price_history. !!!!!!!
     """
     try:
         result = train_lstm_pipeline(
@@ -218,7 +220,7 @@ async def push_sales_fact(
     PUSH-приём данных о продажах из 1С.
     """
     service = SalesFactService()
-    result = await service.process_push_data(db, request.records, request.batch_id)
+    result = await service.process_push_data(db, request.records)
     return result
 
 
@@ -259,20 +261,44 @@ async def push_calendar(
     result = await service.process_push_data(db, request.records)
     return result
 
+
+# ============================================================
+# PUSH запросы для загрузки цен
+# ============================================================
+
+@router.post("/push/retail-prices")
+async def push_retail_prices(
+    request: RetailPricePushRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.services.price_history_service import PriceHistoryService
+    service = PriceHistoryService(db)
+    # 🔥 Преобразуем Pydantic модели в dict
+    records = [r.model_dump() for r in request.records]
+    result = await service.process_retail_prices(db, records)
+    return result
+
+
+@router.post("/push/purchase-prices")
+async def push_purchase_prices(
+    request: PurchasePricePushRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.services.price_history_service import PriceHistoryService
+    service = PriceHistoryService(db)
+    # 🔥 Преобразуем Pydantic модели в dict
+    records = [r.model_dump() for r in request.records]
+    result = await service.process_purchase_prices(db, records)
+    return result
+
+
+
+
 # ================================================
 # Эндпоинт для обучения LSTM
 # ================================================
-
-class TrainLSTMRequest(BaseModel):
-    sku: str = Field(..., description="SKU товара")
-    days: int = Field(365, ge=30, le=730)
-    seq_len: int = Field(30, ge=7, le=90)
-    hidden_size: int = Field(64, ge=16, le=256)
-    num_layers: int = Field(2, ge=1, le=4)
-    learning_rate: float = Field(0.001, gt=0, le=0.1)
-    batch_size: int = Field(32, ge=8, le=128)
-    epochs: int = Field(50, ge=10, le=200)
-    promote: bool = Field(False)
 
 
 @router.post("/train/lstm")
