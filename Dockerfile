@@ -1,6 +1,4 @@
-# Dockerfile.torch
-
-FROM pytorch/pytorch:2.12.0-cuda12.1-cudnn8-runtime
+FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -12,8 +10,10 @@ RUN apt-get update && apt-get install -y \
     libgomp1 libstdc++6 curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements/base.txt .
-RUN pip install --upgrade pip && pip install -r base.txt
+COPY requirements.txt .
+
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 COPY . /app
 

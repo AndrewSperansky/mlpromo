@@ -1,8 +1,9 @@
 # app/api/v1/ml_torch/router.py
 
+import json
 from datetime import date
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pathlib import Path
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -210,19 +211,23 @@ async def push_average_cheque(
 # POST запрос от 1С ПРОДАЖИ
 # ================================================
 
-@router.post("/push/sales-fact")
-async def push_sales_fact(
-    request: SalesFactPushRequest,
-    db: Session = Depends(get_db),
-    # current_user: User = Depends(get_current_user)  # временно отключаем
-):
-    """
-    PUSH-приём данных о продажах из 1С.
-    """
-    service = SalesFactService()
-    result = await service.process_push_data(db, request.records)
-    return result
+@router.post("/push/sales-fact-test")
+async def test_endpoint(request: Request):
+    body = await request.body()
+    print("🔴 TEST ENDPOINT BODY:", body.decode('utf-8'))
+    return {"status": "ok", "received": body.decode('utf-8')}
 
+
+
+@router.post("/push/sales-fact")
+async def push_sales_fact(request: Request, db: Session = Depends(get_db)):
+    body = await request.body()
+    data = json.loads(body)
+    records = data.get("records", [])
+
+    service = SalesFactService()
+    result = await service.process_push_data(db, records)
+    return result
 
 # ================================================
 # POST запрос от 1С КУРСЫ ВАЛЮТ

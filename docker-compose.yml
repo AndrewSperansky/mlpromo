@@ -7,7 +7,7 @@ services:
     image: promo-ml:latest
     build:
       context: .
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
     restart: unless-stopped
 
     environment:
@@ -37,7 +37,7 @@ services:
       interval: 30s          # проверять каждые 30 секунд
       timeout: 10s         # ждать ответа не более 10 секунд
       retries: 3          # после 3 неудач считать контейнер unhealthy
-      start_period: 120s   # игнорировать проверки первые 120 секунд после старта
+      start_period: 300s   # игнорировать проверки первые 120 секунд после старта
     deploy:
       resources:
         limits:
@@ -78,16 +78,16 @@ services:
           memory: 1G
 
   # -------------------- PgAdmin --------------------
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: promo_pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"            # http://localhost:5050
-    networks:
-      - promo_net
+#  pgadmin:
+#    image: dpage/pgadmin4
+#    container_name: promo_pgadmin
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+#      PGADMIN_DEFAULT_PASSWORD: admin
+#    ports:
+#      - "5050:80"            # http://localhost:5050
+#    networks:
+#      - promo_net
 
 
   # ------------ POSTGRES EXPORTER ------------------

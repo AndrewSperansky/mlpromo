@@ -185,6 +185,8 @@ class RetailPriceRecord(BaseModel):
 class RetailPricePushRequest(BaseModel):
     records: List[RetailPriceRecord] = Field(..., description="Список записей цен")
 
+
+
 class PurchasePriceRecord(BaseModel):
     date: date_type = Field(..., description="Дата")
     sku: str = Field(..., description="SKU товара")
