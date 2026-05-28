@@ -1,8 +1,10 @@
 # app/api/v1/ml_torch/router.py
 
 import json
+import logging
 from datetime import date
 from typing import List
+from app.core.settings import settings
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -34,7 +36,9 @@ from app.schemas.torch_schema import (
     PurchasePricePushRequest,
 )
 
+
 router = APIRouter(tags=["ml_torch"])
+logger = logging.getLogger("promo_ml")
 
 @router.get("/health")
 def health():
@@ -59,7 +63,7 @@ def get_retail_price_history(
 def train_lstm(
         request: TrainLSTMRequest,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        # current_user: User = Depends(get_current_user)
 ):
     """
     Обучает LSTM модель для прогнозирования цен на основе истории.
@@ -93,7 +97,7 @@ def train_lstm(
 def predict_lstm(
         request: PredictLSTMRequest,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        # current_user: User = Depends(get_current_user)
 ):
     """
     Прогнозирует цены с использованием активной LSTM модели.
@@ -110,7 +114,7 @@ def predict_lstm(
     active_models = registry.list_models()
     lstm_model = None
     for m in active_models:
-        if m.algorithm == "pytorch_lstm" and m.is_active:
+        if m.algorithm in ["pytorch_lstm", "pytorch_lstm_with_embeddings"] and m.is_active:
             lstm_model = m
             break
 
@@ -124,20 +128,38 @@ def predict_lstm(
     predictor = TorchPredictor(db)
 
     # Загружаем конфигурацию из meta.json
-    import json
+
     meta_path = Path(lstm_model.model_path).with_suffix('.meta.json')
+    if not meta_path.exists():
+        # Ищем в candidate, если в current нет
+        candidate_dir = Path(settings.ML_CANDIDATE_DIR)
+        meta_path = candidate_dir / f"{lstm_model.id}.meta.json"
+
     if meta_path.exists():
         with open(meta_path) as f:
-            config = json.load(f)
-            model_config = config.get("model_config", {})
+            meta = json.load(f)
+            # 🔥 БЕРЁМ КОНФИГ НАПРЯМУЮ ИЗ META
+            model_config = meta.get("model_config", {})
+
+            # Убеждаемся, что все поля есть
+            if "categorical_dims" not in model_config:
+                model_config["categorical_dims"] = {}
+            if "numeric_features" not in model_config:
+                model_config["numeric_features"] = len(meta.get("numeric_features", []))
+
+            logger.info(f"📋 Loaded config from meta: {model_config}")
     else:
         model_config = {
-            "input_size": 1,
+            "numeric_features": 7,
+            "categorical_dims": {},
+            "embedding_dim": 16,
             "hidden_size": 64,
             "num_layers": 2,
             "seq_len": 30
         }
 
+    # Загружаем модель
+    predictor = TorchPredictor(db)
     predictor.load_model(Path(lstm_model.model_path), model_config)
 
     # Делаем прогноз
@@ -211,14 +233,6 @@ async def push_average_cheque(
 # POST запрос от 1С ПРОДАЖИ
 # ================================================
 
-@router.post("/push/sales-fact-test")
-async def test_endpoint(request: Request):
-    body = await request.body()
-    print("🔴 TEST ENDPOINT BODY:", body.decode('utf-8'))
-    return {"status": "ok", "received": body.decode('utf-8')}
-
-
-
 @router.post("/push/sales-fact")
 async def push_sales_fact(request: Request, db: Session = Depends(get_db)):
     body = await request.body()
@@ -275,7 +289,7 @@ async def push_calendar(
 async def push_retail_prices(
     request: RetailPricePushRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    # current_user: User = Depends(get_current_user)
 ):
     from app.services.price_history_service import PriceHistoryService
     service = PriceHistoryService(db)
@@ -285,18 +299,18 @@ async def push_retail_prices(
     return result
 
 
-@router.post("/push/purchase-prices")
-async def push_purchase_prices(
-    request: PurchasePricePushRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    from app.services.price_history_service import PriceHistoryService
-    service = PriceHistoryService(db)
-    # 🔥 Преобразуем Pydantic модели в dict
-    records = [r.model_dump() for r in request.records]
-    result = await service.process_purchase_prices(db, records)
-    return result
+# @router.post("/push/purchase-prices")
+# async def push_purchase_prices(
+#     request: PurchasePricePushRequest,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     from app.services.price_history_service import PriceHistoryService
+#     service = PriceHistoryService(db)
+#     # 🔥 Преобразуем Pydantic модели в dict
+#     records = [r.model_dump() for r in request.records]
+#     result = await service.process_purchase_prices(db, records)
+#     return result
 
 
 
@@ -310,7 +324,7 @@ async def push_purchase_prices(
 async def train_lstm(
         request: TrainLSTMRequest,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        # current_user: User = Depends(get_current_user)
 ):
     """
     Обучает LSTM модель для прогнозирования цен на основе истории.

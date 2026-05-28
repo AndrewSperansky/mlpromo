@@ -17,12 +17,14 @@ class PriceHistoryService:
             text("""
                 SELECT date, price
                 FROM retail_price_history
-                WHERE sku = :sku AND date >= CURRENT_DATE - :days
+                WHERE sku_code = :sku AND date >= CURRENT_DATE - :days
                 ORDER BY date
             """),
             {"sku": sku, "days": days}
         )
         return [{"date": row[0], "price": float(row[1])} for row in result.fetchall()]
+
+
 
     def get_purchase_price_history(self, sku: str, supplier: str, days: int = 30) -> list[dict]:
         """Возвращает историю закупочных цен за последние N дней"""
@@ -36,6 +38,8 @@ class PriceHistoryService:
             {"sku": sku, "supplier": supplier, "days": days}
         )
         return [{"date": row[0], "price": float(row[1])} for row in result.fetchall()]
+
+
 
     async def process_retail_prices(self, db: Session, records: List[dict]) -> dict:
         """Сохраняет историю розничных цен"""

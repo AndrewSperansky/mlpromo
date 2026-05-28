@@ -1,8 +1,14 @@
-✅curl -X POST http://localhost:8000/api/v1/auth/login   -H "Content-Type: application/json"   -d '{
+✅[curl -X POST http://localhost:8000/api/v1/auth/login   -H "Content-Type: application/json"   -d '{
     "email": "a.shigaev@agrohold.ru",
     "password": "admin123"
-  }'
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MjMyNzQ3fQ.jd2ihUJ-RaKYV4IhamKjvps-1DGW7pqimTME9ERNRP8
+  }']( curl -X POST http://localhost:8000/api/v1/ml/models/3/promote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc5OTcwODI3fQ.wBjPEzz3lfUS2CrgduQOyVBkmc3kuZIeIUzwQz9jSV0" \
+  -d '{"force": true}'
+{"detail":"No common metrics found"}(base))
+
+"access_token
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc5OTcwODI3fQ.wBjPEzz3lfUS2CrgduQOyVBkmc3kuZIeIUzwQz9jSV0
 
 ✅ 1. Health
 curl http://localhost:8000/api/v1/system/health

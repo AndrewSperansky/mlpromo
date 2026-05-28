@@ -1,96 +1,111 @@
 # app/ml_torch/data/dataset.py
 
+import logging
 import torch
 from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
-from typing import Optional, List, Tuple
-from app.ml_torch.data.sequence_builder import SequenceBuilder
+from typing import List, Dict, Optional, Tuple
+from sklearn.preprocessing import LabelEncoder
 
+logger = logging.getLogger("promo_ml")
 
 class UpliftTimeSeriesDataset(Dataset):
     """
-    Датасет для обучения LSTM на временных рядах цен.
-
-    Возвращает:
-        - X: последовательность [seq_len, num_features]
-        - y: целевое значение (k_uplift или цена)
+    Датасет для LSTM с поддержкой:
+    - числовых фич
+    - категориальных фич (через эмбеддинги)
     """
 
     def __init__(
             self,
             df: pd.DataFrame,
-            feature_cols: List[str],
+            numeric_features: List[str],
+            categorical_features: List[str],
             target_col: str,
             seq_len: int = 30,
-            transform: Optional[callable] = None
     ):
         """
         Args:
-            df: DataFrame с данными (должен быть отсортирован по времени)
-            feature_cols: колонки-признаки (price, sales, discount, ...)
-            target_col: целевая колонка (k_uplift)
+            df: DataFrame с данными (отсортирован по дате)
+            numeric_features: список числовых колонок
+            categorical_features: список категориальных колонок
+            target_col: целевая колонка
             seq_len: длина окна истории
-            transform: трансформация признаков (нормализация)
         """
         self.df = df.reset_index(drop=True)
-        self.feature_cols = feature_cols
+        self.numeric_features = numeric_features
+        self.categorical_features = categorical_features
         self.target_col = target_col
         self.seq_len = seq_len
-        self.transform = transform
 
-        self.builder = SequenceBuilder(seq_len=seq_len)
+        # Кодируем категориальные признаки
+        self.label_encoders: Dict[str, LabelEncoder] = {}
+        self._encode_categorical()
 
-        # Предварительно строим все последовательности
-        self.X, self.y = self._build_all_sequences()
+        # Строим последовательности
+        self.X_numeric, self.X_categorical, self.y = self._build_sequences()
 
-    def _build_all_sequences(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Строит все окна из DataFrame"""
+    def _encode_categorical(self):
+        """Превращает категории в числа (для эмбеддингов)"""
+        for col in self.categorical_features:
+            le = LabelEncoder()
+            # -1 для неизвестных значений (защита)
+            self.df[col] = self.df[col].astype(str)
+            self.df[f"{col}_encoded"] = le.fit_transform(self.df[col])
+            self.label_encoders[col] = le
+            logger.info(f"Encoded {col}: {len(le.classes_)} unique values")
+
+    def _build_sequences(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Строит окна для LSTM"""
         if len(self.df) < self.seq_len + 1:
             raise ValueError(
-                f"Недостаточно данных: нужно {self.seq_len + 1}, "
-                f"получено {len(self.df)}"
+                f"Need at least {self.seq_len + 1} rows, got {len(self.df)}"
             )
 
-        # Преобразуем в числовой массив
-        feature_values = self.df[self.feature_cols].values
-        target_values = self.df[self.target_col].values
+        # Числовые данные
+        numeric_data = self.df[self.numeric_features].values
 
-        X, y = [], []
+        # Категориальные данные (закодированные)
+        cat_cols = [f"{col}_encoded" for col in self.categorical_features]
+        categorical_data = self.df[cat_cols].values
+
+        # Целевая переменная (next_day_price или next_week_quantity)
+        target_data = self.df[self.target_col].values
+
+        X_num, X_cat, y = [], [], []
+
         for i in range(len(self.df) - self.seq_len):
-            X.append(feature_values[i:i + self.seq_len])
-            y.append(target_values[i + self.seq_len])
+            X_num.append(numeric_data[i:i + self.seq_len])
+            X_cat.append(categorical_data[i:i + self.seq_len])
+            y.append(target_data[i + self.seq_len])
 
-        return np.array(X, dtype=np.float32), np.array(y, dtype=np.float32)
+        return (
+            np.array(X_num, dtype=np.float32),
+            np.array(X_cat, dtype=np.int64),
+            np.array(y, dtype=np.float32)
+        )
 
     def __len__(self):
-        return len(self.X)
+        return len(self.X_numeric)
 
     def __getitem__(self, idx):
-        X = self.X[idx]
-        y = self.y[idx]
+        return (
+            torch.tensor(self.X_numeric[idx]),
+            torch.tensor(self.X_categorical[idx]),
+            torch.tensor(self.y[idx])
+        )
 
-        if self.transform:
-            X = self.transform(X)
+    def get_embedding_dims(self) -> Dict[str, int]:
+        """Возвращает размеры эмбеддингов для каждого категориального признака"""
+        return {
+            col: len(le.classes_)
+            for col, le in self.label_encoders.items()
+        }
 
-        return torch.tensor(X), torch.tensor(y)
-
-    @classmethod
-    def from_sku_history(
-            cls,
-            price_history: List[dict],
-            feature_cols: List[str],
-            target_col: str,
-            seq_len: int = 30
-    ):
-        """
-        Альтернативный конструктор: из истории цен (список словарей)
-
-        price_history = [
-            {"date": "2026-04-01", "price": 100, "k_uplift": 1.2},
-            {"date": "2026-04-02", "price": 101, "k_uplift": 1.3},
-            ...
-        ]
-        """
-        df = pd.DataFrame(price_history)
-        return cls(df, feature_cols, target_col, seq_len)
+    def get_label_encoders_serializable(self) -> Dict[str, List[str]]:
+        """Возвращает классы энкодеров для сохранения"""
+        return {
+            name: list(le.classes_)
+            for name, le in self.label_encoders.items()
+        }

@@ -14,78 +14,60 @@ logger = logging.getLogger("promo_ml")
 
 
 class TorchPredictor:
-    """
-    Класс для инференса (предсказания) PyTorch моделей.
-
-    Инференс (inference) — процесс получения прогноза от обученной модели.
-    """
+    """Класс для инференса PyTorch моделей с поддержкой эмбеддингов"""
 
     def __init__(self, db: Session):
         self.db = db
         self.price_service = PriceHistoryService(db)
         self.model = None
         self.model_config = None
+        self.numeric_features = None
+        self.categorical_features = None
 
     def load_model(self, model_path: Path, config: dict):
         """
-        Загружает сохранённую модель
-
-        Args:
-            model_path: путь к .pt файлу
-            config: конфигурация модели (input_size, hidden_size, ...)
+        Загружает сохранённую модель с эмбеддингами
         """
-        self.model = LSTMUpliftModel.from_config(config)
+
+        logger.info(f"📋 Loading model with config: {config}")
+
+        # 🔥 БЕРЁМ ПАРАМЕТРЫ ИЗ КОНФИГА!
+        self.model = LSTMUpliftModel(
+            numeric_features=config.get("numeric_features", 7),
+            categorical_dims=config.get("categorical_dims", {}),
+            embedding_dim=config.get("embedding_dim", 16),
+            hidden_size=config.get("hidden_size", 64),
+            num_layers=config.get("num_layers", 2),
+            seq_len=config.get("seq_len", 30)
+        )
 
         checkpoint = torch.load(model_path, map_location='cpu')
 
-        # Извлекаем только веса модели (без оптимизатора)
         if 'model_state_dict' in checkpoint:
             self.model.load_state_dict(checkpoint['model_state_dict'])
         else:
             self.model.load_state_dict(checkpoint)
 
-        self.model.eval()  # переводим в режим оценки (отключаем dropout)
+        self.model.eval()
         self.model_config = config
 
-        logger.info(f"Модель загружена из {model_path}")
+        logger.info(f"✅ Модель загружена из {model_path}")
         return self.model
 
-    def predict_next_price(
+    def predict_next_week_sales(
             self,
             sku: str,
-            days: int = 30,
             seq_len: int = 30
     ) -> Optional[float]:
         """
-        Предсказывает следующую цену на основе истории
-
-        Args:
-            sku: артикул
-            days: сколько дней истории брать
-            seq_len: длина окна (должна совпадать с обученной)
+        Предсказывает продажи на следующую неделю
         """
         if self.model is None:
             raise ValueError("Модель не загружена. Вызовите load_model()")
 
-        # Загружаем историю цен
-        history = self.price_service.get_retail_price_history(sku, days=days)
-
-        if len(history) < seq_len:
-            logger.warning(f"Недостаточно данных для SKU={sku}: нужно {seq_len}, есть {len(history)}")
-            return None
-
-        # Берём последние seq_len значений
-        last_prices = [h["price"] for h in history[-seq_len:]]
-
-        # Преобразуем в тензор: [1, seq_len, input_size]
-        import numpy as np
-        input_tensor = torch.tensor(last_prices, dtype=torch.float32).view(1, seq_len, 1)
-
-        # Предсказание
-        with torch.no_grad():
-            prediction = self.model(input_tensor)
-
-        return float(prediction.numpy()[0])
+        # TODO: собрать фичи для предсказания
+        # Пока возвращаем заглушку
+        return None
 
     def predict_prices_forecast(
             self,
@@ -95,49 +77,26 @@ class TorchPredictor:
             seq_len: int = 30
     ) -> List[Dict]:
         """
-        Прогнозирует цены на несколько дней вперёд (авторегрессия)
-
-        Принцип: предсказываем следующий день, добавляем его в историю,
-        и повторяем для следующего дня.
-
-        Args:
-            sku: артикул
-            days_history: сколько дней истории брать
-            forecast_days: на сколько дней вперёд прогноз
-            seq_len: длина окна модели
+        Прогнозирует продажи на несколько дней/недель вперёд
         """
         if self.model is None:
             raise ValueError("Модель не загружена")
 
-        # Загружаем историю
+        # TODO: полноценная реализация с фичами
+        # Пока возвращаем заглушку с предсказанием цены из истории
         history = self.price_service.get_retail_price_history(sku, days=days_history)
 
-        if len(history) < seq_len:
-            raise ValueError(f"Недостаточно данных: нужно {seq_len}, есть {len(history)}")
+        if not history:
+            return []
 
-        # Берём последние seq_len цен как начальную последовательность
-        prices = [h["price"] for h in history]
+        last_price = history[-1]["price"] if history else 0
 
         predictions = []
-        current_prices = prices[-seq_len:].copy()
-
         for day in range(1, forecast_days + 1):
-            # Формируем вход
-            input_tensor = torch.tensor(current_prices, dtype=torch.float32).view(1, seq_len, 1)
-
-            # Предсказываем
-            with torch.no_grad():
-                next_price = float(self.model(input_tensor).numpy()[0])
-
-            # Сохраняем
             pred_date = date.today() + timedelta(days=day)
             predictions.append({
                 "date": pred_date.isoformat(),
-                "predicted_price": round(next_price, 2)
+                "predicted_sales": round(last_price, 2)  # заглушка
             })
-
-            # Добавляем в последовательность для следующего шага
-            current_prices.pop(0)
-            current_prices.append(next_price)
 
         return predictions

@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-from typing import Optional, List
+from typing import Optional, List, Dict
 from .base import BaseTorchModel
 
 
@@ -14,7 +14,9 @@ class LSTMUpliftModel(BaseTorchModel):
     которая умеет «запоминать» важные события из прошлого.
 
     Архитектура:
-        Вход: [batch, seq_len, input_size]
+        Вход:
+        Числовые фичи → LSTM
+        Категории → Embedding → Concatenate
                ↓
         LSTM слой (скрытая память)
                ↓
@@ -30,99 +32,106 @@ class LSTMUpliftModel(BaseTorchModel):
 
     def __init__(
             self,
-            # ===== ОСНОВНЫЕ ПАРАМЕТРЫ =====
-            input_size: int = 1,  # количество признаков (price, sales...) — РАЗМЕР ВХОДА
-            hidden_size: int = 64,  # размер скрытого состояния — «ВМЕСТИЛИЩЕ ПАМЯТИ»
-            num_layers: int = 2,  # количество слоёв LSTM — «ГЛУБИНА ЗАПОМИНАНИЯ»
-            dropout: float = 0.2,  # регуляризация — «ЗАБЫВАНИЕ» случайных нейронов
-
-            # ===== ПАРАМЕТРЫ ВЫХОДНОГО СЛОЯ =====
-            fc_hidden_dims: List[int] = [32, 16],  # размеры полносвязных слоёв
-            output_dim: int = 1,  # сколько чисел выдаём (1 = uplift)
-
-            # ===== ПАРАМЕТРЫ ОБУЧЕНИЯ (по умолчанию) =====
-            learning_rate: float = 0.001,  # скорость обучения («шаг» градиентного спуска)
-            batch_size: int = 32,  # размер батча («порция» примеров)
-            seq_len: int = 30,  # длина последовательности («окно истории»)
+            # Числовые параметры
+            numeric_features: int,  # количество числовых фич
+            categorical_dims: Dict[str, int],  # {имя: размер_словаря}
+            embedding_dim: int = 16,  # размер эмбеддинга
+            hidden_size: int = 64,  # размер скрытого состояния LSTM
+            num_layers: int = 2,  # количество слоёв LSTM
+            seq_len: int = 30,
+            dropout: float = 0.2,
     ):
         super().__init__()
 
+        self.numeric_features = numeric_features
+        self.categorical_dims = categorical_dims
+        self.embedding_dim = embedding_dim
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.input_size = input_size
         self.seq_len = seq_len
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
+
+        # ===== ЭМБЕДДИНГИ ДЛЯ КАТЕГОРИАЛЬНЫХ ПРИЗНАКОВ =====
+        self.embeddings = nn.ModuleDict({
+            name: nn.Embedding(dim, embedding_dim)
+            for name, dim in categorical_dims.items()
+        })
 
         # ===== LSTM СЛОЙ =====
-        # batch_first=True означает: вход [batch, seq_len, features]
+        # Входной размер = числовые фичи + сумма эмбеддингов
+        embedding_total = len(categorical_dims) * embedding_dim
+        lstm_input_size = numeric_features + embedding_total
+
         self.lstm = nn.LSTM(
-            input_size=input_size,
+            input_size=lstm_input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True,
             dropout=dropout if num_layers > 1 else 0
         )
 
-        # ===== ПОЛНОСВЯЗНЫЕ СЛОИ (преобразуют память в ответ) =====
-        layers = []
-        prev_size = hidden_size
+        # ===== ПОЛНОСВЯЗНЫЙ СЛОЙ =====
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_size, 32),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(32, 1)
+        )
 
-        for h_dim in fc_hidden_dims:
-            layers.extend([
-                nn.Linear(prev_size, h_dim),
-                nn.ReLU(),  # функция активации (пропускает только положительные числа)
-                nn.Dropout(dropout)  # случайное выключение нейронов
-            ])
-            prev_size = h_dim
-
-        layers.append(nn.Linear(prev_size, output_dim))
-        self.fc = nn.Sequential(*layers)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_numeric, x_categorical):
         """
-        Прямой проход (forward pass) — превращаем вход в выход.
-
-        x: [batch, seq_len, input_size]
-           batch: сколько примеров
-           seq_len: сколько дней истории
-           input_size: сколько признаков в день
+        Args:
+            x_numeric: [batch, seq_len, numeric_features]
+            x_categorical: [batch, seq_len, num_categorical]
 
         Returns:
-            predictions: [batch] — прогноз для каждого примера
+            predictions: [batch]
         """
-        # LSTM обрабатывает последовательность
-        # lstm_out: [batch, seq_len, hidden_size] — выходы на каждый момент
-        # (h_n, c_n) — финальное скрытое и клеточное состояние
-        lstm_out, (h_n, c_n) = self.lstm(x)
+        batch_size, seq_len = x_numeric.shape[0], x_numeric.shape[1]
 
-        # Берём последнее скрытое состояние (оно содержит «память» о всей последовательности)
-        # h_n[-1] — последний слой LSTM
+        # ===== ПРОГОНЯЕМ КАТЕГОРИИ ЧЕРЕЗ ЭМБЕДДИНГИ =====
+        embedded_features = []
+        for i, (name, emb_layer) in enumerate(self.embeddings.items()):
+            # x_categorical[:, :, i] — колонка для этой категории
+            cat_values = x_categorical[:, :, i]  # [batch, seq_len]
+            emb = emb_layer(cat_values)  # [batch, seq_len, embedding_dim]
+            embedded_features.append(emb)
+
+        # Объединяем все эмбеддинги
+        embedded_concat = torch.cat(embedded_features, dim=-1)  # [batch, seq_len, embedding_total]
+
+        # ===== ОБЪЕДИНЯЕМ С ЧИСЛОВЫМИ ФИЧАМИ =====
+        lstm_input = torch.cat([x_numeric, embedded_concat], dim=-1)
+
+        # ===== LSTM =====
+        lstm_out, (h_n, c_n) = self.lstm(lstm_input)
+
+        # ===== ПОСЛЕДНИЙ ВЫХОД LSTM =====
         last_hidden = h_n[-1]  # [batch, hidden_size]
 
-        # Полносвязные слои превращают память в прогноз
-        predictions = self.fc(last_hidden)  # [batch, output_dim]
+        # ===== ПРЕДСКАЗАНИЕ =====
+        predictions = self.fc(last_hidden)  # [batch, 1]
 
-        # Убираем лишнюю размерность: [batch, 1] -> [batch]
-        return predictions.squeeze(-1)
+        return predictions.squeeze(-1)  # [batch]
 
     def get_config(self) -> dict:
-        """Возвращает конфигурацию модели для сохранения в meta.json"""
+        """Возвращает конфигурацию для сохранения"""
         return {
-            "type": "lstm",
-            "input_size": self.input_size,
+            "type": "lstm_with_embeddings",
+            "numeric_features": self.numeric_features,
+            "categorical_dims": self.categorical_dims,
+            "embedding_dim": self.embedding_dim,
             "hidden_size": self.hidden_size,
             "num_layers": self.num_layers,
             "seq_len": self.seq_len,
-            "learning_rate": self.learning_rate,
-            "batch_size": self.batch_size
         }
 
     @classmethod
     def from_config(cls, config: dict):
         """Создаёт модель из конфига (для загрузки)"""
         return cls(
-            input_size=config.get("input_size", 1),
+            numeric_features=config.get("numeric_features", 7),
+            categorical_dims=config.get("categorical_dims", {}),
+            embedding_dim=config.get("embedding_dim", 16),
             hidden_size=config.get("hidden_size", 64),
             num_layers=config.get("num_layers", 2),
             seq_len=config.get("seq_len", 30)
