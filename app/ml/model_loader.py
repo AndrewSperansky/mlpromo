@@ -1,6 +1,7 @@
 # app/ml/model_loader.py
 
 import logging
+import torch
 from pathlib import Path
 from app.ml.runtime_state import ML_RUNTIME_STATE
 import json
@@ -134,10 +135,9 @@ class ModelLoader:
     @classmethod
     def load(cls):
         """
-        Загружает ML-модель и метаданные.
+        Загружает ML-модель (CatBoost .cbm или PyTorch .pt) и метаданные.
         Возвращает dict: {"model": ..., "meta": {...}}
         """
-
         current_model_id = ML_RUNTIME_STATE.get("ml_model_id")
 
         # Если модель уже загружена и id совпадает — возвращаем кэш
@@ -157,7 +157,17 @@ class ModelLoader:
             cls._loaded_model_id = None
             return {"model": cls._model, "meta": cls._meta}
 
-        # ===============  Load model safely  ===========================
+        # =============== ОПРЕДЕЛЯЕМ ТИП МОДЕЛИ ПО РАСШИРЕНИЮ ===============
+        if model_path.suffix == '.pt':
+            # Загружаем PyTorch модель
+            return cls._load_torch_model(model_path, current_model_id)
+        else:
+            # Загружаем CatBoost модель (.cbm)
+            return cls._load_catboost_model(model_path, current_model_id)
+
+    @classmethod
+    def _load_catboost_model(cls, model_path: Path, current_model_id) -> dict:
+        """Загружает CatBoost модель (.cbm)"""
         try:
             logger.info("Loading CatBoost model from %s", model_path)
             model = CatBoostRegressor()
@@ -170,33 +180,106 @@ class ModelLoader:
             cls._model = None
             cls._loaded_model_id = None
 
-        # ===============  Load meta from RUNTIME STATE ===============
-        # Берём из runtime, а не из файла!
-        feature_order = ML_RUNTIME_STATE.get("feature_order", [])
-        version = ML_RUNTIME_STATE.get("version")
+        return cls._finalize_load(model_path, current_model_id)
 
-        # также пытаемся загрузить из файла метаданных
-        meta_path = model_path.with_suffix('.meta.json')
-        if meta_path.exists():
-            try:
+    @classmethod
+    def _load_torch_model(cls, model_path: Path, current_model_id) -> dict:
+        file_meta = {}
+        try:
+            logger.info("Loading PyTorch model from %s", model_path)
+            meta_path = model_path.with_suffix('.meta.json')
+            if meta_path.exists():
                 with open(meta_path) as f:
                     file_meta = json.load(f)
 
-                    # Сохраняем conformal данные в runtime_state
-                    if "conformal_q_hat" in file_meta:
-                        ML_RUNTIME_STATE["conformal_q_hat"] = file_meta["conformal_q_hat"]
-                        logger.info(f"✅ Loaded conformal_q_hat from meta: {file_meta['conformal_q_hat']}")
+            model_config = file_meta.get("model_config", {})
 
-                    if "conformal" in file_meta:
-                        ML_RUNTIME_STATE["conformal"] = file_meta["conformal"]
-                        logger.info(f"✅ Loaded conformal data (alpha={file_meta['conformal'].get('alpha')})")
+            # 🔥 ЛОГИРУЕМ, ЧТО НАШЛИ
+            logger.info(f"🔍 file_meta keys: {list(file_meta.keys())}")
+            logger.info(f"🔍 model_config: {model_config}")
 
-                    if not feature_order:
-                        feature_order = file_meta.get("feature_order", [])
-                    if not version:
-                        version = file_meta.get("version")
-            except Exception as e:
-                logger.warning(f"Failed to load meta file: {e}")
+            # 🔥 БЕРЁМ ПАРАМЕТРЫ ИЗ КОНФИГА
+            numeric_features = model_config.get("numeric_features", 7)
+            categorical_dims = model_config.get("categorical_dims", {})
+            embedding_dim = model_config.get("embedding_dim", 16)
+            hidden_size = model_config.get("hidden_size", 64)
+            num_layers = model_config.get("num_layers", 2)
+            seq_len = model_config.get("seq_len", 30)
+
+            logger.info(f"📋 Model config: hidden_size={hidden_size}, num_layers={num_layers}, seq_len={seq_len}")
+
+            from app.ml_torch.models.lstm import LSTMUpliftModel
+            cls._model = LSTMUpliftModel(
+                numeric_features=numeric_features,
+                categorical_dims=categorical_dims,
+                embedding_dim=embedding_dim,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                seq_len=seq_len
+            )
+
+            checkpoint = torch.load(model_path, map_location='cpu')
+            if 'model_state_dict' in checkpoint:
+                cls._model.load_state_dict(checkpoint['model_state_dict'])
+            else:
+                cls._model.load_state_dict(checkpoint)
+
+            cls._model.eval()
+            cls._loaded_model_id = current_model_id
+            ML_RUNTIME_STATE["model_path"] = str(model_path)
+            ML_RUNTIME_STATE["model_type"] = "pytorch"
+
+            logger.info("✅ PyTorch model loaded successfully")
+
+        except Exception as e:
+            logger.error("Failed to load PyTorch model: %s", e, exc_info=True)
+            cls._model = None
+            cls._loaded_model_id = None
+
+        return cls._finalize_load(model_path, current_model_id, file_meta)
+
+
+
+    @classmethod
+    def _finalize_load(cls, model_path: Path, current_model_id, file_meta: dict = None) -> dict:
+        """Финальная обработка после загрузки модели"""
+
+        # Берём из runtime
+        feature_order = ML_RUNTIME_STATE.get("feature_order", [])
+        version = ML_RUNTIME_STATE.get("version")
+
+        if file_meta is None:
+            file_meta = {}
+
+        # загружаем метаданные из файла (если ещё не загружены)
+        if not file_meta:
+            meta_path = model_path.with_suffix('.meta.json')
+            if meta_path.exists():
+                try:
+                    with open(meta_path) as f:
+                        file_meta = json.load(f)
+                except Exception as e:
+                    logger.warning(f"Failed to load meta file: {e}")
+
+        if file_meta:
+            # Сохраняем conformal данные в runtime_state
+            if "conformal_q_hat" in file_meta:
+                ML_RUNTIME_STATE["conformal_q_hat"] = file_meta["conformal_q_hat"]
+                logger.info(f"✅ Loaded conformal_q_hat from meta: {file_meta['conformal_q_hat']}")
+
+            if "conformal" in file_meta:
+                ML_RUNTIME_STATE["conformal"] = file_meta["conformal"]
+                logger.info(f"✅ Loaded conformal data (alpha={file_meta['conformal'].get('alpha')})")
+
+            if not feature_order:
+                feature_order = file_meta.get("feature_order", [])
+            if not version:
+                version = file_meta.get("version")
+
+        # Определяем тип модели (используем обычную переменную, не type)
+        is_pytorch = model_path.suffix == '.pt'
+        model_type_str = "pytorch" if is_pytorch else "catboost"
+        algorithm_str = file_meta.get("algorithm", "catboost")
 
         # создаём метаданные
         cls._meta = {
@@ -204,17 +287,19 @@ class ModelLoader:
             "version": version,
             "ml_model_id": current_model_id,
             "model_path": str(model_path),
+            "model_type": model_type_str,
+            "algorithm": algorithm_str,
         }
 
         # Обновляем runtime
-        ML_RUNTIME_STATE["model_loaded"] = True
+        ML_RUNTIME_STATE["model_loaded"] = cls._model is not None
         if version:
             ML_RUNTIME_STATE["version"] = version
         if feature_order:
             ML_RUNTIME_STATE["feature_order"] = feature_order
             ML_RUNTIME_STATE["feature_count"] = len(feature_order)
 
-        logger.info(f"Model loaded: {current_model_id}, features count: {len(feature_order)}")
+        logger.info(f"Model loaded: {current_model_id}, type={model_type_str}, features count: {len(feature_order)}")
 
         return {"model": cls._model, "meta": cls._meta}
 

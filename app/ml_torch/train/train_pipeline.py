@@ -116,30 +116,31 @@ def train_lstm_pipeline(
             early_stopping_patience=10
         )
 
-        # ===== 7. СОХРАНЯЕМ МОДЕЛЬ =====
+        # ===== 7. СОХРАНЯЕМ МОДЕЛЬ С ПРАВИЛЬНЫМ ИМЕНЕМ =====
         candidate_dir = Path(settings.ML_CANDIDATE_DIR)
         candidate_dir.mkdir(parents=True, exist_ok=True)
 
-        # Генерируем ID модели (можно и из БД, но сначала сохраняем)
+        # Генерируем имя модели
         timestamp = int(datetime.now(timezone.utc).timestamp())
         model_filename = f"lstm_{sku}_{timestamp}.pt"
         model_path = candidate_dir / model_filename
 
+        # Сохраняем чекпоинт модели
         trainer.save_checkpoint(str(model_path))
 
-        # ===== 8. РЕГИСТРИРУЕМ В БД =====
+        # ===== 8. РЕГИСТРИРУЕМ В БД (ПОЛУЧАЕМ ID) =====
         registry = ModelRegistryService(db)
 
-        # Сохраняем конфигурацию эмбеддингов
-        embedding_config = dataset.get_embedding_dims()
+        # 🔥 ПРАВИЛЬНО: используем все фичи (числовые + категориальные)
+        all_features = numeric_features + categorical_features
 
         db_model = registry.register_model(
             name=f"lstm_uplift_{sku}",
             version=datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'),
             algorithm="pytorch_lstm_with_embeddings",
             model_type="time_series",
-            target="next_week_sales",
-            features=numeric_features + categorical_features,
+            target="quantity",  # или "next_week_sales"
+            features=all_features,  # ← список всех фич
             metrics={"val_loss": train_result["best_val_loss"]},
             model_path=model_path,
             trained_rows_count=len(dataset)
@@ -149,7 +150,7 @@ def train_lstm_pipeline(
         model_config = {
             "type": "lstm_with_embeddings",
             "numeric_features": len(numeric_features),
-            "categorical_dims": embedding_config,
+            "categorical_dims": dataset.get_embedding_dims(),
             "embedding_dim": embedding_dim,
             "hidden_size": hidden_size,
             "num_layers": num_layers,
@@ -159,7 +160,10 @@ def train_lstm_pipeline(
             "label_encoders": dataset.get_label_encoders_serializable()
         }
 
-        # ===== 8.2 СОХРАНЯЕМ meta.json =====
+        # ===== 8.2 СОХРАНЯЕМ meta.json С ТЕМ ЖЕ ИМЕНЕМ, ЧТО И МОДЕЛЬ! =====
+        meta_filename = model_path.with_suffix('.meta.json').name
+        meta_path = candidate_dir / meta_filename
+
         meta = {
             "model_id": db_model.id,
             "model_name": f"lstm_uplift_{sku}",
@@ -173,13 +177,15 @@ def train_lstm_pipeline(
             "categorical_features": categorical_features,
         }
 
-        meta_path = candidate_dir / f"{db_model.id}.meta.json"
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
 
-        # Обновляем путь в БД (если нужно переместить)
+        # Обновляем путь в БД
         db_model.model_path = str(model_path)
         db.commit()
+
+        logger.info(f"✅ Model saved: {model_path}")
+        logger.info(f"✅ Meta saved: {meta_path}")
 
         # ===== 9. ПРОМОУШН =====
         promoted = False
