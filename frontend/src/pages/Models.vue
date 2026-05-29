@@ -114,6 +114,7 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   getModels,
+  activateModel,
   deactivateModel,
   uploadModel,
   evaluateModel,
@@ -197,6 +198,7 @@ async function loadModels() {
     metrics: m.metrics
   }))
 }
+
 
 function goToModel(id: number) {
   selectedModelId.value = id
@@ -295,7 +297,7 @@ function openDeactivateModal(modelId: number) {
 }
 
 async function confirmActivate() {
-  await deactivateModel(Number(selectedModelForActivation.value))
+  await activateModel(Number(selectedModelForActivation.value))
   showActivateModal.value = false
   await loadModels()
   alert('✅ Model activated successfully!')

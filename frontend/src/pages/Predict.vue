@@ -15,6 +15,10 @@
         @click="inputMode = 'csv'">
         <i class="bi bi-file-earmark-spreadsheet me-1"></i> CSV Upload
       </button>
+      <button type="button" class="btn" :class="inputMode === 'lstm' ? 'btn-primary' : 'btn-outline-secondary'"
+        @click="inputMode = 'lstm'">
+        <i class="bi bi-cpu me-1"></i> LSTM Predict
+      </button>
     </div>
 
     <!-- ==================== РУЧНОЙ ВВОД ==================== -->
@@ -135,6 +139,8 @@
       </div>
     </div>
 
+    <LSTMPredictForm v-if="inputMode === 'lstm'" />
+
     <!-- ==================== Кнопка Run Prediction (для ручного режима) ==================== -->
     <div v-if="inputMode === 'manual'" class="d-flex justify-content-end mb-4">
       <button class="btn btn-primary btn-lg" @click="runManualPrediction"
@@ -231,6 +237,7 @@ import { ref, nextTick, computed } from 'vue'
 import { predictBatch } from '../services/api'
 import Chart from 'chart.js/auto'
 import ManualPredictForm from '../components/ManualPredictForm.vue'
+import LSTMPredictForm from '../components/LSTMPredictForm.vue'
 
 interface RowData {
   promo_id: string
@@ -267,7 +274,7 @@ interface PredictionResult {
 }
 
 // Режим ввода
-const inputMode = ref<'manual' | 'csv'>('manual')
+const inputMode = ref<'manual' | 'csv' | 'lstm'>('manual')
 
 // Ручной ввод
 const manualRows = ref<RowData[]>([])

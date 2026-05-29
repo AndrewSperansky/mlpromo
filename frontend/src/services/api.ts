@@ -366,3 +366,28 @@ export const deleteDataset = (datasetId: string, force: boolean = false) => {
 // Docker Containers Status
 // ============================
 export const getContainersStatus = () => api.get('/system/containers-status')
+
+
+
+// ============================
+// LSTM PREDICT
+// ============================
+
+export interface LSTMPredictRequest {
+  sku: string
+  days_ahead: number
+  store_id?: string
+}
+
+export interface LSTMPredictResponse {
+  sku: string
+  days_ahead: number
+  predictions: Array<{
+    date: string
+    predicted_sales: number
+  }>
+  model_id: number
+}
+
+export const predictLSTM = (data: LSTMPredictRequest) =>
+  api.post<LSTMPredictResponse>('/ml/torch/predict/lstm', data)
