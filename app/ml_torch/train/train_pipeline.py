@@ -7,12 +7,10 @@ LSTM training pipeline — обучение нейросети на времен
 import json
 import logging
 import torch
-import numpy as np
-import pandas as pd
+
 from pathlib import Path
 from datetime import datetime, timezone
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+
 from torch.utils.data import DataLoader, random_split
 
 from app.db.session import SessionLocal
@@ -120,14 +118,6 @@ def train_lstm_pipeline(
         candidate_dir = Path(settings.ML_CANDIDATE_DIR)
         candidate_dir.mkdir(parents=True, exist_ok=True)
 
-        # Генерируем имя модели
-        timestamp = int(datetime.now(timezone.utc).timestamp())
-        model_filename = f"lstm_{sku}_{timestamp}.pt"
-        model_path = candidate_dir / model_filename
-
-        # Сохраняем чекпоинт модели
-        trainer.save_checkpoint(str(model_path))
-
         # ===== 8. РЕГИСТРИРУЕМ В БД (ПОЛУЧАЕМ ID) =====
         registry = ModelRegistryService(db)
 
@@ -142,9 +132,16 @@ def train_lstm_pipeline(
             target="quantity",  # или "next_week_sales"
             features=all_features,  # ← список всех фич
             metrics={"val_loss": train_result["best_val_loss"]},
-            model_path=model_path,
             trained_rows_count=len(dataset)
         )
+
+
+        # Генерируем имя модели
+        # timestamp = int(datetime.now(timezone.utc).timestamp())
+        model_filename = f"{db_model.id}.pt"
+        model_path = candidate_dir / model_filename
+        trainer.save_checkpoint(str(model_path))
+
 
         # ===== 8.1 СОХРАНЯЕМ КОНФИГУРАЦИЮ МОДЕЛИ =====
         model_config = {
@@ -161,7 +158,7 @@ def train_lstm_pipeline(
         }
 
         # ===== 8.2 СОХРАНЯЕМ meta.json С ТЕМ ЖЕ ИМЕНЕМ, ЧТО И МОДЕЛЬ! =====
-        meta_filename = model_path.with_suffix('.meta.json').name
+        meta_filename = f"{db_model.id}.meta.json"
         meta_path = candidate_dir / meta_filename
 
         meta = {
@@ -213,5 +210,161 @@ def train_lstm_pipeline(
             "sku": sku,
             "error": str(e)
         }
+    finally:
+        db.close()
+
+
+
+
+def train_lstm_unified(
+        days: int = 365,
+        seq_len: int = 30,
+        hidden_size: int = 128,
+        num_layers: int = 3,
+        embedding_dim: int = 16,
+        learning_rate: float = 0.001,
+        batch_size: int = 32,
+        epochs: int = 50,
+        promote: bool = False
+) -> dict:
+    """
+    Обучает ЕДИНУЮ LSTM модель для ВСЕХ SKU.
+    """
+    logger.info(f"🚀 Запуск UNIFIED LSTM обучения для всех SKU")
+
+    db = SessionLocal()
+    try:
+        # ===== 1. СТРОИМ ФИЧИ ДЛЯ ВСЕХ SKU =====
+        feature_builder = FeatureBuilder(db)
+        df = feature_builder.build_features_for_all_skus(days)
+
+        if df.empty:
+            raise ValueError("Нет данных")
+
+        # ===== 2. ЦЕЛЕВАЯ ПЕРЕМЕННАЯ =====
+        df['target'] = df['quantity'].shift(-1)
+        df = df.dropna().reset_index(drop=True)
+
+        # ===== 3. КАТЕГОРИАЛЬНЫЕ ФИЧИ (с эмбеддингами) =====
+        categorical_features = [
+            "sku_code",  # ← теперь разных SKU много!
+            "store_code",
+            "category",
+            "day_type",
+            "region",
+            "oblast",
+        ]
+
+        numeric_features = [
+            "regular_price",
+            "average_cheque",
+            "sales_lag_1",
+            "sales_lag_2",
+            "sales_lag_3",
+            "avg_weekly_sales",
+        ]
+
+        # ===== 4. ДАТАСЕТ =====
+        dataset = UpliftTimeSeriesDataset(
+            df=df,
+            numeric_features=numeric_features,
+            categorical_features=categorical_features,
+            target_col='target',
+            seq_len=seq_len
+        )
+
+        # ===== 5. МОДЕЛЬ =====
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = LSTMUpliftModel(
+            numeric_features=len(numeric_features),
+            categorical_dims=dataset.get_embedding_dims(),
+            embedding_dim=embedding_dim,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            seq_len=seq_len
+        )
+
+        # ===== 6. ОБУЧЕНИЕ =====
+        train_size = int(0.8 * len(dataset))
+        val_size = len(dataset) - train_size
+        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        trainer = TorchTrainerWithEmbeddings(model, learning_rate, device)
+        train_result = trainer.train(train_loader, val_loader, epochs)
+
+        # ===== 7. СОХРАНЕНИЕ =====
+        candidate_dir = Path(settings.ML_CANDIDATE_DIR)
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+
+        registry = ModelRegistryService(db)
+
+        all_features = numeric_features + categorical_features
+
+        db_model = registry.register_model(
+            name="lstm_unified_all_skus",
+            version=datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S'),
+            algorithm="pytorch_lstm_with_embeddings",
+            model_type="time_series",
+            target="quantity",
+            features=all_features,
+            metrics={"val_loss": train_result["best_val_loss"]},
+            trained_rows_count=len(dataset)
+        )
+
+        # Сохраняем модель
+        model_path = candidate_dir / f"{db_model.id}.pt"
+        trainer.save_checkpoint(str(model_path))
+
+        # Сохраняем meta.json
+        model_config = {
+            "type": "lstm_with_embeddings",
+            "numeric_features": len(numeric_features),
+            "categorical_dims": dataset.get_embedding_dims(),
+            "embedding_dim": embedding_dim,
+            "hidden_size": hidden_size,
+            "num_layers": num_layers,
+            "seq_len": seq_len,
+            "label_encoders": dataset.get_label_encoders_serializable()
+        }
+
+        meta = {
+            "model_id": db_model.id,
+            "model_name": "lstm_unified_all_skus",
+            "algorithm": "pytorch_lstm_with_embeddings",
+            "model_config": model_config,
+            "metrics": {"val_loss": train_result["best_val_loss"]},
+            "trained_at": datetime.now(timezone.utc).isoformat(),
+            "total_rows": len(dataset),
+            "numeric_features": numeric_features,
+            "categorical_features": categorical_features,
+        }
+
+        meta_path = candidate_dir / f"{db_model.id}.meta.json"
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+
+        db_model.model_path = str(model_path)
+        db.commit()
+
+        # Промоушен
+        promoted = False
+        if promote:
+            registry.promote_model(db_model.id)
+            promoted = True
+
+        return {
+            "status": "success",
+            "model_id": db_model.id,
+            "val_loss": train_result["best_val_loss"],
+            "epochs_completed": train_result["epochs_completed"],
+            "promoted": promoted
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка обучения единой модели: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
     finally:
         db.close()

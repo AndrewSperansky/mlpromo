@@ -91,8 +91,11 @@ export interface ModelItem {
     version: string
     active: boolean
     created_at: string
+    algorithm?: string        // ← добавить
+    sku_code?: string         // ← добавить
     metrics?: {
         rmse?: number
+        val_loss?: number
         [key: string]: any
     }
 }

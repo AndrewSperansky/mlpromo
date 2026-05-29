@@ -2,12 +2,11 @@
 
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import List
 from app.core.settings import settings
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pathlib import Path
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.ml_torch.train.train_pipeline import train_lstm_pipeline
@@ -23,17 +22,13 @@ from app.auth.dependencies import get_current_user
 
 from app.schemas.torch_schema import (
     TrainLSTMRequest,
-    TrainLSTMResponse,
     PredictLSTMRequest,
     PredictLSTMResponse,
-    PriceHistoryResponse,
-    PriceHistoryItem,
     AverageChequePushRequest,
-    SalesFactPushRequest,
     ExchangeRatePushRequest,
     CalendarPushRequest,
     RetailPricePushRequest,
-    PurchasePricePushRequest,
+    TrainLSTMUnifiedRequest,
 )
 
 
@@ -62,7 +57,7 @@ def get_retail_price_history(
 @router.post("/train/lstm")
 def train_lstm(
         request: TrainLSTMRequest,
-        db: Session = Depends(get_db),
+        # db: Session = Depends(get_db),
         # current_user: User = Depends(get_current_user)
 ):
     """
@@ -80,7 +75,7 @@ def train_lstm(
             learning_rate=request.learning_rate,
             batch_size=request.batch_size,
             epochs=request.epochs,
-            promote=request.promote
+            promote=request.promote,
         )
         return result
     except ValueError as e:
@@ -89,9 +84,46 @@ def train_lstm(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# app/api/v1/ml_torch/router.py
+
+@router.post("/train/lstm/unified", summary="Обучение единой LSTM модели для всех SKU")
+async def train_lstm_unified(
+        request: TrainLSTMUnifiedRequest,
+        # db: Session = Depends(get_db),
+        # current_user: User = Depends(get_current_user)
+):
+    """
+    Обучает одну модель для прогнозирования продаж любых SKU.
+    Вход: исторические продажи всех SKU.
+    Выход: единая модель с эмбеддингами SKU.
+    """
+    from app.ml_torch.train.train_pipeline import train_lstm_unified
+
+    result = train_lstm_unified(
+        days=request.days,
+        seq_len=request.seq_len,
+        hidden_size=request.hidden_size,
+        num_layers=request.num_layers,
+        embedding_dim=request.embedding_dim,
+        learning_rate=request.learning_rate,
+        batch_size=request.batch_size,
+        epochs=request.epochs,
+        promote=request.promote
+    )
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+
+
 # ============================================================
 # ПРОГНОЗ
 # ============================================================
+
+# app/api/v1/ml_torch/router.py
 
 @router.post("/predict/lstm", response_model=PredictLSTMResponse)
 def predict_lstm(
@@ -100,17 +132,15 @@ def predict_lstm(
         # current_user: User = Depends(get_current_user)
 ):
     """
-    Прогнозирует цены с использованием активной LSTM модели.
+    Прогнозирует продажи с использованием активной LSTM модели.
 
     Для работы требуется:
-    1. Активная LSTM модель в реестре (algorithm='pytorch_lstm')
-    2. История цен SKU в таблице retail_price_history
+    1. Активная LSTM модель в реестре (algorithm='pytorch_lstm' или 'pytorch_lstm_with_embeddings')
+    2. История продаж SKU в таблице sales_fact
     """
-    # Находим активную LSTM модель
+    # ===== 1. НАХОДИМ АКТИВНУЮ LSTM МОДЕЛЬ =====
     registry = ModelRegistryService(db)
 
-    # Ищем активную модель с нужным алгоритмом
-    # TODO: добавить фильтр по algorithm в registry
     active_models = registry.list_models()
     lstm_model = None
     for m in active_models:
@@ -124,24 +154,17 @@ def predict_lstm(
             detail="Нет активной LSTM модели. Сначала обучите и активируйте модель."
         )
 
-    # Загружаем модель
-    predictor = TorchPredictor(db)
-
-    # Загружаем конфигурацию из meta.json
-
+    # ===== 2. ЗАГРУЖАЕМ КОНФИГУРАЦИЮ ИЗ META.JSON =====
     meta_path = Path(lstm_model.model_path).with_suffix('.meta.json')
     if not meta_path.exists():
-        # Ищем в candidate, если в current нет
         candidate_dir = Path(settings.ML_CANDIDATE_DIR)
         meta_path = candidate_dir / f"{lstm_model.id}.meta.json"
 
     if meta_path.exists():
         with open(meta_path) as f:
             meta = json.load(f)
-            # 🔥 БЕРЁМ КОНФИГ НАПРЯМУЮ ИЗ META
             model_config = meta.get("model_config", {})
 
-            # Убеждаемся, что все поля есть
             if "categorical_dims" not in model_config:
                 model_config["categorical_dims"] = {}
             if "numeric_features" not in model_config:
@@ -158,20 +181,31 @@ def predict_lstm(
             "seq_len": 30
         }
 
-    # Загружаем модель
+    # ===== 3. ЗАГРУЖАЕМ МОДЕЛЬ =====
     predictor = TorchPredictor(db)
     predictor.load_model(Path(lstm_model.model_path), model_config)
 
-    # Делаем прогноз
-    try:
-        predictions = predictor.predict_prices_forecast(
-            sku=request.sku,
-            forecast_days=request.days_ahead,
-            seq_len=model_config.get("seq_len", 30)
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    # ===== 4. ДЕЛАЕМ ПРОГНОЗ =====
+    from datetime import date, timedelta
 
+    predictions = []
+    for i in range(request.days_ahead):
+        forecast_date = date.today() + timedelta(days=i)
+
+        try:
+            result = predictor.predict_for_day(
+                sku=request.sku,
+                date=forecast_date,
+                store_id=request.store_id if hasattr(request, 'store_id') else None
+            )
+            predictions.append({
+                "date": forecast_date.isoformat(),
+                "predicted_sales": result["predicted_quantity"]
+            })
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # ===== 5. ВОЗВРАЩАЕМ ОТВЕТ =====
     return PredictLSTMResponse(
         sku=request.sku,
         days_ahead=request.days_ahead,
@@ -187,7 +221,7 @@ async def sync_average_cheque(
         start_date: str,
         end_date: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        # current_user: User = Depends(get_current_user)
 ):
     """
     Синхронизирует данные о среднем чеке из 1С.

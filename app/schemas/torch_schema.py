@@ -66,7 +66,7 @@ class PredictLSTMRequest(BaseModel):
     """
     sku: str = Field(..., description="SKU товара")
     days_ahead: int = Field(1, ge=1, le=30, description="На сколько дней вперёд прогноз")
-
+    store_id: Optional[str] = Field(None, description="ID магазина (опционально)")
 
 
 
@@ -99,6 +99,20 @@ class TrainLSTMResponse(BaseModel):
     message: Optional[str] = Field(None, description="Дополнительное сообщение")
 
 
+
+class TrainLSTMUnifiedRequest(BaseModel):
+    """Запрос на обучение единой LSTM модели для всех SKU"""
+    days: int = Field(365, ge=30, le=730, description="Сколько дней истории")
+    seq_len: int = Field(30, ge=7, le=90, description="Длина окна")
+    hidden_size: int = Field(128, ge=16, le=256, description="Размер скрытого состояния")
+    num_layers: int = Field(3, ge=1, le=4, description="Количество слоёв")
+    embedding_dim: int = Field(16, ge=4, le=64, description="Размер эмбеддинга")
+    learning_rate: float = Field(0.001, gt=0, le=0.1, description="Скорость обучения")
+    batch_size: int = Field(64, ge=8, le=256, description="Размер батча")
+    epochs: int = Field(30, ge=5, le=100, description="Количество эпох")
+    promote: bool = Field(False, description="Активировать после обучения")
+
+
 # ============================================
 # Средний чек
 # ============================================
@@ -110,7 +124,7 @@ class AverageChequeRecord(BaseModel):
     cheque_count: int
     total_amount: float
     average_amount: float
-    is_total: int  # 0 или 1
+    week: int
 
 class AverageChequePushRequest(BaseModel):
     """Формат данных, который 1С отправляет в Promo-ML"""

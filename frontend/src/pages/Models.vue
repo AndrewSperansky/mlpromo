@@ -1,11 +1,40 @@
-<!-- frontend/src/pages/Models.vue -->
-
 <template>
   <div>
     <div class="mb-4">
       <h2>Model Registry</h2>
 
       <div class="d-flex mt-4 gap-2 align-items-center">
+        <!-- ===== ВКЛАДКИ ===== -->
+        <div class="btn-group me-auto" role="group">
+          <button 
+            type="button" 
+            class="btn" 
+            :class="activeTab === 'catboost' ? 'btn-primary' : 'btn-outline-secondary'"
+            @click="activeTab = 'catboost'; loadModels()"
+          >
+            <i class="bi bi-tree-fill me-1"></i>
+            CatBoost
+          </button>
+          <button 
+            type="button" 
+            class="btn" 
+            :class="activeTab === 'pytorch' ? 'btn-primary' : 'btn-outline-secondary'"
+            @click="activeTab = 'pytorch'; loadModels()"
+          >
+            <i class="bi bi-cpu me-1"></i>
+            PyTorch LSTM
+          </button>
+          <button 
+            type="button" 
+            class="btn" 
+            :class="activeTab === 'all' ? 'btn-primary' : 'btn-outline-secondary'"
+            @click="activeTab = 'all'; loadModels()"
+          >
+            <i class="bi bi-diagram-3 me-1"></i>
+            All Models
+          </button>
+        </div>
+
         <button class="btn btn-primary" :disabled="training" @click="handleTrain">
           {{ training ? 'Training...' : 'Train Model' }}
         </button>
@@ -31,14 +60,13 @@
     <NewDataAlert v-if="showNewDataAlert" :newRowsCount="newRowsCount" :message="newDataMessage"
       @close="showNewDataAlert = false" />
 
-    <!-- Результат обучения  Training Bunner-->
+    <!-- Результат обучения -->
     <NotificationBanner v-if="trainingResultMessage" :type="trainingResultType" :title="trainingResultTitle"
       :message="trainingResultMessage" :details="trainingResultDetails" @close="trainingResultMessage = null" />
 
     <!-- График сравнения моделей -->
     <ModelCompareChart v-if="trainingResultMessage && trainingResultComparison"
       :comparison="trainingResultComparisonData" />
-
 
     <!-- Uploaded Model Metrics -->
     <div v-if="uploadResult" class="alert alert-info alert-dismissible fade show" role="alert">
@@ -47,14 +75,24 @@
       <button type="button" class="btn-close" @click="uploadResult = null" aria-label="Close"></button>
     </div>
 
-    <ModelTable class="mt-4" :models="models" @activate="openActivateModal" @deactivate="openDeactivateModal"
-      @rollback="handleRollback" @evaluate="handleEvaluate" @row-click="goToModel" @delete="openDeleteModal" />
+    <!-- ===== ТАБЛИЦА МОДЕЛЕЙ (с фильтром по активной вкладке) ===== -->
+    <ModelTable 
+      class="mt-4" 
+      :models="filteredModels" 
+      :activeTab="activeTab"
+      @activate="openActivateModal" 
+      @deactivate="openDeactivateModal"
+      @rollback="handleRollback" 
+      @evaluate="handleEvaluate" 
+      @row-click="goToModel" 
+      @delete="openDeleteModal" 
+    />
 
     <button class="btn btn-sm btn-outline-info" @click="showHistoryModal = true">
       Show Activation History
     </button>
 
-    <!-- Остальные модальные окна... -->
+    <!-- Модальные окна -->
     <ActivateModal :show="showActivateModal" :modelId="selectedModelForActivation" @close="showActivateModal = false"
       @confirm="confirmActivate" />
 
@@ -66,14 +104,14 @@
 
     <ModelDetailsModal :modelId="selectedModelId" @closed="selectedModelId = null" />
 
-    <CompareModelsModal :show="showCompareModal" :models="models" @close="showCompareModal = false" />
+    <CompareModelsModal :show="showCompareModal" :models="allModels" @close="showCompareModal = false" />
 
     <ActivationHistoryModal :show="showHistoryModal" @close="showHistoryModal = false" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   getModels,
   deactivateModel,
@@ -96,7 +134,7 @@ import NotificationBanner from '../components/NotificationBanner.vue'
 import NewDataAlert from '../components/NewDataAlert.vue'
 import ModelCompareChart from '../components/ModelCompareChart.vue'
 
-const models = ref<ModelItem[]>([])
+const activeTab = ref<'catboost' | 'pytorch' | 'all'>('all')
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const uploading = ref(false)
@@ -126,17 +164,37 @@ const selectedModelForDeactivation = ref<string>('')
 const modelToDelete = ref<number | null>(null)
 
 const trainingResultComparison = ref(false)
-const trainingResultComparisonData = ref<any>(null)  
+const trainingResultComparisonData = ref<any>(null)
 
+// ===== ВСЕ МОДЕЛИ (без фильтра) =====
+const allModels = ref<ModelItem[]>([])
 
+// ===== ОТФИЛЬТРОВАННЫЕ МОДЕЛИ ПО АКТИВНОЙ ВКЛАДКЕ =====
+const filteredModels = computed(() => {
+  if (activeTab.value === 'catboost') {
+    return allModels.value.filter(m => 
+      m.algorithm === 'catboost' || !m.algorithm?.startsWith('pytorch')
+    )
+  }
+  if (activeTab.value === 'pytorch') {
+    return allModels.value.filter(m => 
+      m.algorithm?.startsWith('pytorch_lstm') || m.algorithm === 'pytorch_lstm_with_embeddings'
+    )
+  }
+  return allModels.value
+})
 
 async function loadModels() {
   const response = await getModels()
-  models.value = response.data.map((m: any) => ({
+  // Сохраняем все модели
+  allModels.value = response.data.map((m: any) => ({
     ml_model_id: m.id,
     version: m.version,
     active: m.is_active,
-    created_at: m.trained_at || m.created_at
+    created_at: m.trained_at || m.created_at,
+    algorithm: m.algorithm || 'catboost',
+    sku_code: m.sku_code, 
+    metrics: m.metrics
   }))
 }
 
@@ -157,9 +215,6 @@ async function checkNewData() {
       trainingResultTitle.value = 'No New Data'
       trainingResultMessage.value = 'Dataset is up to date. No retraining needed.'
       trainingResultDetails.value = ''
-      /* setTimeout(() => {
-        trainingResultMessage.value = null
-      }, 120000) */
     }
   } catch (error) {
     console.error('Check new data failed:', error)
@@ -168,8 +223,6 @@ async function checkNewData() {
   }
 }
 
-
-/// СРАВНЕНИЕ МОДЕЛЕЙ И РЕНДЕРИНГ БАННЕРА ПОСЛЕ ОБУЧЕНИЯ + График сравнения
 async function handleTrain() {
   training.value = true
 
@@ -177,17 +230,14 @@ async function handleTrain() {
     const response = await trainModel({ promote: false })
     uploadResult.value = response.data
 
-    // Получаем comparison из ответа
     const comparison = response.data.comparison
     console.log('🔍 COMPARISON DATA:', JSON.stringify(comparison, null, 2))
 
     if (comparison) {
       trainingResultComparisonData.value = comparison
       trainingResultComparison.value = true
-      console.log('📊 Comparison data saved for chart:', comparison)
     }
 
-    // Получаем model_id из ответа
     const newModelId = response.data.model_id
 
     if (comparison && newModelId) {
@@ -197,28 +247,24 @@ async function handleTrain() {
       const improvement = comparison.improvement_percent ?? 0
 
       if (isBetter) {
-        // Метрики улучшились — активируем автоматически
         await api.post(`/ml/models/${newModelId}/activate`)
         trainingResultType.value = 'success'
         trainingResultTitle.value = '✅ Model Auto-Activated'
         trainingResultMessage.value = `New model (ID: ${newModelId}) activated automatically.`
         trainingResultDetails.value = `RMSE: ${rmseOld?.toFixed(6) || '?'} → ${rmseNew?.toFixed(6) || '?'} (improved by ${Math.abs(improvement).toFixed(1)}%)`
       } else {
-        // Метрики хуже — не активируем
         trainingResultType.value = 'warning'
         trainingResultTitle.value = '⚠️ Model Trained but Not Activated'
         trainingResultMessage.value = `New model (ID: ${newModelId}) has worse metrics.`
         trainingResultDetails.value = `RMSE: ${rmseOld?.toFixed(6) || '?'} → ${rmseNew?.toFixed(6) || '?'} (worsened by ${Math.abs(improvement).toFixed(1)}%)`
       }
-    } else if (!models.value.find(m => m.active) && newModelId) {
-      // Первая модель — активируем
+    } else if (!allModels.value.find(m => m.active) && newModelId) {
       await api.post(`/ml/models/${newModelId}/activate`)
       trainingResultType.value = 'success'
       trainingResultTitle.value = '✅ First Model Activated'
       trainingResultMessage.value = `Model (ID: ${newModelId}) activated as first model.`
       trainingResultDetails.value = `RMSE: ${response.data.metrics?.rmse?.toFixed(6) || 'N/A'}`
     } else {
-      // Нет comparison — просто показываем результат
       trainingResultType.value = 'info'
       trainingResultTitle.value = 'ℹ️ Model Trained'
       trainingResultMessage.value = `New model (ID: ${newModelId}) created.`

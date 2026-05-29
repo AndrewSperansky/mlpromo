@@ -5,29 +5,40 @@
     <thead class="table-dark">
       <tr>
         <th>Model ID</th>
+        <th>Algorithm</th>
         <th>Version</th>
         <th>Status</th>
+        <th>Metric</th>
         <th>Created At</th>
         <th>Actions</th>
       </tr>
     </thead>
-
     <tbody>
       <tr v-for="model in models" :key="model.ml_model_id" @click="$emit('row-click', model.ml_model_id)"
         style="cursor: pointer;">
         <td>{{ model.ml_model_id }}</td>
+        <td>
+          <span :class="getAlgorithmBadgeClass(model.algorithm)">
+            {{ getAlgorithmLabel(model.algorithm) }}
+          </span>
+        </td>
         <td>{{ model.version }}</td>
         <td>
           <span class="badge" :class="model.active ? 'bg-success' : 'bg-secondary'">
             {{ model.active ? 'Active' : 'Inactive' }}
           </span>
         </td>
-        <td>{{ formatDate(model.created_at) }}</td>
-
         <td @click.stop>
-          <!-- STOP PROPAGATION чтобы клик по кнопке не вызывал row-click -->
-          
-          <!-- 🔥 Activate — только для неактивных моделей -->
+          <span v-if="model.algorithm === 'catboost'">
+            RMSE: {{ model.metrics?.rmse?.toFixed(4) || '—' }}
+          </span>
+          <span v-else-if="model.algorithm && model.algorithm.startsWith('pytorch')">
+            Val Loss: {{ model.metrics?.val_loss?.toFixed(2) || '—' }}
+          </span>
+          <span v-else>—</span>
+        </td>
+        <td>{{ formatDate(model.created_at) }}</td>
+        <td @click.stop>
           <button 
             v-if="!model.active"
             class="btn btn-sm btn-outline-primary me-2" 
@@ -36,7 +47,6 @@
             Activate
           </button>
           
-          <!-- 🔥 Deactivate — только для активных моделей -->
           <button 
             v-if="model.active"
             class="btn btn-sm btn-outline-warning me-2" 
@@ -53,12 +63,11 @@
             Rollback
           </button>
 
-          <!-- Кнопка DELETE -->
           <button class="btn btn-sm btn-outline-danger" @click="$emit('delete', model.ml_model_id)">
             Delete
           </button>
         </td>
-      </tr>
+       </tr>
     </tbody>
   </table>
 </template>
@@ -69,6 +78,12 @@ export interface ModelItem {
   version: string
   active: boolean
   created_at: string
+  algorithm?: string
+  metrics?: {
+    rmse?: number
+    val_loss?: number
+    [key: string]: any
+  }
 }
 
 defineProps<{
@@ -77,25 +92,18 @@ defineProps<{
 
 defineEmits<{
   (e: 'activate', id: number): void
-  (e: 'deactivate', id: number): void  // 🔥 новое событие
+  (e: 'deactivate', id: number): void
   (e: 'rollback', id: number): void
   (e: 'evaluate', id: number): void
   (e: 'row-click', id: number): void
   (e: 'delete', id: number): void
 }>()
 
-// Форматирование даты
 function formatDate(dateStr: string) {
   if (!dateStr) return '-'
-
   try {
     const date = new Date(dateStr)
-
-    if (isNaN(date.getTime())) {
-      console.warn('Invalid date format:', dateStr)
-      return '-'
-    }
-
+    if (isNaN(date.getTime())) return '-'
     return date.toLocaleString('ru-RU', {
       year: 'numeric',
       month: '2-digit',
@@ -104,8 +112,21 @@ function formatDate(dateStr: string) {
       minute: '2-digit'
     })
   } catch (e) {
-    console.error('Error parsing date:', dateStr, e)
     return '-'
   }
+}
+
+function getAlgorithmBadgeClass(algorithm: string | undefined): string {
+  if (algorithm && algorithm.startsWith('pytorch')) {
+    return 'badge bg-info text-dark'
+  }
+  return 'badge bg-secondary'
+}
+
+function getAlgorithmLabel(algorithm: string | undefined): string {
+  if (algorithm === 'catboost') return 'CatBoost'
+  if (algorithm === 'pytorch_lstm') return 'LSTM'
+  if (algorithm === 'pytorch_lstm_with_embeddings') return 'LSTM (Embs)'
+  return algorithm || 'CatBoost'
 }
 </script>
