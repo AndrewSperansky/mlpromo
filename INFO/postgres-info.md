@@ -495,7 +495,7 @@ FOREIGN KEY (model_id) REFERENCES ml_model(id);
 
 
 ## Выгрузка только схемы БД
-docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-owner --no-privileges > app/db/schema.sql
+`docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-owner --no-privileges > backup/schema_v1.5_$(date +%Y%m%d).sql`
 
 
 ## Создание Backup.dump  
