@@ -550,6 +550,8 @@ cd /srv/promo-ml
 
 ### Скачать изменения с Git
 git  pull
+docker pull asperansky/promo-ml:v1.2
+
 ### Скачать новые образы
 docker compose -f docker-compose.prod.yml pull
 ### или
