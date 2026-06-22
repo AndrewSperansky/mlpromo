@@ -110,6 +110,7 @@ class DatasetStreamingService:
 
                             # Сохраняем в industrial_dataset_raw
                             db_record = IndustrialDatasetRaw(
+                                batch_id=batch_id,
                                 promo_id=record.promo_id,
                                 week=record.week,
                                 month=record.month,
