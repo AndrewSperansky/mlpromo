@@ -537,3 +537,16 @@ password = b'your_password_here'
 hashed = bcrypt.hashpw(password, bcrypt.gensalt())
 print(hashed.decode())
 "
+
+
+📝 Удаление датасетов в postgres
+
+docker exec -it promo_postgres psql -U postgres -d promo
+
+DELETE FROM industrial_dataset_raw;
+
+ALTER SEQUENCE industrial_dataset_raw_id_seq RESTART WITH 1;
+
+DELETE FROM dataset_upload_history;
+
+ALTER SEQUENCE dataset_upload_history_id_seq RESTART WITH 1;
