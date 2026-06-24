@@ -514,13 +514,13 @@ docker push asperansky/promo-ml-front:v1.2
 ### 8. Проверка на Docker Hub
 
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:stage5 | grep Id 
+docker inspect asperansky/promo-ml:v1.2 | grep Id 
 ### Production
 docker images asperansky/promo-ml
 docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
 ### Frontend
 docker images asperansky/promo-ml-front
-docker inspect asperansky/promo-ml-front:stage5
+docker inspect asperansky/promo-ml-front:v1.2
 
 
 

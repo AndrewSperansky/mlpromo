@@ -7,6 +7,7 @@ import time
 from typing import AsyncGenerator, List
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 
@@ -51,6 +52,7 @@ class DatasetStreamingService:
         # ===== ДИАГНОСТИЧЕСКИЕ СЧЁТЧИКИ =====
         records_received = 0
         records_saved = 0
+        records_in_current_chunk = 0
         line_number = 0
         total_expected = 0
         error_msg = None
@@ -88,7 +90,9 @@ class DatasetStreamingService:
                     payload = data.get("data", {})
 
                     if operation == "batch_start":
+                        logger.info(f"RAW BATCH_START: {data}")
                         # 🔥 ИСПОЛЬЗУЕМ BATCH_ID ИЗ 1С (ЕСЛИ ЕСТЬ)
+                        records_in_current_chunk = 0
                         client_batch_id = data.get("batch_id")
                         if client_batch_id:
                             batch_id = client_batch_id  # fallback
@@ -96,6 +100,11 @@ class DatasetStreamingService:
                         total_expected = data.get("total_count", 0)
                         logger.info(f"📌 BATCH_START line={line_number}, batch_id={batch_id}, promo_id={promo_id}")
                         logger.info(f"📌 EXPECTED RECORDS={total_expected}")
+                        logger.info(
+                            f"RECEIVED batch_id={batch_id}, "
+                            f"chunk={data.get('chunk')}, "
+                            f"total_chunks={data.get('total_chunks')}"
+                        )
                         continue
 
                     if operation == "record":
@@ -165,6 +174,7 @@ class DatasetStreamingService:
 
                             db.add(db_record)
                             records_saved += 1
+                            records_in_current_chunk += 1
 
                             # Commit каждые 1000 записей
                             if records_saved % 1000 == 0:
@@ -205,6 +215,7 @@ class DatasetStreamingService:
             logger.info(f"📊 EXPECTED={total_expected}")
             logger.info(f"📊 RECORDS_RECEIVED={records_received}")
             logger.info(f"📊 RECORDS_SAVED={records_saved}")
+            logger.info(f"📊 records_in_current_chunk={records_in_current_chunk}")
 
             # =========================================================
             # CHECK RETRAIN NEED
@@ -238,8 +249,28 @@ class DatasetStreamingService:
 
             duration_ms = int((time.time() - start_time) * 1000)
 
-            # Сохраняем историю загрузки
-            upload_history = DatasetUploadHistory(
+            #  ======== INSERT: Сохраняем историю загрузки ДОБАВЛЯЕМ НОВУЮ ========
+            # upload_history = DatasetUploadHistory(
+            #     batch_id=batch_id,
+            #     promo_id=promo_id,
+            #     uploaded_at=datetime.now(),
+            #     records_added=records_saved,
+            #     total_records_after=total_after,
+            #     status=status,
+            #     error_message=error_msg,
+            #     duration_ms=duration_ms
+            # )
+            # db.add(upload_history)
+            # db.commit()
+
+            # ===== ДИАГНОСТИКА =====
+            logger.info(f"📊 records_saved (total) = {records_saved}")
+            logger.info(f"📊 records_in_current_chunk = {records_in_current_chunk}")
+            logger.info(f"UPSERT batch_id={batch_id}, records_saved={records_saved}")
+
+
+            # ===== UPSERT: СУММИРУЕМ records_added и duration_ms с защитой от NULL =====
+            stmt = insert(DatasetUploadHistory).values(
                 batch_id=batch_id,
                 promo_id=promo_id,
                 uploaded_at=datetime.now(),
@@ -249,8 +280,29 @@ class DatasetStreamingService:
                 error_message=error_msg,
                 duration_ms=duration_ms
             )
-            db.add(upload_history)
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_dataset_upload_history_batch",
+                set_={
+                    # 🔥 СУММИРУЕМ records_added
+                    "records_added": DatasetUploadHistory.records_added + stmt.excluded.records_added,
+
+                    # 🔥 СУММИРУЕМ duration_ms с защитой от NULL
+                    "duration_ms": func.coalesce(DatasetUploadHistory.duration_ms, 0) + func.coalesce(
+                        stmt.excluded.duration_ms, 0),
+
+                    # Остальные поля — просто обновляем
+                    "total_records_after": stmt.excluded.total_records_after,
+                    "status": stmt.excluded.status,
+                    "error_message": stmt.excluded.error_message,
+                    "uploaded_at": stmt.excluded.uploaded_at,
+                    "promo_id": stmt.excluded.promo_id
+                }
+            )
+
+            db.execute(stmt)
             db.commit()
+            logger.info(f"📝 UPSERT history: batch_id={batch_id}, records_added={records_saved}")
 
 
             logger.info(f"📊 RECORDS_RECEIVED={records_received}")
@@ -274,8 +326,24 @@ class DatasetStreamingService:
             duration_ms = int((time.time() - start_time) * 1000)
             total_after = db.query(IndustrialDatasetRaw).count()
 
-            upload_history = DatasetUploadHistory(
+            # ===== INSERT ДЛЯ ОШИБКИ =====
+            # upload_history = DatasetUploadHistory(
+            #     batch_id=batch_id,
+            #     uploaded_at=datetime.now(),
+            #     records_added=records_saved,
+            #     total_records_after=total_after,
+            #     status="error",
+            #     error_message=str(e),
+            #     duration_ms=duration_ms
+            # )
+            # db.add(upload_history)
+            # db.commit()
+
+
+            # ===== UPSERT ДЛЯ ОШИБКИ =====
+            stmt = insert(DatasetUploadHistory).values(
                 batch_id=batch_id,
+                promo_id=promo_id,
                 uploaded_at=datetime.now(),
                 records_added=records_saved,
                 total_records_after=total_after,
@@ -283,8 +351,24 @@ class DatasetStreamingService:
                 error_message=str(e),
                 duration_ms=duration_ms
             )
-            db.add(upload_history)
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="dataset_upload_history_pkey",
+                set_={
+                    "records_added": stmt.excluded.records_added,
+                    "total_records_after": stmt.excluded.total_records_after,
+                    "status": stmt.excluded.status,
+                    "error_message": stmt.excluded.error_message,
+                    "duration_ms": stmt.excluded.duration_ms,
+                    "uploaded_at": stmt.excluded.uploaded_at
+                }
+            )
+
+            db.execute(stmt)
             db.commit()
+            logger.info(f"📝 UPSERT error history: batch_id={batch_id}, records_added={records_saved}")
+
+
 
             logger.info(f"📊 RECORDS_RECEIVED={records_received}")
             logger.info(f"📊 RECORDS_SAVED={records_saved}")
