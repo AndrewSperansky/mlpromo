@@ -488,9 +488,14 @@ docker images | grep promo-ml
 🔹 Важно:  
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
+
+
+
 ### 6. Собрать образ Backend
 docker build -t asperansky/promo-ml:v1.2  .  
 docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . 
+
+
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
@@ -514,13 +519,13 @@ docker push asperansky/promo-ml-front:v1.2
 ### 8. Проверка на Docker Hub
 
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:stage5 | grep Id 
+docker inspect asperansky/promo-ml:v1.2 | grep Id 
 ### Production
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
+docker inspect asperansky/promo-ml:v1.2 --format='{{.Id}}'
 ### Frontend
 docker images asperansky/promo-ml-front
-docker inspect asperansky/promo-ml-front:stage5
+docker inspect asperansky/promo-ml-front:v1.2
 
 
 
@@ -576,3 +581,9 @@ docker rm ca6849b6960b
 docker rmi 9c7bf4362851
 #### принудительно
 docker rmi -f 9c7bf4362851
+
+
+
+### Проверить куда монтируются папки
+docker inspect promo_ml_backend
+docker inspect promo_promtail

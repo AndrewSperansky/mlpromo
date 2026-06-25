@@ -11,6 +11,7 @@ class DatasetUploadHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     batch_id = Column(UUID(as_uuid=True), nullable=False)
+    promo_id = Column(Text, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.now)
     records_added = Column(Integer, nullable=False)
     total_records_after = Column(Integer, nullable=False)

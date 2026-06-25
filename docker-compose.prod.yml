@@ -6,7 +6,7 @@ services:
 
   backend:
     container_name: promo_ml_backend
-    image: asperansky/promo-ml:v1.2
+    image: asperansky/promo-ml:v1.5
     restart: unless-stopped
 
 

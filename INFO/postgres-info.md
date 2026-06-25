@@ -495,23 +495,18 @@ FOREIGN KEY (model_id) REFERENCES ml_model(id);
 
 
 ## Выгрузка только схемы БД
-`docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-owner --no-privileges > backup/schema_v1.5_$(date +%Y%m%d).sql`
+docker exec -t promo_postgres pg_dump -U postgres -d promo --schema-only --no-owner --no-privileges > app/db/schema.sql
 
 
 ## Создание Backup.dump  
 `docker exec -t promo_postgres pg_dump -U postgres -Fc promo > backup/promo_backup_$(date +%Y%m%d_%H%M).dump`
 
 ## Создание Backup.sql  
-`docker exec -t promo_postgres pg_dump -U postgres promo > backup/schema_v1.5_$(date +%Y%m%d_%H%M).sql`
+`docker exec -t promo_postgres pg_dump -U postgres promo > backup/promo_backup_v1.2_$(date +%Y%m%d_%H%M).sql`
 
 
 ## Восстановление < Backup.dump
 docker exec -i promo_postgres pg_restore -U postgres -d promo < dump/promo_backup.dump
-
-### Восстановление < schema.sql
-
-docker cp ./backup/schema_v1.2.sql promo_postgres:/tmp/schema.sql
-docker exec -it promo_postgres psql -U postgres -d promo -f /tmp/schema.sql
 
 
 ## Создание юзера с ролью 'admin' и паролем 'admin123' 
@@ -542,3 +537,16 @@ password = b'your_password_here'
 hashed = bcrypt.hashpw(password, bcrypt.gensalt())
 print(hashed.decode())
 "
+
+
+📝 Удаление датасетов в postgres
+
+docker exec -it promo_postgres psql -U postgres -d promo
+
+DELETE FROM industrial_dataset_raw;
+
+ALTER SEQUENCE industrial_dataset_raw_id_seq RESTART WITH 1;
+
+DELETE FROM dataset_upload_history;
+
+ALTER SEQUENCE dataset_upload_history_id_seq RESTART WITH 1;

@@ -4,10 +4,12 @@ import json
 import logging
 import uuid
 import time
-from typing import AsyncGenerator, Dict, List
+from typing import AsyncGenerator, List
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
 
 from app.models.industrial_dataset import IndustrialDatasetRaw
 from app.models.dataset_upload_history import DatasetUploadHistory
@@ -23,37 +25,42 @@ logger = logging.getLogger("promo_ml")
 class DatasetStreamingService:
     """
     Service for processing streaming dataset from 1C
-    Replaces CSV file upload with JSON stream
+
     """
 
     def __init__(self, ml_service: MLPredictionService):
         self.ml_service = ml_service
-        self.active_batches: Dict[str, dict] = {}
+        self.active_batches: dict = {}
         logger.info("✅ DatasetStreamingService initialized")
 
     async def process_stream(
-        self,
-        stream_generator: AsyncGenerator[bytes, None],
-        db: Session,
-        current_user=None
+            self,
+            stream_generator: AsyncGenerator[bytes, None],
+            db: Session,
+            current_user=None
     ) -> dict:
         """
-        Process streaming NDJSON data
-        Saves all records to industrial_dataset_raw (single dataset)
-        Tracks upload history
+        Process streaming NDJSON data with full diagnostics
         """
         logger.info("🚀 process_stream STARTED")
 
+        # ===== АВАРИЙНЫЙ BATCH_ID (вдруг ошибка до batch_start) =====
         batch_id = str(uuid.uuid4())
-        records: List[DatasetRecord] = []
+        promo_id = ""
         start_time = time.time()
+
+        # ===== ДИАГНОСТИЧЕСКИЕ СЧЁТЧИКИ =====
+        records_received = 0
         records_saved = 0
+        records_in_current_chunk = 0
+        line_number = 0
+        total_expected = 0
         error_msg = None
         status = "success"
 
         logger.info(f"📦 Created batch_id: {batch_id}")
 
-        buffer = ""
+        buffer = b""
 
         try:
             # Получаем текущее количество строк ДО загрузки
@@ -61,35 +68,71 @@ class DatasetStreamingService:
             logger.info(f"📊 Total records before upload: {total_before}")
 
             async for chunk in stream_generator:
-                buffer += chunk.decode('utf-8')
+                buffer += chunk  # ← байты, не строка!
+                """buffer += chunk.decode("utf-8")"""
 
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
+                while b"\n" in buffer:
+                    line_bytes, buffer = buffer.split(b"\n", 1)
+                    line_number += 1
+                    line = line_bytes.decode("utf-8").strip()
 
                     if not line:
                         continue
 
-                    logger.info(f"📨 NDJSON LINE: {line[:200]}")
+                    try:
+                        data = json.loads(line)
+                    except Exception as e:
+                        logger.error(f"❌ JSON ERROR line={line_number}: {e}")
+                        logger.error(f"❌ BAD LINE: {line[:1000]}")
+                        continue
 
-                    data = json.loads(line)
                     operation = data.get("operation")
                     payload = data.get("data", {})
 
-                    logger.info(f"Received: {operation}")
-
                     if operation == "batch_start":
-                        total_expected = data.get("total_count")
-                        logger.info(f"🎬 BATCH START: total_count={total_expected}")
+                        logger.info(f"RAW BATCH_START: {data}")
+                        # 🔥 ИСПОЛЬЗУЕМ BATCH_ID ИЗ 1С (ЕСЛИ ЕСТЬ)
+                        records_in_current_chunk = 0
+                        client_batch_id = data.get("batch_id")
+                        if client_batch_id:
+                            batch_id = client_batch_id  # fallback
+                        promo_id = data.get("promo_id", "")           # Сохраняем PROMO_ID
+                        total_expected = data.get("total_count", 0)
+                        logger.info(f"📌 BATCH_START line={line_number}, batch_id={batch_id}, promo_id={promo_id}")
+                        logger.info(f"📌 EXPECTED RECORDS={total_expected}")
+                        logger.info(
+                            f"RECEIVED batch_id={batch_id}, "
+                            f"chunk={data.get('chunk')}, "
+                            f"total_chunks={data.get('total_chunks')}"
+                        )
+                        continue
 
-                    elif operation == "record":
-                        if payload:
-                            # Создаём DatasetRecord из payload
+                    if operation == "record":
+                        records_received += 1
+
+                        try:
+                            # ===== ВАЛИДАЦИЯ ОБЯЗАТЕЛЬНЫХ ПОЛЕЙ =====
+                            sku = payload.get("sku", "").strip()
+                            if not sku:
+                                logger.warning(f"⚠️ RECORD ERROR #{records_received}: empty sku")
+                                continue
+
+                            k_uplift = payload.get("k_uplift")
+                            if k_uplift is None or k_uplift <= 0:
+                                logger.warning(f"⚠️ RECORD ERROR #{records_received}: k_uplift={k_uplift}, sku={sku}")
+                                continue
+
+                            promo_id = payload.get("promo_id", "").strip()
+                            if not promo_id:
+                                logger.warning(f"⚠️ RECORD ERROR #{records_received}: empty promo_id, sku={sku}")
+                                continue
+
+                            # ===== СОЗДАЁМ ЗАПИСЬ =====
                             record = DatasetRecord(
-                                promo_id=payload.get("promo_id", ""),
+                                promo_id=promo_id,
                                 week=payload.get("week", 1),
                                 month=payload.get("month", 1),
-                                sku=payload.get("sku", ""),
+                                sku=sku,
                                 category=payload.get("category", ""),
                                 regular_price=payload.get("regular_price", 0),
                                 promo_price=payload.get("promo_price", 0),
@@ -102,14 +145,13 @@ class DatasetStreamingService:
                                 marketing_type=payload.get("marketing_type"),
                                 promo_mechanics=payload.get("promo_mechanics"),
                                 analog_sku=payload.get("analog_sku"),
-                                k_uplift=payload.get("k_uplift", 1.0),
+                                k_uplift=k_uplift,
                                 extra_features=payload.get("extra_features")
                             )
 
-                            records.append(record)
-
-                            # Сохраняем в industrial_dataset_raw
+                            # ===== СОХРАНЯЕМ В БД =====
                             db_record = IndustrialDatasetRaw(
+                                batch_id=batch_id,
                                 promo_id=record.promo_id,
                                 week=record.week,
                                 month=record.month,
@@ -127,29 +169,53 @@ class DatasetStreamingService:
                                 promo_mechanics=record.promo_mechanics,
                                 analog_sku=record.analog_sku,
                                 k_uplift=record.k_uplift,
-                                extra_features=record.extra_features or {},
+                                extra_features=record.extra_features or {}
                             )
+
                             db.add(db_record)
                             records_saved += 1
+                            records_in_current_chunk += 1
 
-                            # Commit каждые 100 записей
-                            if len(records) % 100 == 0:
+                            # Commit каждые 1000 записей
+                            if records_saved % 1000 == 0:
                                 db.commit()
-                                logger.info(f"💾 Committed {records_saved} records to DB")
+                                logger.info(f"💾 SAVED={records_saved}")
 
-                    elif operation == "batch_end":
-                        logger.info(f"🏁 BATCH END received")
-                        break
+                        except Exception as e:
+                            logger.error(f"❌ RECORD ERROR #{records_received}: {e}")
+                            logger.error(f"❌ SKU={payload.get('sku')}")
+                            continue
 
-                    elif operation == "error":
+                        continue
+
+                    if operation == "batch_end":
+                        logger.info(f"📌 BATCH_END line={line_number}")
+                        continue
+
+                    if operation == "error":
                         error_msg = payload.get("message", "Unknown error")
-                        logger.error(f"Client error: {error_msg}")
+                        logger.error(f"❌ Client error: {error_msg}")
                         status = "error"
                         break
+
+            # ===== ОБРАБОТКА ОСТАТКА БУФЕРА =====
+            if buffer.strip():
+                logger.info("📌 PROCESSING LAST BUFFER")
+                try:
+                    data = json.loads(buffer.decode("utf-8"))
+                    logger.info(f"📌 LAST OPERATION={data.get('operation')}")
+                except Exception as e:
+                    logger.error(f"❌ LAST BUFFER ERROR: {e}")
 
             # Финализируем commit
             db.commit()
             logger.info(f"💾 Final commit: {records_saved} records saved")
+
+            # ===== ДИАГНОСТИКА =====
+            logger.info(f"📊 EXPECTED={total_expected}")
+            logger.info(f"📊 RECORDS_RECEIVED={records_received}")
+            logger.info(f"📊 RECORDS_SAVED={records_saved}")
+            logger.info(f"📊 records_in_current_chunk={records_in_current_chunk}")
 
             # =========================================================
             # CHECK RETRAIN NEED
@@ -157,7 +223,6 @@ class DatasetStreamingService:
 
             if status == "success":
 
-                # 🔥 Логируем действие
                 if current_user:
                     ActivityService.log(
                         db=db,
@@ -167,7 +232,6 @@ class DatasetStreamingService:
                         details=f"Stream upload, records: {records_saved}"
                     )
 
-                # Триггерим проверку необходимости retrain
                 try:
                     from app.services.system_service import SystemService
                     system_service = SystemService()
@@ -185,9 +249,30 @@ class DatasetStreamingService:
 
             duration_ms = int((time.time() - start_time) * 1000)
 
-            # Сохраняем историю загрузки
-            upload_history = DatasetUploadHistory(
+            #  ======== INSERT: Сохраняем историю загрузки ДОБАВЛЯЕМ НОВУЮ ========
+            # upload_history = DatasetUploadHistory(
+            #     batch_id=batch_id,
+            #     promo_id=promo_id,
+            #     uploaded_at=datetime.now(),
+            #     records_added=records_saved,
+            #     total_records_after=total_after,
+            #     status=status,
+            #     error_message=error_msg,
+            #     duration_ms=duration_ms
+            # )
+            # db.add(upload_history)
+            # db.commit()
+
+            # ===== ДИАГНОСТИКА =====
+            logger.info(f"📊 records_saved (total) = {records_saved}")
+            logger.info(f"📊 records_in_current_chunk = {records_in_current_chunk}")
+            logger.info(f"UPSERT batch_id={batch_id}, records_saved={records_saved}")
+
+
+            # ===== UPSERT: СУММИРУЕМ records_added и duration_ms с защитой от NULL =====
+            stmt = insert(DatasetUploadHistory).values(
                 batch_id=batch_id,
+                promo_id=promo_id,
                 uploaded_at=datetime.now(),
                 records_added=records_saved,
                 total_records_after=total_after,
@@ -195,13 +280,39 @@ class DatasetStreamingService:
                 error_message=error_msg,
                 duration_ms=duration_ms
             )
-            db.add(upload_history)
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_dataset_upload_history_batch",
+                set_={
+                    # 🔥 СУММИРУЕМ records_added
+                    "records_added": DatasetUploadHistory.records_added + stmt.excluded.records_added,
+
+                    # 🔥 СУММИРУЕМ duration_ms с защитой от NULL
+                    "duration_ms": func.coalesce(DatasetUploadHistory.duration_ms, 0) + func.coalesce(
+                        stmt.excluded.duration_ms, 0),
+
+                    # Остальные поля — просто обновляем
+                    "total_records_after": stmt.excluded.total_records_after,
+                    "status": stmt.excluded.status,
+                    "error_message": stmt.excluded.error_message,
+                    "uploaded_at": stmt.excluded.uploaded_at,
+                    "promo_id": stmt.excluded.promo_id
+                }
+            )
+
+            db.execute(stmt)
             db.commit()
+            logger.info(f"📝 UPSERT history: batch_id={batch_id}, records_added={records_saved}")
+
+
+            logger.info(f"📊 RECORDS_RECEIVED={records_received}")
+            logger.info(f"📊 RECORDS_SAVED={records_saved}")
+            logger.info(f"📊 EXPECTED={total_expected}")
 
             return {
                 "batch_id": batch_id,
                 "status": status,
-                "records_received": len(records),
+                "records_received": records_received,
                 "records_added": records_saved,
                 "total_records": total_after,
                 "duration_ms": duration_ms,
@@ -213,13 +324,26 @@ class DatasetStreamingService:
             db.rollback()
 
             duration_ms = int((time.time() - start_time) * 1000)
-
-            # Получаем текущее количество строк после ошибки
             total_after = db.query(IndustrialDatasetRaw).count()
 
-            # Сохраняем ошибку в историю
-            upload_history = DatasetUploadHistory(
+            # ===== INSERT ДЛЯ ОШИБКИ =====
+            # upload_history = DatasetUploadHistory(
+            #     batch_id=batch_id,
+            #     uploaded_at=datetime.now(),
+            #     records_added=records_saved,
+            #     total_records_after=total_after,
+            #     status="error",
+            #     error_message=str(e),
+            #     duration_ms=duration_ms
+            # )
+            # db.add(upload_history)
+            # db.commit()
+
+
+            # ===== UPSERT ДЛЯ ОШИБКИ =====
+            stmt = insert(DatasetUploadHistory).values(
                 batch_id=batch_id,
+                promo_id=promo_id,
                 uploaded_at=datetime.now(),
                 records_added=records_saved,
                 total_records_after=total_after,
@@ -227,14 +351,35 @@ class DatasetStreamingService:
                 error_message=str(e),
                 duration_ms=duration_ms
             )
-            db.add(upload_history)
+
+            stmt = stmt.on_conflict_do_update(
+                constraint="dataset_upload_history_pkey",
+                set_={
+                    "records_added": stmt.excluded.records_added,
+                    "total_records_after": stmt.excluded.total_records_after,
+                    "status": stmt.excluded.status,
+                    "error_message": stmt.excluded.error_message,
+                    "duration_ms": stmt.excluded.duration_ms,
+                    "uploaded_at": stmt.excluded.uploaded_at
+                }
+            )
+
+            db.execute(stmt)
             db.commit()
+            logger.info(f"📝 UPSERT error history: batch_id={batch_id}, records_added={records_saved}")
+
+
+
+            logger.info(f"📊 RECORDS_RECEIVED={records_received}")
+            logger.info(f"📊 RECORDS_SAVED={records_saved}")
+            logger.info(f"📊 EXPECTED={total_expected}")
+
 
             return {
                 "batch_id": batch_id,
                 "status": "error",
                 "error": str(e),
-                "records_received": len(records),
+                "records_received": records_received,
                 "records_added": records_saved,
                 "total_records": total_after,
                 "duration_ms": duration_ms

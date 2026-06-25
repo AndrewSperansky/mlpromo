@@ -16,38 +16,25 @@ scrape_configs:
   - job_name: promo_ml_backend
 
     static_configs:
-      - targets: [ localhost ]
+      - targets:
+          - localhost
         labels:
           job: promo_ml_backend
           service: backend
           __path__: /app/logs/app.log
 
     pipeline_stages:
-      # Парсим JSON
       - json:
           expressions:
-            levelname: levelname
-            logger: name
-            correlation_id: correlation_id
-            src_file: filename
-            src_line: lineno
-            message: message
+            message:
+            levelname:
+            correlation_id:
+            filename:
 
-      # Нормализуем уровень
-      - template:
-          source: levelname
-          template: '{{ ToUpper .Value }}'
-
-      # Labels — ТОЛЬКО стабильные
       - labels:
           levelname:
-          logger:
 
-      # correlation_id — НЕ label (используем как derived field)
 
-      # Финальный текст лога
-      - output:
-          source: message
 
 
   # =========================

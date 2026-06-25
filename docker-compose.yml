@@ -4,48 +4,66 @@ services:
   # -------------------- BACKEND --------------------
   backend:
     container_name: promo_ml_backend
-    image: promo-ml:latest
+
     build:
       context: .
       dockerfile: Dockerfile
+
     restart: unless-stopped
 
     environment:
-      ENV: env
-      LOG_LEVEL: INFO
+      ENV: dev
+      LOG_LEVEL: DEBUG
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/promo
+      REDIS_URL: redis://redis:6379/0
 
     volumes:
-      - backend-logs:/app/logs
-      - ./models:/app/models
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./models/current:/app/models/current
+      - ./models/candidate:/app/models/candidate
+      - ./models/archive:/app/models/archive
+      - ./models/history:/app/models/history
+      - ./models/metrics:/app/models/metrics
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
 
     ports:
       - "8000:8000"
+
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
     networks:
       - promo_net
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "curl -f http://localhost:8000/api/v1/system/health || exit 1"
-      ]
-      interval: 30s          # проверять каждые 30 секунд
-      timeout: 10s         # ждать ответа не более 10 секунд
-      retries: 3          # после 3 неудач считать контейнер unhealthy
-      start_period: 300s   # игнорировать проверки первые 120 секунд после старта
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: 1024M
-        reservations:
-          cpus: "0.3"
-          memory: 256M
+
+  # -------------------- FRONTEND --------------------
+
+  frontend:
+    container_name: promo_ml_frontend
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+
+    environment:
+      - VITE_GRAFANA_URL=http://localhost:3000
+
+    depends_on:
+      - backend
+    networks:
+      - promo_net
+
 
   # -------------------- POSTGRES --------------------
   postgres:
@@ -190,7 +208,7 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/promtail/promtail-config.yml
     volumes:
-      - backend-logs:/app/logs
+      - ./logs:/app/logs
       - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
       - postgres-logs:/var/log/postgresql:ro
       - nginx-logs:/var/log/nginx:ro
@@ -242,25 +260,7 @@ services:
     networks:
       - promo_net
 
-  # -------------------- FRONTEND --------------------
 
-  frontend:
-    container_name: promo_ml_frontend
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    command: sh -c "npm install && npm run dev -- --host"
-    ports:
-      - "5173:5173"
-
-    environment:
-      - VITE_GRAFANA_URL=http://localhost:3000
-
-    depends_on:
-      - backend
-    networks:
-      - promo_net
 
 # -------------------- NETWORKS --------------------
 networks:
@@ -269,8 +269,6 @@ networks:
 
 # -------------------- VOLUMES --------------------
 volumes:
-  lineage:
-  metrics:
   postgres-data:
   postgres-logs:
   grafana-data:
