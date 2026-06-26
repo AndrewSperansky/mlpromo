@@ -13,14 +13,15 @@ scrape_configs:
   # =========================
   # Backend (FastAPI / Uvicorn)
   # =========================
-  - job_name: promo_ml_backend
+  - job_name: promo
 
     static_configs:
       - targets:
           - localhost
         labels:
-          job: promo_ml_backend
+          job: backend
           service: backend
+          container_name: promo_ml_backend
           __path__: /app/logs/app.log
 
     pipeline_stages:

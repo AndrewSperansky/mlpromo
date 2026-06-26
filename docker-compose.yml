@@ -44,6 +44,16 @@ services:
     networks:
       - promo_net
 
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "curl -f http://localhost:8000/api/v1/system/health || exit 1"
+      ]
+      interval: 30s          # проверять каждые 30 секунд
+      timeout: 10s         # ждать ответа не более 10 секунд
+      retries: 3          # после 3 неудач считать контейнер unhealthy
+      start_period: 180s   # игнорировать проверки первые 180 секунд после старта
+
   # -------------------- FRONTEND --------------------
 
   frontend:
@@ -63,6 +73,13 @@ services:
       - backend
     networks:
       - promo_net
+
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:5173 || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 
   # -------------------- POSTGRES --------------------
@@ -114,11 +131,13 @@ services:
     image: prometheuscommunity/postgres-exporter
     container_name: promo_postgres_exporter
     environment:
-      DATA_SOURCE_NAME: "postgresql://promo:promo@postgres:5432/promo?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/promo?sslmode=disable"
     ports:
       - "9187:9187"
     depends_on:
       - postgres
+    networks:
+      - promo_net
 
 
   # -------------------- REDIS --------------------
@@ -132,8 +151,7 @@ services:
     volumes:
       - redis-data:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
-    networks:
-      - promo_net
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -143,6 +161,9 @@ services:
         limits:
           memory: 512M
 
+    networks:
+      - promo_net
+
   # ------------- REDIS EXPORTER ----------------
 
   redis-exporter:
@@ -150,9 +171,12 @@ services:
     container_name: promo_redis_exporter
     restart: unless-stopped
     environment:
-      - REDIS_ADDR=redis://promo_redis:6379
+      - REDIS_ADDR=redis://172.18.0.2:6379
     ports:
       - "9121:9121"
+
+    networks:
+      - promo_net
 
   # -------------------- NGINX --------------------
   nginx:
@@ -178,6 +202,22 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
+
+  # -------------------- NGINX EXPORTER --------------------
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:0.11.0
+    container_name: promo_nginx_exporter
+    restart: unless-stopped
+    command:
+      - -nginx.scrape-uri=http://nginx:80/nginx_status
+      - -web.listen-address=:9113
+    ports:
+      - "9113:9113"
+    depends_on:
+      - nginx
+
+    networks:
+      - promo_net
 
   # -------------------- LOKI --------------------
   loki:
@@ -235,12 +275,14 @@ services:
     depends_on:
       loki:
         condition: service_healthy
-    networks:
-      - promo_net
+
     deploy:
       resources:
         limits:
           memory: 512M
+
+    networks:
+      - promo_net
 
   # -------------------- PROMETHEUS --------------------
 
@@ -259,6 +301,7 @@ services:
 
     networks:
       - promo_net
+
 
 
 

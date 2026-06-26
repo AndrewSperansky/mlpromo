@@ -31,6 +31,9 @@ from app.models.ml_model import MLModel
 from app.ml.model_loader import ModelLoader
 # =========================================================================
 
+# ---- Metrics ----
+from prometheus_fastapi_instrumentator import Instrumentator
+
 
 # ------------------------------------------------------
 # Globals
@@ -178,13 +181,29 @@ app = FastAPI(
 )
 
 # ------------------------------------------------------
+# Создание Prometheus FastAPI Instrumentator
+# ------------------------------------------------------
+
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    # should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=[".*admin.*", "/metrics"],
+    # env_var_name="ENABLE_METRICS",
+    inprogress_name="inprogress_requests",
+    inprogress_labels=False,
+)
+
+
+# ------------------------------------------------------
 # Подключение Middleware
 # ------------------------------------------------------
 
 # Разрешаем фронту обращаться к серверу
 origins = [
     "http://localhost:5173",  # твой фронт
-    "http://localhost:3000",  # если будешь запускать другой порт
+    "http://localhost:3000",  # если будем запускать другой порт
     "http://127.0.0.1:5173",
 ]
 
@@ -199,6 +218,14 @@ CORSMiddleware,
     )
 
 app.add_middleware(RequestLoggingMiddleware)
+
+
+
+# ---- Инструментируем приложение ---------------------
+instrumentator.instrument(app)
+
+instrumentator.expose(app, endpoint="/metrics")
+
 
 
 # ------------------------------------------------------
@@ -244,7 +271,7 @@ def list_routes_plain():
         name = r.name or "-"
 
         endpoint = cast(Callable, r.endpoint)
-        module = endpoint.__module__
+        module = endpoint.__module__               # type: ignore
 
         line = f"{methods:<7} {r.path:<45} → {name} ({module})"
         lines.append(line)

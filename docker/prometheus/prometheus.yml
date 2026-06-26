@@ -1,4 +1,4 @@
-# Минимальный
+# docker/prometheus/prometheus.yml
 
 global:
   scrape_interval: 15s
@@ -7,31 +7,82 @@ global:
 scrape_configs:
 
   # =====================
-  # Prometheus self
+  # Prometheus
   # =====================
   - job_name: prometheus
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets:
+          - localhost:9090
+        labels:
+          service: Prometheus
 
   # =====================
-  # Redis exporter
+  # Backend
+  # =====================
+  - job_name: promo_ml_backend
+    static_configs:
+      - targets:
+          - promo_ml_backend:8000
+        labels:
+          service: Backend API
+
+  # =====================
+  # PostgreSQL Exporter
+  # =====================
+  - job_name: postgres
+    static_configs:
+      - targets:
+          - postgres-exporter:9187
+        labels:
+          service: PostgreSQL
+
+  # =====================
+  # Redis Exporter
   # =====================
   - job_name: redis
     static_configs:
-      - targets: ["redis-exporter:9121"]
+      - targets:
+          - promo_redis_exporter:9121
+        labels:
+          service: Redis
 
   # =====================
-  # Postgres exporter
+  # Nginx Exporter
   # =====================
-
-  - job_name: postgres
+  - job_name: nginx
     static_configs:
-      - targets: [ 'postgres-exporter:9187' ]
+      - targets:
+          - promo_nginx_exporter:9113
+        labels:
+          service: Nginx
+  # =====================
+  # Grafana
+  # =====================
+  - job_name: grafana
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - promo_grafana:3000
+        labels:
+          service: Grafana
+  # =====================
+  # Loki
+  # =====================
+  - job_name: loki
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - promo_loki:3100
+        labels:
+          service: Loki
+  # =====================
+  # Promtail
+  # =====================
+  - job_name: promtail
+    static_configs:
+      - targets:
+          - promo_promtail:9080
+        labels:
+          service: Promtail
 
 
-  # =====================
-  # Backend (если добавим /metrics позже)
-  # =====================
-  # - job_name: promo_ml_backend
-  #   static_configs:
-  #     - targets: ["promo_ml_backend:8000"]
