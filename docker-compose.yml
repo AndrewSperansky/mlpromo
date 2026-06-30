@@ -29,6 +29,14 @@ services:
         condition: service_healthy
     networks:
       - promo_net
+
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --timeout-keep-alive 1800
+      --timeout-graceful-shutdown 1800
+
     healthcheck:
       test: [
         "CMD-SHELL",
@@ -38,6 +46,7 @@ services:
       timeout: 10s         # ждать ответа не более 10 секунд
       retries: 3          # после 3 неудач считать контейнер unhealthy
       start_period: 30s   # игнорировать проверки первые 60 секунд после старта
+
     deploy:
       resources:
         limits:
