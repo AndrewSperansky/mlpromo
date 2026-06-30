@@ -175,9 +175,7 @@ export const trainModel = async (data: TrainModelParams) => {
     console.log('🚀 Starting model training...', data)
 
     try {
-        const response = await api.post('/ml/train', data, {
-            timeout: 300000  // 5 минут
-        })
+        const response = await api.post('/ml/train', data)
 
         console.log('✅ Training completed:', response.data)
         return response
@@ -207,10 +205,7 @@ export const trainModelDirect = async (promote: boolean = false) => {
     console.log('🚀 Starting direct model training...', { promote })
     
     try {
-        const response = await api.post('/ml/train', { promote }, {
-            timeout: 300000  // 5 минут
-        })
-        
+        const response = await api.post('/ml/train', { promote })
         console.log('✅ Training completed:', response.data)
         return response
         
