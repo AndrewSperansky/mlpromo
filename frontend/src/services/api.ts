@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
     baseURL: '/api/v1',
-    timeout: 5000
+    timeout: 1800000    // ← 30 минут (1 800 000 мс)
 })
 
 // Добавляем интерцепторы для логирования ВСЕХ запросов и ответов
