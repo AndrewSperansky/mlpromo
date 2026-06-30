@@ -42,6 +42,8 @@ api.interceptors.response.use(
             method: error.config?.method?.toUpperCase(),
             data: error.response?.data,
             headers: error.response?.headers,
+            code: error.code,
+            message: error.message,
         })
         
         // Если 401 Unauthorized — выходим из системы
@@ -172,15 +174,18 @@ export const rollbackModel = () =>
 
 
 export const trainModel = async (data: TrainModelParams) => {
-    console.log('🚀 Starting model training...', data)
+    const startTime = Date.now()
+    console.log('🚀 Starting model training...', { data, startTime: new Date().toISOString() })
 
     try {
         const response = await api.post('/ml/train', data)
-
-        console.log('✅ Training completed:', response.data)
+         const duration = (Date.now() - startTime) / 1000
+        console.log('✅ Training completed in ${duration} seconds:', response.data)
         return response
 
     } catch (error: unknown) {
+        const duration = (Date.now() - startTime) / 1000
+        console.error(`❌ Error after ${duration} seconds:`, error)
         // Проверяем тип ошибки
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNABORTED') {
             console.error('❌ Training timeout - operation took too long')
