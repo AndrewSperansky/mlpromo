@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
     baseURL: '/api/v1',
-    timeout: 1800000    // ← 30 минут (1 800 000 мс)
+    timeout: 1800000,  // ← 30 минут (1 800 000 мс)
 })
 
 // Добавляем интерцепторы для логирования ВСЕХ запросов и ответов
@@ -42,6 +42,8 @@ api.interceptors.response.use(
             method: error.config?.method?.toUpperCase(),
             data: error.response?.data,
             headers: error.response?.headers,
+            code: error.code,
+            message: error.message,
         })
         
         // Если 401 Unauthorized — выходим из системы
@@ -91,11 +93,8 @@ export interface ModelItem {
     version: string
     active: boolean
     created_at: string
-    algorithm?: string        // ← добавить
-    sku_code?: string         // ← добавить
     metrics?: {
         rmse?: number
-        val_loss?: number
         [key: string]: any
     }
 }
@@ -175,17 +174,34 @@ export const rollbackModel = () =>
 
 
 export const trainModel = async (data: TrainModelParams) => {
-    console.log('🚀 Starting model training...', data)
+    const startTime = Date.now()
+    console.log('🚀 Starting model training...', { data, startTime: new Date().toISOString() })
 
     try {
-        const response = await api.post('/ml/train', data, {
-            timeout: 300000  // 5 минут
-        })
-
-        console.log('✅ Training completed:', response.data)
+        const response = await api.post('/ml/train', data)
+        console.log("========== API RESPONSE ==========")
+        console.group("🚀 TRAIN RESPONSE")
+        console.log("Axios Response:", response)
+        console.log("Status:", response.status)
+        console.log("Headers:", response.headers)
+        console.log(response.data)
+        console.log("==================================")
+        const duration = (Date.now() - startTime) / 1000
+        console.log(`✅ Training completed in ${duration} seconds:`, response.data)
         return response
 
     } catch (error: unknown) {
+        const duration = (Date.now() - startTime) / 1000
+        console.error(`❌ Error after ${duration} seconds:`, error)
+        console.error("============== AXIOS ERROR ==============");
+        console.error(error);
+        console.error("code:", (error as any).code);
+        console.error("message:", (error as any).message);
+        console.error("status:", (error as any).response?.status);
+        console.error("response:", (error as any).response?.data)
+        console.error("headers:", (error as any).response?.headers);
+        console.error("config:", (error as any).config);
+        console.error("=========================================");
         // Проверяем тип ошибки
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNABORTED') {
             console.error('❌ Training timeout - operation took too long')
@@ -210,10 +226,7 @@ export const trainModelDirect = async (promote: boolean = false) => {
     console.log('🚀 Starting direct model training...', { promote })
     
     try {
-        const response = await api.post('/ml/train', { promote }, {
-            timeout: 300000  // 5 минут
-        })
-        
+        const response = await api.post('/ml/train', { promote })
         console.log('✅ Training completed:', response.data)
         return response
         
@@ -366,28 +379,3 @@ export const deleteDataset = (datasetId: string, force: boolean = false) => {
 // Docker Containers Status
 // ============================
 export const getContainersStatus = () => api.get('/system/containers-status')
-
-
-
-// ============================
-// LSTM PREDICT
-// ============================
-
-export interface LSTMPredictRequest {
-  sku: string
-  days_ahead: number
-  store_id?: string
-}
-
-export interface LSTMPredictResponse {
-  sku: string
-  days_ahead: number
-  predictions: Array<{
-    date: string
-    predicted_sales: number
-  }>
-  model_id: number
-}
-
-export const predictLSTM = (data: LSTMPredictRequest) =>
-  api.post<LSTMPredictResponse>('/ml/torch/predict/lstm', data)

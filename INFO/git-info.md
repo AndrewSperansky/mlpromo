@@ -1,3 +1,5 @@
+## Возврат на определнный коммит!
+git checkout 4b2a2287
 
 ## Проверка удаленного репозитория:
 git remote -v 
@@ -711,9 +713,17 @@ Git restore frontend/src/components/ModelTable.vue
 
 git reset --soft HEAD~
 
-
+## Возврат на определнный коммит!
+git checkout 4b2a2287
 
 ### Удалить файл из кэша Git!
 git rm --cached models/history/lineage_events.json
 
 ### Очистка кэша Git
+
+
+### 2. Принудительно запушить (перезаписать удалённую ветку)
+git push --force origin v-1-2
+
+### безопасный вариант (не даст перезаписать, если кто-то другой уже запушил):
+git push --force-with-lease origin v-1-2
