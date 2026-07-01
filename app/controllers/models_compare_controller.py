@@ -42,6 +42,10 @@ class ModelsCompareController:
 
 
     def _compare_metrics(self, m1: dict, m2: dict) -> dict:
+        """
+        Сравнивает метрики двух моделей.
+        Пропускает нечисловые значения (словари, списки и т.д.).
+        """
         result = {}
 
         if not m1 or not m2:
@@ -50,7 +54,15 @@ class ModelsCompareController:
         keys = set(m1.keys()).intersection(set(m2.keys()))
 
         for k in keys:
-            result[k] = m2[k] - m1[k]
+            v1 = m1.get(k)
+            v2 = m2.get(k)
+
+            # 🔥 Проверяем, что оба значения — числа
+            if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+                result[k] = round(v2 - v1, 6)
+            else:
+                # Для нечисловых метрик (словари, списки) пропускаем
+                result[k] = "non-numeric"
 
         return result
 

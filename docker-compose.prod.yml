@@ -30,6 +30,16 @@ services:
 #      - "8000:8000"
       # - "8000"
 
+    # ✅ ДОБАВЛЯЕМ КОМАНДУ С ТАЙМАУТАМИ
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --timeout-keep-alive 7200
+      --timeout-graceful-shutdown 7200
+
+
+
     expose:
       - "8000"
 
@@ -41,6 +51,16 @@ services:
 
     networks:
       - promo_net
+
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "curl -f http://localhost:8000/api/v1/system/health || exit 1"
+      ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # -------------------- FRONTEND --------------------
 
