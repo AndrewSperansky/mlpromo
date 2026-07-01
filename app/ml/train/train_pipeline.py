@@ -142,44 +142,101 @@ def train_pipeline(
 
     rows_used = cleaned_count
 
-    # ========== ОПРЕДЕЛЯЕМ ПРИЗНАКИ (FEATURES) ==========
-    exclude_cols = {"id", TARGET}
+    # ================================================================
+    # 🔥 ОПРЕДЕЛЯЕМ КАТЕГОРИАЛЬНЫЕ И ЧИСЛОВЫЕ ПРИЗНАКИ
+    # ================================================================
 
-    numeric_columns = []
-    for col in df.columns:
-        if col in exclude_cols:
-            continue
-        if pd.api.types.is_numeric_dtype(df[col]):
-            numeric_columns.append(col)
+    # Категориальные признаки (текстовые)
+    categorical_features = [
+        'sku',
+        'store_id',  # ← КЛЮЧЕВАЯ ФИЧА!
+        'category',
+        'region',
+        'store_location_type',
+        'format_assortment',
+        'promo_mechanics',
+        'adv_carrier',
+        'adv_material',
+        'marketing_type',
+    ]
 
-    FEATURES = numeric_columns
+    # Числовые признаки
+    numeric_features = [
+        'month',
+        'week',
+        'regular_price',
+        'promo_price',
+    ]
+
+    # Все признаки (порядок важен!)
+    FEATURES =  numeric_features + categorical_features
 
     X = df[FEATURES]
     y = df[TARGET]
 
     logger.info(f"📊 Features ({len(FEATURES)}): {FEATURES}")
 
-    # ========== РАЗДЕЛЯЕМ ДАННЫЕ ==========
 
+
+    # Проверяем, что все признаки есть в датасете
+    missing_features = [f for f in FEATURES if f not in df.columns]
+    if missing_features:
+        raise ValueError(f"Missing features in dataset: {missing_features}")
+
+    logger.info(f"📊 Numeric features ({len(numeric_features)}): {numeric_features}")
+    logger.info(f"📊 Categorical features ({len(categorical_features)}): {categorical_features}")
+    logger.info(f"📊 Total features: {len(FEATURES)}")
+
+    # ================================================================
+    # ПОДГОТОВКА ДАННЫХ
+    # ================================================================
+
+    # Заполняем пропуски в категориальных признаках
+    for col in categorical_features:
+        df[col] = df[col].fillna('unknown').astype(str)
+
+    X = df[FEATURES]
+    y = df[TARGET]
+
+    # ========== РАЗДЕЛЯЕМ ДАННЫЕ ==========
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
     logger.info(f"📊 Train size: {len(X_train)}, Validation size: {len(X_val)}")
 
+    # ================================================================
+    # 🔥 ОБУЧЕНИЕ CATBOOST С КАТЕГОРИАЛЬНЫМИ ПРИЗНАКАМИ
+    # ================================================================
+
+    # Находим индексы категориальных признаков
+    cat_feature_indices = [FEATURES.index(f) for f in categorical_features]
+
+    model = CatBoostRegressor(
+        iterations=300,
+        depth=4,
+        learning_rate=0.05,
+        loss_function="RMSE",
+        random_seed=42,
+        verbose=False,
+        early_stopping_rounds=50,
+        cat_features=cat_feature_indices,  # ← КРИТИЧНО!
+        l2_leaf_reg=5,  # опционально: регуляризация
+        one_hot_max_size=8,  # для признаков с небольшим числом категорий
+    )
 
     # =========================
     # TRAIN WITH VALIDATION
     # =========================
 
-    model = CatBoostRegressor(
-        iterations=500,  # увеличим до 500
-        depth=6,
-        learning_rate=0.05,
-        loss_function="RMSE",
-        random_seed=42,
-        verbose=False,
-        early_stopping_rounds=50  # остановка при отсутствии улучшений
-    )
+    # model = CatBoostRegressor(
+    #     iterations=500,  # увеличим до 500
+    #     depth=6,
+    #     learning_rate=0.05,
+    #     loss_function="RMSE",
+    #     random_seed=42,
+    #     verbose=False,
+    #     early_stopping_rounds=50  # остановка при отсутствии улучшений
+    # )
 
     # Обучаем с валидационной выборкой
     model.fit(
@@ -195,7 +252,7 @@ def train_pipeline(
     val_rmse = evals_result['validation']['RMSE']
     iterations = list(range(1, len(train_rmse) + 1))
 
-    # Сохраняем метрики в JSON для API
+    # Сохраняем метрики обучения в JSON для API
     training_metrics = {
         "iterations": iterations,
         "train_rmse": train_rmse,
@@ -206,15 +263,15 @@ def train_pipeline(
 
     # Сохраняем training_metrics.json в metrics/
 
-
     metrics_path = metrics_dir / "training_metrics.json"
     with open(metrics_path, "w") as f:
         json.dump(training_metrics, f, indent=2)
 
     # Для обратной совместимости — используем предсказания на ВСЕХ данных
     preds = model.predict(X)  # ← предсказания на всех данных
-    rmse_value = float(mean_squared_error(y, preds, squared=False))
-    logger.info(f"📈 Training RMSE (full dataset): {rmse_value:.6f}")
+
+    # rmse_value = float(mean_squared_error(y, preds, squared=False))
+    # logger.info(f"📈 Training RMSE (full dataset): {rmse_value:.6f}")
 
     # Для метрик модели используем validation RMSE (честная оценка)
     preds_val = model.predict(X_val)
@@ -228,10 +285,16 @@ def train_pipeline(
         "model_id": None,
         "model_name": "promo_uplift",
         "trained_at": datetime.now(timezone.utc).isoformat(),
-        "features": FEATURES,
+        "features": FEATURES,  # ← теперь ВСЕ признаки!
+        "categorical_features": categorical_features,
+        "numeric_features": numeric_features,
         "stage": "candidate",
         "metrics": {
-            "rmse": rmse_value,
+            "rmse": val_rmse_final,
+            "train_rmse": float(train_rmse[-1]),
+            "val_rmse": val_rmse_final,
+            "best_iteration": model.get_best_iteration(),
+            "total_iterations": len(train_rmse),
         },
         "total_rows": rows_used,
     }
@@ -368,6 +431,7 @@ def train_pipeline(
 
         # Обновляем meta с ID
         meta["model_id"] = db_model.id
+        meta["feature_order"] = FEATURES  # ← сохраняем порядок фич!
 
         # ===== СОХРАНЯЕМ META В ФАЙЛ (ПОСЛЕ ДОБАВЛЕНИЯ ВСЕХ МЕТРИК) =====
         meta_path = candidate_dir / f"{db_model.id}.meta.json"
@@ -409,14 +473,18 @@ def train_pipeline(
         shap_values, expected_value = compute_shap_catboost(
             model=model,
             X=X,
+            categorical_features=categorical_features,
+            validate=True,
         )
 
-        save_shap_artifacts(
+        shap_stats = save_shap_artifacts(
             shap_values=shap_values,
             expected_value=expected_value,
             feature_names=FEATURES,
             models_dir=candidate_dir,
+            save_full_shap=False,
         )
+        logger.info(f"SHAP stats: {shap_stats}")
 
         # =========================
         # PROMOTION

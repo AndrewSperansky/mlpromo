@@ -2,10 +2,10 @@
 
 import logging
 import time
+import pandas as pd
 from pathlib import Path
 from sqlalchemy.orm import Session
 # from typing import Optional
-
 from app.db.session import SessionLocal
 from app.services.registry_service import ModelRegistryService
 from app.models.ml_model import MLModelManager, MLModel  # ← добавили импорт MLModel
@@ -21,7 +21,6 @@ class Predictor:
         self.model = None
         self.meta = None
         self.model_record = None
-
 
 
     def _load_active_model(self):
@@ -84,6 +83,18 @@ class Predictor:
         """
         if self.model is None:
             raise RuntimeError("Model not loaded")
+
+        # 🔥 Если X — это DataFrame, убеждаемся, что категории передаются правильно
+        if isinstance(X, pd.DataFrame):
+            # Определяем категориальные колонки
+            categorical_cols = ['store_id', 'sku', 'category', 'region',
+                                'store_location_type', 'format_assortment',
+                                'promo_mechanics', 'adv_carrier', 'adv_material',
+                                'marketing_type']
+
+            for col in categorical_cols:
+                if col in X.columns:
+                    X[col] = X[col].astype(str)
 
         start = time.perf_counter()
         preds = self.model.predict(X)

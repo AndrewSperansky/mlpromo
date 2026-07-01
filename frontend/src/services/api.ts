@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
     baseURL: '/api/v1',
-    timeout: 1800000,  // ← 30 минут (1 800 000 мс)
+    timeout: 7200000,  // ← 2 часа
 })
 
 // Добавляем интерцепторы для логирования ВСЕХ запросов и ответов
@@ -179,29 +179,12 @@ export const trainModel = async (data: TrainModelParams) => {
 
     try {
         const response = await api.post('/ml/train', data)
-        console.log("========== API RESPONSE ==========")
-        console.group("🚀 TRAIN RESPONSE")
-        console.log("Axios Response:", response)
-        console.log("Status:", response.status)
-        console.log("Headers:", response.headers)
-        console.log(response.data)
-        console.log("==================================")
-        const duration = (Date.now() - startTime) / 1000
-        console.log(`✅ Training completed in ${duration} seconds:`, response.data)
+        console.log(`✅ Training completed in ${(Date.now() - startTime) / 1000} seconds:`, response.data)
         return response
 
     } catch (error: unknown) {
-        const duration = (Date.now() - startTime) / 1000
-        console.error(`❌ Error after ${duration} seconds:`, error)
-        console.error("============== AXIOS ERROR ==============");
-        console.error(error);
-        console.error("code:", (error as any).code);
-        console.error("message:", (error as any).message);
-        console.error("status:", (error as any).response?.status);
-        console.error("response:", (error as any).response?.data)
-        console.error("headers:", (error as any).response?.headers);
-        console.error("config:", (error as any).config);
-        console.error("=========================================");
+        console.error(`❌ Error after ${(Date.now() - startTime) / 1000} seconds:`, error)
+        
         // Проверяем тип ошибки
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNABORTED') {
             console.error('❌ Training timeout - operation took too long')

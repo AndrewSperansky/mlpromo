@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from app.schemas.prediction_schema import PredictionRequest
 
 import pandas as pd
-import shap
 from catboost import Pool
 
 from app.ml.model_loader import ModelLoader
@@ -24,8 +23,16 @@ class MLPredictionService:
         """
         Загружает модель и метаданные.
         """
+        self.model = None
+        self.meta: Dict[str, Any] = {}
+        self.feature_order: List[str] = []
+        self.cat_features_indices: List[int] = []
+        self.ml_model_id: str = "unknown"
+        self.version: str = "dev"
+        self.trained_at: datetime = datetime.now(timezone.utc)
+
         self._load_model()
-        self._refresh_meta()  # ← добавить
+        self._refresh_meta()
 
     def _load_model(self) -> None:
         """Загружает модель через ModelLoader"""
@@ -44,21 +51,7 @@ class MLPredictionService:
             )
             return
 
-        # Инициализация SHAP
-        try:
-            logger.info("Initializing SHAP TreeExplainer...")
-            self.explainer = shap.TreeExplainer(self.model)
-            logger.info("SHAP TreeExplainer initialized successfully")
-        except Exception as exc:
-            logger.error(
-                "SHAP explainer initialization FAILED",
-                extra={
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "model_type": type(self.model).__name__,
-                },
-                exc_info=True,
-            )
+        logger.info("ML model loaded successfully")
 
     def _refresh_meta(self) -> None:
         """Обновляет метаданные из актуального runtime-state"""
@@ -71,10 +64,15 @@ class MLPredictionService:
             "trained_at", datetime.now(timezone.utc)
         )
 
-        # Определяем индексы категориальных признаков
+        # ================================================================
+        # 🔥 ОПРЕДЕЛЯЕМ ИНДЕКСЫ КАТЕГОРИАЛЬНЫХ ПРИЗНАКОВ
+        # ================================================================
         self.cat_features_indices = []
         for i, feat in enumerate(self.feature_order):
-            if feat in ['promo_code', 'sku']:
+            if feat in ['store_id', 'sku', 'category', 'region',
+                        'store_location_type', 'format_assortment',
+                        'promo_mechanics', 'adv_carrier', 'adv_material',
+                        'marketing_type']:
                 self.cat_features_indices.append(i)
 
         logger.info(
@@ -95,33 +93,6 @@ class MLPredictionService:
         # ВРЕМЕННО ОТКЛЮЧАЕМ ВАЛИДАЦИЮ
         logger.info(f"⚠️ VALIDATION SKIPPED - features: {list(features.keys())}")
         return
-
-        # if not self.feature_order:
-        #     logger.warning("feature_order is empty, skipping validation")
-        #     return
-        #
-        # # Проверяем, что все обязательные фичи есть
-        # missing = set(self.feature_order) - set(features.keys())
-        # if missing:
-        #     raise ValueError(f"Missing features: {sorted(missing)}")
-        #
-        # # Предупреждаем о лишних фичах
-        # extra = set(features.keys()) - set(self.feature_order)
-        # if extra:
-        #     logger.warning(f"Extra features ignored: {sorted(extra)}")
-        #
-        # # Проверяем типы и значения
-        # for name in self.feature_order:
-        #     value = features.get(name)
-        #     if value is None:
-        #         raise ValueError(f"Feature '{name}' is None")
-        #
-        #     # Для числовых признаков проверяем тип
-        #     if name not in ['promo_code', 'sku']:
-        #         if not isinstance(value, (int, float)):
-        #             raise TypeError(
-        #                 f"Feature '{name}' must be numeric, got {type(value).__name__}"
-        #             )
 
     def normalize_external_features(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -156,20 +127,22 @@ class MLPredictionService:
         if not self.feature_order:
             raise ValueError("feature_order is empty")
 
-        # Собираем значения в правильном порядке
         values = []
         for f in self.feature_order:
-            val = features[f]
-            # Конвертируем числа в float, строки оставляем как есть
-            if isinstance(val, (int, float)) and f not in ['promo_code', 'sku']:
-                values.append(float(val))
+            val = features.get(f, "")
+
+            # Числовые признаки → float
+            if f in ['month', 'week', 'regular_price', 'promo_price']:
+                try:
+                    values.append(float(val) if val is not None else 0.0)
+                except (ValueError, TypeError):
+                    values.append(0.0)
             else:
+                # Категориальные признаки → строка
                 values.append(str(val) if val is not None else "")
 
-        # Создаем DataFrame для Pool
         df = pd.DataFrame([values], columns=self.feature_order)
 
-        # Создаем Pool с указанием категориальных признаков
         return Pool(
             data=df,
             cat_features=self.cat_features_indices,
@@ -186,51 +159,44 @@ class MLPredictionService:
         # Предсказание
         y_pred = float(self.model.predict(pool)[0])
 
-        # SHAP - создаем отдельный числовой DataFrame
+        # ================================================================
+        # 🔥 SHAP через CatBoost (нативный способ)
+        # ================================================================
         shap_output: List[Dict[str, Any]] = []
 
-        if self.explainer:
-            try:
-                # Создаем числовой DataFrame для SHAP
-                shap_values_list = []
-                for f in self.feature_order:
-                    val = features[f]
-                    if f in ['promo_code', 'sku'] and isinstance(val, str):
-                        # Конвертируем строку в число для SHAP
-                        shap_values_list.append(float(hash(val) % 10000))
-                    else:
-                        shap_values_list.append(float(val))
+        try:
+            shap_matrix = self.model.get_feature_importance(
+                pool,
+                type="ShapValues"
+            )
 
-                df_shap = pd.DataFrame([shap_values_list], columns=self.feature_order)
+            # Извлекаем SHAP значения (без expected_value)
+            shap_values = shap_matrix[0, :-1]
+            expected_value = float(shap_matrix[0, -1])
 
-                # Вычисляем SHAP values
-                shap_values = self.explainer.shap_values(df_shap)
+            shap_output = [
+                {"feature": f, "effect": float(shap_values[i])}
+                for i, f in enumerate(self.feature_order)
+            ]
 
-                # Обрабатываем результат
-                if isinstance(shap_values, list):
-                    # Для мульти-класса
-                    values = shap_values[0][0]
-                else:
-                    # Для регрессии
-                    values = shap_values[0]
+            logger.debug(
+                "SHAP calculated successfully (CatBoost native)",
+                extra={
+                    "shap_length": len(shap_output),
+                    "expected_value": expected_value
+                }
+            )
 
-                feature_names = self.feature_order or list(features.keys())
-                shap_output = [
-                    {"feature": f, "effect": float(values[i])}
-                    for i, f in enumerate(feature_names)
-                ]
-
-                logger.debug("SHAP calculated successfully", extra={"shap_length": len(shap_output)})
-
-            except Exception as exc:
-                logger.warning(
-                    "SHAP calculation failed",
-                    extra={
-                        "error": str(exc),
-                        "error_type": type(exc).__name__,
-                    },
-                    exc_info=True,
-                )
+        except Exception as exc:
+            logger.warning(
+                "SHAP calculation failed (CatBoost native)",
+                extra={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+                exc_info=True,
+            )
+            shap_output = []
 
         return {
             "prediction": y_pred,
@@ -268,11 +234,7 @@ class MLPredictionService:
         # 🔥 ОБНОВЛЯЕМ МЕТАДАННЫЕ ПЕРЕД КАЖДЫМ ПРЕДСКАЗАНИЕМ
         self._refresh_meta()
 
-        # Преобразуем payload в словарь с фичами
-        # features = payload.model_dump()
-
-        features = payload.features.copy()  # берём словарь из features
-        # 🔥 ДОБАВЛЯЕМ НЕ-ЧИСЛОВЫЕ ПОЛЯ ОТДЕЛЬНО (НЕ В features!)
+        features = payload.features.copy()
         full_features = {
             **features,
             "promo_code": payload.promo_code,
@@ -299,7 +261,7 @@ class MLPredictionService:
             )
             return self._fallback_response(payload, "feature_validation_failed", features)
 
-        # СОЗДАЕМ ДАННЫЕ ДЛЯ МОДЕЛИ (СО СТРОКАМИ)
+        # СОЗДАЕМ ДАННЫЕ ДЛЯ МОДЕЛИ
         values = []
         for f in self.feature_order:
             val = features.get(f)
@@ -323,48 +285,40 @@ class MLPredictionService:
         # ПРЕДСКАЗАНИЕ
         y_pred = float(self.model.predict(pool)[0])
 
-        # СОЗДАЕМ ЧИСЛОВЫЕ ДАННЫЕ ДЛЯ SHAP
+        # ================================================================
+        # 🔥 SHAP через CatBoost (нативный способ)
+        # ================================================================
         shap_output = []
-        if self.explainer:
-            try:
-                logger.debug("Starting SHAP calculation")
 
-                # Создаем отдельный числовой DataFrame для SHAP
-                shap_values_list = []
-                for f in self.feature_order:
-                    val = features.get(f, 0.0)
-                    if f in ['promo_code', 'sku']:
-                        if isinstance(val, str):
-                            shap_values_list.append(float(hash(val) % 10000))
-                        else:
-                            shap_values_list.append(float(val))
-                    else:
-                        shap_values_list.append(float(val))
+        try:
+            shap_matrix = self.model.get_feature_importance(
+                pool,
+                type="ShapValues"
+            )
 
-                df_shap = pd.DataFrame([shap_values_list], columns=self.feature_order)
-                shap_values = self.explainer.shap_values(df_shap)
+            shap_values = shap_matrix[0, :-1]
+            expected_value = float(shap_matrix[0, -1])
 
-                if isinstance(shap_values, list):
-                    values = shap_values[0][0]
-                else:
-                    values = shap_values[0]
+            shap_output = [
+                {"feature": f, "effect": float(shap_values[i])}
+                for i, f in enumerate(self.feature_order)
+            ]
 
-                feature_names = self.feature_order or list(features.keys())
-                shap_output = [
-                    {"feature": f, "effect": float(values[i])}
-                    for i, f in enumerate(feature_names)
-                ]
+            logger.info(
+                "SHAP calculated successfully (CatBoost native)",
+                extra={
+                    "shap_length": len(shap_output),
+                    "expected_value": expected_value
+                }
+            )
 
-                logger.info("SHAP calculated successfully", extra={"shap_length": len(shap_output)})
-
-            except Exception as exc:
-                logger.error(
-                    "SHAP calculation failed",
-                    extra={"error": str(exc)},
-                    exc_info=True,
-                )
-        else:
-            logger.warning("SHAP explainer not available")
+        except Exception as exc:
+            logger.error(
+                "SHAP calculation failed (CatBoost native)",
+                extra={"error": str(exc)},
+                exc_info=True,
+            )
+            shap_output = []
 
         return {
             "promo_code": payload.promo_code,
@@ -383,12 +337,13 @@ class MLPredictionService:
         """Устаревший метод. Используется ML_RUNTIME_STATE['conformal_q_hat']"""
         return ML_RUNTIME_STATE.get("conformal_q_hat")
 
-
     def predict_with_interval(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Предсказание с доверительным интервалом (Conformal Prediction)
+        Предсказание с доверительным интервалом (Conformal Prediction).
+        Интервал масштабируется пропорционально baseline.
         """
         logger.info(f"🔍 predict_with_interval called, features keys: {list(features.keys())}")
+
         # 1. Получаем предсказание
         prediction_result, shap_list = self.predict_raw(features)
 
@@ -397,30 +352,40 @@ class MLPredictionService:
         else:
             pred_value = float(prediction_result) if prediction_result is not None else 1.0
 
-        # 2. Получаем q_hat из runtime_state (загружено из meta.json)
+        # 2. Получаем q_hat из runtime_state
         q_hat = ML_RUNTIME_STATE.get("conformal_q_hat")
-        logger.info(f"🔍 q_hat from runtime: {q_hat}")
 
-        # 3. Формируем ответ
-        result: Dict[str, Any] = {  # ← явно указываем тип
+        # 3. Получаем baseline (если не передан — используем 1.0)
+        baseline = features.get("baseline", 1.0)
+        if baseline is None:
+            baseline = 1.0
+
+        logger.info(f"🔍 q_hat: {q_hat}, baseline: {baseline}, pred_value: {pred_value}")
+
+        result = {
             "prediction": pred_value,
             "shap_values": shap_list
         }
 
         if q_hat is not None:
-            lower = pred_value - q_hat
-            upper = pred_value + q_hat
+            # 🔥 Масштабируем q_hat на baseline
+            interval_width = q_hat * baseline
+            lower = pred_value - interval_width
+            upper = pred_value + interval_width
+
+            # ✅ НЕ обрезаем до нуля — интервал остаётся симметричным
             result["interval"] = {
-                "lower": max(0, lower),
+                "lower": lower,
                 "upper": upper
             }
             result["interval_width"] = upper - lower
             result["has_interval"] = True
+            logger.info(f"✅ Interval: [{lower:.2f}, {upper:.2f}], width: {interval_width:.2f}")
         else:
             result["has_interval"] = False
             result["note"] = "Conformal prediction not available for this model"
-        return result
 
+        return result
 
     def _fallback_response(self, payload: PredictionRequest, reason: str, features: dict = None) -> Dict[str, Any]:
         """Унифицированный ответ при fallback"""
