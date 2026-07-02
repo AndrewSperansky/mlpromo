@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from typing import List
 from app.core.settings import settings
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -19,6 +19,7 @@ from app.ml_torch.inference.predictor import TorchPredictor
 from app.services.registry_service import ModelRegistryService
 from app.models.user import User
 from app.auth.dependencies import get_current_user
+from app.ml.runtime_state import ML_RUNTIME_STATE
 
 from app.schemas.torch_schema import (
     TrainLSTMRequest,
@@ -383,25 +384,161 @@ async def train_lstm(
     return result
 
 
-# ================================================
-# Заглушка для активации LSTM:
-# ================================================
 
-# ═══════════════════════════════════════════════════════════════
-# 🔮 LSTM INTEGRATION (FUTURE)
-# ═══════════════════════════════════════════════════════════════
-#
-# Данный код закладывает основу для использования LSTM модели
-# как источника baseline (продажи без промо).
-#
-# Сейчас LSTM выключена (USE_LSTM=False). Для включения:
-# 1. Обучите LSTM модель через /ml/torch/train/lstm/unified
-# 2. Активируйте её через /ml/torch/activate
-# 3. Установите USE_LSTM=True в настройках
-#
-# После активации LSTM будет автоматически подставлять baseline
-# для прогнозов, где он не указан вручную.
-# ═══════════════════════════════════════════════════════════════
+# ================================================================
+# 🔮 LSTM HITL (Human-In-The-Loop) Endpoints
+# Функция "На будущее" и пока не используется,
+# ================================================================
+
+@router.get("/compare/catboost")
+def compare_lstm_catboost(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    Сравнивает активную LSTM модель с CatBoost.
+    Возвращает метрики обеих моделей для HITL.
+
+    FOR COMING FUTURE: Используется для принятия решения об активации LSTM.
+    """
+    from app.services.registry_service import ModelRegistryService
+
+    registry = ModelRegistryService(db)
+
+    # Получаем активную LSTM модель
+    lstm_model = registry.get_active_model_by_algorithm("pytorch_lstm_with_embeddings")
+
+    # Получаем активную CatBoost модель
+    catboost_model = registry.get_active_model_by_algorithm("catboost")
+
+    # ===== Базовый ответ =====
+    result = {
+        "lstm": {
+            "id": lstm_model.id if lstm_model else None,
+            "version": lstm_model.version if lstm_model else None,
+            "metrics": lstm_model.metrics if lstm_model else None,
+            "is_active": lstm_model.is_active if lstm_model else False,
+            "is_trained": lstm_model is not None,
+            "exists": lstm_model is not None,
+        },
+        "catboost": {
+            "id": catboost_model.id if catboost_model else None,
+            "version": catboost_model.version if catboost_model else None,
+            "metrics": catboost_model.metrics if catboost_model else None,
+            "is_active": catboost_model.is_active if catboost_model else True,
+            "exists": catboost_model is not None,
+        },
+        "comparison": None,
+        "lstm_active_in_runtime": ML_RUNTIME_STATE.get("lstm_active", False),
+    }
+
+    # ===== Сравниваем метрики, если обе модели есть =====
+    if lstm_model and catboost_model:
+        lstm_metrics = lstm_model.metrics or {}
+        catboost_metrics = catboost_model.metrics or {}
+
+        # Извлекаем RMSE
+        lstm_rmse = lstm_metrics.get("rmse") or lstm_metrics.get("val_loss")
+        catboost_rmse = catboost_metrics.get("rmse")
+
+        # Извлекаем Coverage
+        lstm_coverage = lstm_metrics.get("coverage")
+        catboost_coverage = catboost_metrics.get("coverage")
+
+        # Извлекаем Uplift
+        lstm_uplift = lstm_metrics.get("uplift")
+        catboost_uplift = catboost_metrics.get("uplift")
+
+        comparison = {
+            "rmse": {
+                "lstm": lstm_rmse,
+                "catboost": catboost_rmse,
+                "diff": round(lstm_rmse - catboost_rmse, 6) if lstm_rmse and catboost_rmse else None,
+                "is_better": lstm_rmse < catboost_rmse if lstm_rmse and catboost_rmse else None,
+            },
+            "coverage": {
+                "lstm": lstm_coverage,
+                "catboost": catboost_coverage,
+                "is_better": lstm_coverage > catboost_coverage if lstm_coverage and catboost_coverage else None,
+            },
+            "uplift": {
+                "lstm": lstm_uplift,
+                "catboost": catboost_uplift,
+                "is_better": lstm_uplift > catboost_uplift if lstm_uplift and catboost_uplift else None,
+            }
+        }
+
+        # Вычисляем общую оценку
+        if lstm_rmse and catboost_rmse:
+            improvement_percent = ((catboost_rmse - lstm_rmse) / catboost_rmse) * 100 if catboost_rmse != 0 else 0
+            comparison["overall"] = {
+                "improvement_percent": round(improvement_percent, 2),
+                "is_better": lstm_rmse < catboost_rmse,
+                "verdict": "LSTM is better" if lstm_rmse < catboost_rmse else "CatBoost is better",
+                "recommendation": "Activate LSTM" if lstm_rmse < catboost_rmse else "Keep CatBoost",
+            }
+
+        result["comparison"] = comparison
+
+    # ===== Если нет LSTM модели =====
+    elif not lstm_model and catboost_model:
+        result["message"] = "No LSTM model found. Train LSTM model first."      # type: ignore
+
+    # ===== Если нет CatBoost модели =====
+    elif lstm_model and not catboost_model:
+        result["message"] = "No CatBoost model found. Train CatBoost model first."      # type: ignore
+
+    # ===== Если нет ни одной модели =====
+    else:
+        result["message"] = "No models found. Train models first."          # type: ignore
+
+    return result
+
+
+
+# ================================================================
+# 🔮 LSTM HITL (Human-In-The-Loop) — простой статус + активация
+# ================================================================
+
+@router.get("/status")
+def get_lstm_status(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    Возвращает статус LSTM модели и CatBoost для справки.
+    """
+    from app.services.registry_service import ModelRegistryService
+
+    registry = ModelRegistryService(db)
+
+    # Получаем активную LSTM модель (pytorch_lstm_with_embeddings)
+    lstm_model = registry.get_active_model_by_algorithm("pytorch_lstm_with_embeddings")
+
+    # Получаем активную CatBoost модель (для справки)
+    catboost_model = registry.get_active_model_by_algorithm("catboost")
+
+    # Проверяем, есть ли LSTM модели в принципе (не только активные)
+    all_lstm_models = registry.get_models_by_algorithm("pytorch_lstm_with_embeddings", limit=1)
+
+    return {
+        "lstm": {
+            "exists": lstm_model is not None,
+            "has_candidate": len(all_lstm_models) > 0,
+            "id": lstm_model.id if lstm_model else None,
+            "version": lstm_model.version if lstm_model else None,
+            "metrics": lstm_model.metrics if lstm_model else None,
+            "is_active": ML_RUNTIME_STATE.get("lstm_active", False),
+            "activated_at": ML_RUNTIME_STATE.get("lstm_activated_at"),
+        },
+        "catboost": {
+            "id": catboost_model.id if catboost_model else None,
+            "version": catboost_model.version if catboost_model else None,
+            "metrics": catboost_model.metrics if catboost_model else None,
+            "is_active": catboost_model.is_active if catboost_model else False,
+        }
+    }
+
 
 @router.post("/activate")
 def activate_lstm(
@@ -410,17 +547,129 @@ def activate_lstm(
 ):
     """
     Активирует LSTM модель как источник baseline.
+    HITL: человек подтверждает активацию после сравнения.
 
-    🔮 В БУДУЩЕМ: после обучения LSTM модели, эта функция
+    🔮 FUTURE: после обучения LSTM модели, эта функция
     будет делать её активной для всех прогнозов.
 
-    СЕЙЧАС: заглушка, возвращает сообщение о том, что LSTM
-    ещё не готова к использованию в production.
+    СЕЙЧАС: если USE_LSTM=True — выполняет активацию,
+    если USE_LSTM=False — возвращает сообщение о настройке.
     """
+    from app.core.settings import settings
+    from app.services.registry_service import ModelRegistryService
+    from app.services.activity_service import ActivityService
+
+    # ═══════════════════════════════════════════════════════════════
+    # 🔮 LSTM INTEGRATION (FUTURE)
+    # ═══════════════════════════════════════════════════════════════
+    #
+    # Сейчас LSTM выключена (USE_LSTM=False). Для включения:
+    # 1. Обучите LSTM модель через /ml/torch/train/lstm/unified
+    # 2. Установите USE_LSTM=True в настройках
+    # 3. Используйте этот эндпоинт для активации
+    # ═══════════════════════════════════════════════════════════════
+
+    # Если LSTM выключена — возвращаем сообщение
+    if not settings.USE_LSTM:
+        return {
+            "status": "not_implemented",
+            "message": "LSTM activation is not yet available in production. "
+                       "Please set USE_LSTM=True in settings when ready.",
+            "docs": "See app/core/settings.py -> USE_LSTM"
+        }
+
+    logger.info("🔮 Attempting to activate LSTM model as baseline source")
+
+    registry = ModelRegistryService(db)
+
+    # Ищем LSTM модель
+    lstm_model = registry.get_active_model_by_algorithm("pytorch_lstm_with_embeddings")
+
+    if not lstm_model:
+        raise HTTPException(
+            status_code=404,
+            detail="No LSTM model found. Train LSTM model first via /ml/torch/train/lstm/unified"
+        )
+
+    # Проверяем, не активна ли уже
+    if ML_RUNTIME_STATE.get("lstm_active", False):
+        raise HTTPException(
+            status_code=400,
+            detail="LSTM is already active. Deactivate first if you want to switch."
+        )
+
+    # Активируем LSTM в runtime_state
+    ML_RUNTIME_STATE["lstm_active"] = True
+    ML_RUNTIME_STATE["lstm_model_id"] = lstm_model.id
+    ML_RUNTIME_STATE["lstm_activated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Логируем действие
+    ActivityService.log(
+        db=db,
+        user_id=current_user.id,
+        action="activate_lstm",
+        resource=f"lstm_model_{lstm_model.id}",
+        details=f"LSTM model {lstm_model.id} (version {lstm_model.version}) activated as baseline source"
+    )
+
+    logger.info(f"✅ LSTM model {lstm_model.id} activated by user {current_user.username}")
+
     return {
-        "status": "not_implemented",
-        "message": "LSTM activation is not yet available in production. "
-                   "Please set USE_LSTM=True in settings when ready.",
-        "docs": "See app/core/settings.py -> USE_LSTM"
+        "status": "activated",
+        "lstm_model_id": lstm_model.id,
+        "lstm_version": lstm_model.version,
+        "message": "LSTM model activated as baseline source",
+        "activated_at": ML_RUNTIME_STATE["lstm_activated_at"],
+    }
+
+
+@router.post("/deactivate")
+def deactivate_lstm(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    Деактивирует LSTM модель.
+    Возвращает CatBoost как источник baseline.
+    """
+    from app.core.settings import settings
+    from app.services.activity_service import ActivityService
+
+    # Если LSTM выключена — возвращаем сообщение
+    if not settings.USE_LSTM:
+        return {
+            "status": "not_implemented",
+            "message": "LSTM deactivation is not yet available in production. "
+                       "Please set USE_LSTM=True in settings when ready.",
+            "docs": "See app/core/settings.py -> USE_LSTM"
+        }
+
+    if not ML_RUNTIME_STATE.get("lstm_active", False):
+        raise HTTPException(
+            status_code=400,
+            detail="LSTM is not active. Nothing to deactivate."
+        )
+
+    lstm_model_id = ML_RUNTIME_STATE.get("lstm_model_id")
+
+    # Деактивируем LSTM
+    ML_RUNTIME_STATE["lstm_active"] = False
+    ML_RUNTIME_STATE["lstm_deactivated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Логируем действие
+    ActivityService.log(
+        db=db,
+        user_id=current_user.id,
+        action="deactivate_lstm",
+        resource=f"lstm_model_{lstm_model_id}" if lstm_model_id else "lstm_model",
+        details="LSTM deactivated, returning to CatBoost baseline"
+    )
+
+    logger.info(f"✅ LSTM model {lstm_model_id} deactivated by user {current_user.username}")
+
+    return {
+        "status": "deactivated",
+        "message": "LSTM model deactivated. CatBoost will be used for baseline.",
+        "deactivated_at": ML_RUNTIME_STATE["lstm_deactivated_at"],
     }
 

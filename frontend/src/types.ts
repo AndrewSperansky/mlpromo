@@ -16,6 +16,7 @@ export interface Model {
     trained_rows_count: number
     is_active: boolean
     trained_at?: string
+    created_at?: string
     metrics?: Record<string, any>
     features?: string[]
 }
