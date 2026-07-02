@@ -4,6 +4,10 @@ import logging
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from app.schemas.prediction_schema import PredictionRequest
+from app.db.session import SessionLocal
+from app.services.registry_service import ModelRegistryService
+from app.core.settings import settings
+
 
 import pandas as pd
 from catboost import Pool
@@ -261,6 +265,39 @@ class MLPredictionService:
             )
             return self._fallback_response(payload, "feature_validation_failed", features)
 
+        # ================================================================
+        # 🔥 BASELINE: приоритет — ручной > LSTM > fallback
+        # ================================================================
+
+        baseline = features.get("baseline")
+
+        # Если baseline не указан или равен 0 — пробуем LSTM
+        if (baseline is None or baseline == 0) and settings.USE_LSTM:
+            lstm_baseline = self._get_lstm_baseline(
+                sku=payload.sku,
+                store_id=payload.store_id,
+                prediction_date=payload.prediction_date.isoformat() if payload.prediction_date else None,
+                regular_price=payload.regular_price,
+            )
+
+            if lstm_baseline is not None:
+                baseline = lstm_baseline
+                logger.info(f"✅ Using LSTM baseline: {baseline}")
+            else:
+                # LSTM не дала результат — используем fallback
+                baseline = features.get("baseline", 1.0)
+                if baseline is None or baseline == 0:
+                    baseline = 1.0
+                logger.debug(f"LSTM unavailable, using fallback baseline: {baseline}")
+        else:
+            # Если baseline указан вручную — используем его (приоритет!)
+            baseline = baseline or 1.0
+            if baseline is not None:
+                logger.info(f"Using manual baseline: {baseline}")
+
+        # Сохраняем baseline в features для дальнейшего использования
+        features["baseline"] = baseline
+
         # СОЗДАЕМ ДАННЫЕ ДЛЯ МОДЕЛИ
         values = []
         for f in self.feature_order:
@@ -355,7 +392,15 @@ class MLPredictionService:
         # 2. Получаем q_hat из runtime_state
         q_hat = ML_RUNTIME_STATE.get("conformal_q_hat")
 
+        # ================================================================
+        # 3. 🔥 BASELINE: приоритет — ручной > LSTM > fallback
         # 3. Получаем baseline (если не передан — используем 1.0)
+        # ================================================================
+
+
+        baseline = features.get("baseline")
+
+        # Если baseline не указан ИЛИ равен 0 — пробуем LSTM
         baseline = features.get("baseline", 1.0)
         if baseline is None:
             baseline = 1.0
@@ -383,9 +428,10 @@ class MLPredictionService:
             logger.info(f"✅ Interval: [{lower:.2f}, {upper:.2f}], width: {interval_width:.2f}")
         else:
             result["has_interval"] = False
-            result["note"] = "Conformal prediction not available for this model"
+            result["note"] = "Conformal prediction not available for this model"     # type: ignore
 
         return result
+
 
     def _fallback_response(self, payload: PredictionRequest, reason: str, features: dict = None) -> Dict[str, Any]:
         """Унифицированный ответ при fallback"""
@@ -402,3 +448,102 @@ class MLPredictionService:
             "fallback_used": True,
             "reason": reason,
         }
+
+    # ================================================================
+    # 4. 🔥 BASELINE: Получение Baseline из LTSM
+    # ================================================================
+
+
+    def _get_lstm_baseline(
+            self,
+            sku: str,
+            store_id: str,
+            prediction_date: str,
+            regular_price: Optional[float] = None,
+    ) -> Optional[float]:
+        """
+        Получает baseline (продажи без промо) из LSTM модели.
+        Возвращает None, если LSTM не активна или произошла ошибка.
+
+        🔮 FUTURE: LSTM интеграция готова, но отключена флагом USE_LSTM.
+        Для включения установите USE_LSTM=True в настройках.
+        """
+
+        # ═══════════════════════════════════════════════════════════════
+        # 🔮 LSTM INTEGRATION (FUTURE)
+        # ═══════════════════════════════════════════════════════════════
+        #
+        # Данный код закладывает основу для использования LSTM модели
+        # как источника baseline (продажи без промо).
+        #
+        # Сейчас LSTM выключена (USE_LSTM=False). Для включения:
+        # 1. Обучите LSTM модель через /ml/torch/train/lstm/unified
+        # 2. Активируйте её через /ml/torch/activate
+        # 3. Установите USE_LSTM=True в настройках
+        #
+        # После активации LSTM будет автоматически подставлять baseline
+        # для прогнозов, где он не указан вручную.
+        # ═══════════════════════════════════════════════════════════════
+
+        # Если LSTM выключена — сразу возвращаем None
+        if not settings.USE_LSTM:
+            logger.debug(
+                "LSTM is disabled (USE_LSTM=False). "
+                "Set USE_LSTM=True in settings to enable."
+            )
+            return None
+
+        logger.info(f"🔮 Attempting to get LSTM baseline for SKU={sku}, store={store_id}")
+
+        db = SessionLocal()
+        try:
+            registry = ModelRegistryService(db)
+
+            # Ищем активную LSTM модель
+            lstm_model = registry.get_active_model_by_algorithm(
+                "pytorch_lstm_with_embeddings"
+            )
+
+            if not lstm_model:
+                logger.debug("No active LSTM model found")
+                return None
+
+            # Загружаем meta.json
+            import json
+            from pathlib import Path
+            meta_path = Path(lstm_model.model_path).with_suffix('.meta.json')
+            if not meta_path.exists():
+                logger.warning(f"LSTM meta not found: {meta_path}")
+                return None
+
+            with open(meta_path) as f:
+                meta = json.load(f)
+
+            # Создаём TorchPredictor и загружаем модель
+            from app.ml_torch.inference.predictor import TorchPredictor
+            predictor = TorchPredictor(db)
+            predictor.load_model(
+                Path(lstm_model.model_path),
+                meta.get("model_config", {})
+            )
+
+            # Делаем прогноз
+            from datetime import date
+            target_date = date.fromisoformat(prediction_date) if prediction_date else date.today()
+
+            result = predictor.predict_for_day(
+                sku=sku,
+                date=target_date,
+                store_id=store_id,
+                regular_price=regular_price,
+            )
+
+            baseline = result.get("predicted_quantity")
+            logger.info(f"✅ LSTM baseline for {sku}: {baseline}")
+            return baseline
+
+        except Exception as e:
+            logger.error(f"LSTM baseline failed: {e}", exc_info=True)
+            return None
+        finally:
+            db.close()

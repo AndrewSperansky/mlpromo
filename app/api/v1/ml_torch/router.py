@@ -382,3 +382,45 @@ async def train_lstm(
 
     return result
 
+
+# ================================================
+# Заглушка для активации LSTM:
+# ================================================
+
+# ═══════════════════════════════════════════════════════════════
+# 🔮 LSTM INTEGRATION (FUTURE)
+# ═══════════════════════════════════════════════════════════════
+#
+# Данный код закладывает основу для использования LSTM модели
+# как источника baseline (продажи без промо).
+#
+# Сейчас LSTM выключена (USE_LSTM=False). Для включения:
+# 1. Обучите LSTM модель через /ml/torch/train/lstm/unified
+# 2. Активируйте её через /ml/torch/activate
+# 3. Установите USE_LSTM=True в настройках
+#
+# После активации LSTM будет автоматически подставлять baseline
+# для прогнозов, где он не указан вручную.
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/activate")
+def activate_lstm(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    Активирует LSTM модель как источник baseline.
+
+    🔮 В БУДУЩЕМ: после обучения LSTM модели, эта функция
+    будет делать её активной для всех прогнозов.
+
+    СЕЙЧАС: заглушка, возвращает сообщение о том, что LSTM
+    ещё не готова к использованию в production.
+    """
+    return {
+        "status": "not_implemented",
+        "message": "LSTM activation is not yet available in production. "
+                   "Please set USE_LSTM=True in settings when ready.",
+        "docs": "See app/core/settings.py -> USE_LSTM"
+    }
+

@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     ML_META_PATH: str = "/app/models/current/cb_promo_v1.meta.json"
 
 
+    # ===== LSTM SETTINGS (НА БУДУЩЕЕ с GBU) =====
+    USE_LSTM: bool = Field(
+        default=False,
+        description="Включить LSTM для получения baseline (пока в разработке)"
+    )
+    LSTM_MODEL_ID: Optional[int] = Field(
+        default=None,
+        description="ID активной LSTM модели (если USE_LSTM=True)"
+    )
+
+
     # ===== DATABASE =============
     DATABASE_URL: str = "postgresql+psycopg2://postgres:postgres@postgres:5432/promo"
     REDIS_URL: str = "redis://localhost:6379/0"
