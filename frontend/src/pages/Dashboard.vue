@@ -158,6 +158,21 @@
       Best iteration: {{ trainingData.best_iteration }} (Best RMSE: {{ trainingData.best_val_rmse?.toFixed(6) }})
     </div>
 
+    <!-- ===== LSTM TRAINING CHART ===== -->
+
+    <div class="row mt-4">
+      <div class="col-md-12">
+        <LSTMTrainingChart
+          :data="lstmTrainingData"
+          title="LSTM Training"
+          model-type="LSTM"
+          :loading="lstmTrainingData.loading"
+          :hint="lstmTrainingData.message || 'Train LSTM model to see learning curve'"
+        />
+      </div>
+    </div>
+
+
     <!-- ===== PERFORMANCE CARDS ===== -->
     <div class="row g-3 mb-4">
       <div class="col-md-4">
@@ -232,6 +247,8 @@ import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import { getContainersStatus } from '../services/api'
 import DriftCoverageChart from '../components/DriftCoverageChart.vue'
+import LSTMTrainingChart from '../components/LSTMTrainingChart.vue'
+import { getLSTMTrainingMetrics } from '../services/api'
 
 interface OverviewResponse {
   timestamp: string
@@ -370,6 +387,21 @@ const healthIconClass = computed(() => {
   if (status === 'Attention') return 'bi bi-eye'
   return 'bi bi-x-lg'
 })
+
+const lstmTrainingData = ref({
+  iterations: [],
+  train_loss: [],
+  val_loss: [],
+  best_epoch: null,
+  best_val_loss: null,
+  total_epochs: 0,
+  loading: false,
+  message: 'No LSTM training data yet',
+})
+
+//  ========================================================
+//              ФУНКЦИИ (МЕТОДЫ)
+//  ========================================================
 
 // Методы для карточек контейнеров
 function formatContainerName(name: string): string {
@@ -570,10 +602,28 @@ function renderTrainingCharts() {
   }
 }
 
+async function loadLSTMTrainingMetrics() {
+  lstmTrainingData.value.loading = true
+  try {
+    const response = await getLSTMTrainingMetrics()
+    lstmTrainingData.value = {
+      ...response.data,
+      loading: false,
+      message: response.data.message || '',
+    }
+  } catch (error) {
+    console.error('Failed to load LSTM training metrics:', error)
+    lstmTrainingData.value.loading = false
+    lstmTrainingData.value.message = 'Failed to load metrics'
+  }
+}
+
+
 onMounted(() => {
   loadDashboard()
   loadContainersStatus()
   loadTrainingMetrics()
+  loadLSTMTrainingMetrics()
   intervalId = setInterval(() => {
     loadDashboard()
     loadContainersStatus()

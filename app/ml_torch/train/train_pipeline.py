@@ -10,9 +10,7 @@ import torch
 
 from pathlib import Path
 from datetime import datetime, timezone
-
 from torch.utils.data import DataLoader, random_split
-
 from app.db.session import SessionLocal
 from app.core.settings import settings
 from app.services.registry_service import ModelRegistryService
@@ -313,6 +311,30 @@ def train_lstm_unified(
             metrics={"val_loss": train_result["best_val_loss"]},
             trained_rows_count=len(dataset)
         )
+
+        # ===== СОХРАНЯЕМ МЕТРИКИ ОБУЧЕНИЯ ДЛЯ ГРАФИКОВ =====
+
+
+        metrics_dir = Path(settings.ML_METRICS_DIR)
+        metrics_dir.mkdir(parents=True, exist_ok=True)
+
+        # Извлекаем историю обучения
+        history = trainer.history  # или train_result.get("history", {})
+
+        training_metrics = {
+            "iterations": list(range(1, len(history.get("train_loss", [])) + 1)),
+            "train_loss": history.get("train_loss", []),
+            "val_loss": history.get("val_loss", []),
+            "best_epoch": train_result.get("best_epoch"),
+            "best_val_loss": train_result.get("best_val_loss"),
+            "total_epochs": train_result.get("epochs_completed", 0)
+        }
+
+        metrics_path = metrics_dir / "lstm_training_metrics.json"
+        with open(metrics_path, "w") as f:
+            json.dump(training_metrics, f, indent=2)
+
+        logger.info(f"✅ LSTM training metrics saved to {metrics_path}")
 
         # Сохраняем модель
         model_path = candidate_dir / f"{db_model.id}.pt"

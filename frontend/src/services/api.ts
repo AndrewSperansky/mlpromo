@@ -429,3 +429,11 @@ export const activateLSTM = () =>
 export const deactivateLSTM = () =>
     api.post('/ml/torch/deactivate')
 
+
+// ============================
+// LSTM TRAINING METRICS FOR CHART
+// ============================
+
+export const getLSTMTrainingMetrics = () =>
+    api.get('/ml/torch/training/metrics')
+

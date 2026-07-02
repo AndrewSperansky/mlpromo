@@ -673,3 +673,57 @@ def deactivate_lstm(
         "deactivated_at": ML_RUNTIME_STATE["lstm_deactivated_at"],
     }
 
+
+
+# ================================================================
+# 📈 LSTM TRAINING METRICS FOR CHART
+# ================================================================
+
+@router.get("/training/metrics")
+def get_lstm_training_metrics(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    Возвращает метрики обучения LSTM модели для графиков.
+    Ищет в папке models/metrics/lstm_training_metrics.json
+    """
+    from pathlib import Path
+    import json
+    from app.core.settings import settings
+
+    metrics_dir = Path(settings.ML_METRICS_DIR)
+    metrics_path = metrics_dir / "lstm_training_metrics.json"
+
+    if not metrics_path.exists():
+        return {
+            "iterations": [],
+            "train_loss": [],
+            "val_loss": [],
+            "best_epoch": None,
+            "best_val_loss": None,
+            "message": "No LSTM training metrics available yet. Train LSTM model first."
+        }
+
+    try:
+        with open(metrics_path) as f:
+            data = json.load(f)
+
+        return {
+            "iterations": data.get("iterations", []),
+            "train_loss": data.get("train_loss", []),
+            "val_loss": data.get("val_loss", []),
+            "best_epoch": data.get("best_epoch"),
+            "best_val_loss": data.get("best_val_loss"),
+            "total_epochs": len(data.get("train_loss", []))
+        }
+    except Exception as e:
+        return {
+            "iterations": [],
+            "train_loss": [],
+            "val_loss": [],
+            "best_epoch": None,
+            "best_val_loss": None,
+            "error": str(e)
+        }
+
