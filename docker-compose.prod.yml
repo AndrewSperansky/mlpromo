@@ -63,7 +63,7 @@ services:
 
   frontend:
     container_name: promo_ml_frontend
-    image: asperansky/promo-ml-front:v1.2
+    image: asperansky/promo-ml-front:v1.5
     restart: unless-stopped
 
     ports:
