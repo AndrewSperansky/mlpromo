@@ -492,8 +492,8 @@ docker images | grep promo-ml
 
 
 ### 6. Собрать образ Backend
-docker build -t asperansky/promo-ml:v1.2  .  
-docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . 
+docker build -t asperansky/promo-ml:v1.5  .  
+docker build -t asperansky/promo-ml:v1.5 -f Dockerfile . 
 
 
 🔹  -t     задает имя  
@@ -502,16 +502,16 @@ docker build -t asperansky/promo-ml:v1.2 -f Dockerfile .
 
 ### 7. Отправить образ Backend на Docker Hub
 
-docker push asperansky/promo-ml:v1.2
+docker push asperansky/promo-ml:v1.5
 
 
 # Собрать Frontend
 
-docker build -t asperansky/promo-ml-front:v1.2 -f Dockerfile.frontend .
+docker build -t asperansky/promo-ml-front:v1.5 -f Dockerfile.frontend .
 
 # Запушить  Frontend на Docker Hub
 
-docker push asperansky/promo-ml-front:v1.2
+docker push asperansky/promo-ml-front:v1.5
 
 
 
@@ -519,13 +519,13 @@ docker push asperansky/promo-ml-front:v1.2
 ### 8. Проверка на Docker Hub
 
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:v1.2 | grep Id 
+docker inspect asperansky/promo-ml:v1.5 | grep Id 
 ### Production
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:v1.2 --format='{{.Id}}'
+docker inspect asperansky/promo-ml:v1.5 --format='{{.Id}}'
 ### Frontend
 docker images asperansky/promo-ml-front
-docker inspect asperansky/promo-ml-front:v1.2
+docker inspect asperansky/promo-ml-front:v1.5
 
 
 
@@ -558,8 +558,8 @@ git  pull
 ### Скачать новые образы
 docker compose -f docker-compose.prod.yml pull
 ### или
-docker pull asperansky/promo-ml:v1.2
-docker pull asperansky/promo-ml-front:v1.2
+docker pull asperansky/promo-ml:v1.5
+docker pull asperansky/promo-ml-front:v1.5
 
 ### Перезапустить
 docker compose -f docker-compose.prod.yml down

@@ -42,3 +42,7 @@ offline_wheels/
 docker-compose.override.yml
 
 /models/_smoke/
+
+/backup/
+/backup/*.dump
+/backup/*.sql
