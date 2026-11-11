@@ -43,59 +43,27 @@ class FeaturePipeline:
         return features
 
     def _extract_inference_features(self, request: Dict) -> Dict:
-        """
-        Извлекает фичи из запроса
-        """
-        logger.info(f"🔍 DEBUG: request keys = {list(request.keys())}")
-        logger.info(f"🔍 DEBUG: request content = {request}")
-
         features = {}
-        missing_required = []  # ← собираем отсутствующие обязательные поля
-
         for f in self.config.get('inference_features', []):
             name = f['name']
             default = f.get('default', '')
-            required = f.get('required', False)
-            value_type = f.get('type', 'string')
-
             value = request.get(name, default)
 
-            # Преобразуем тип
-            if value_type in ['integer', 'int']:
-                try:
-                    value = int(value)
-                except (TypeError, ValueError):
-                    value = int(default) if default else 0
-            elif value_type in ['number', 'float']:
-                try:
-                    value = float(value)
-                except (TypeError, ValueError):
-                    value = float(default) if default else 0.0
-            elif value_type in ['boolean', 'bool']:
-                if isinstance(value, str):
-                    value = value.lower() in ['true', '1', 'yes']
-                else:
-                    value = bool(value)
-            elif value_type in ['array', 'list']:
-                if isinstance(value, str):
-                    import json
-                    value = json.loads(value) if value else []
-                else:
-                    value = value if isinstance(value, list) else []
-            else:  # string
+            # 🔥 НЕ ПЫТАЕМСЯ КОНВЕРТИРОВАТЬ store_id В ЧИСЛО!
+            if name in ['store_id', 'sku', 'promo_id', 'category', 'region',
+                        'store_location_type', 'format_assortment',
+                        'promo_mechanics', 'adv_carrier', 'adv_material',
+                        'marketing_type']:
+                value = str(value) if value is not None else ''
+            elif isinstance(value, (int, float)):
+                value = float(value)
+            else:
                 value = str(value) if value is not None else ''
 
             features[name] = value
-
-            if required and (value is None or value == '' or value == 0):
-                missing_required.append(name)
-                logger.warning(f"Required feature '{name}' is missing, using default: {default}")
-
-            # 🔥 Если есть отсутствующие обязательные поля — бросаем ошибку
-        if missing_required:
-            raise ValueError(f"Missing required features: {', '.join(missing_required)}")
-
         return features
+
+
 
     def _compute_features(self, features: Dict) -> Dict:
         """Вычисляет производные фичи"""

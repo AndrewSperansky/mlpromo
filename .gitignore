@@ -12,8 +12,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-data/
-data/models_history/
+.data/
+
 frontend/node_modules/
 INFO/
 lib/
@@ -42,3 +42,7 @@ offline_wheels/
 docker-compose.override.yml
 
 /models/_smoke/
+
+/backup/
+/backup/*.dump
+/backup/*.sql

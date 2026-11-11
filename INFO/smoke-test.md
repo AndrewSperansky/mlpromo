@@ -1,3 +1,15 @@
+✅[curl -X POST http://localhost:8000/api/v1/auth/login   -H "Content-Type: application/json"   -d '{
+    "email": "a.shigaev@agrohold.ru",
+    "password": "admin123"
+  }']( curl -X POST http://localhost:8000/api/v1/ml/models/3/promote \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc5OTcwODI3fQ.wBjPEzz3lfUS2CrgduQOyVBkmc3kuZIeIUzwQz9jSV0" \
+  -d '{"force": true}'
+{"detail":"No common metrics found"}(base))
+
+"access_token
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc5OTcwODI3fQ.wBjPEzz3lfUS2CrgduQOyVBkmc3kuZIeIUzwQz9jSV0
+
 ✅ 1. Health
 curl http://localhost:8000/api/v1/system/health
 
@@ -186,12 +198,117 @@ curl http://localhost:8000/api/v1/system/status | jq
   "IsAnalogSKU"
 ]
 
+✅
 curl http://localhost:8000/api/v1/system/runtime-state | jq '.ml_model_id'
 
 42
 
-
+✅
 curl -N -X POST "http://localhost:8000/api/v1/ml/dataset/stream"   -H "Content-Type: application/x-ndjson"   --data-binary @data/test_real_record.ndjson | jq .
  
-
+✅
 curl http://localhost:8000/api/v1/ml/dataset/stats | jq
+
+
+
+curl -X POST http://localhost:8000/api/v1/ml/torch/push/average-cheque \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batch_id": "550e8400-e29b-41d4-a716-446655440000",
+    "records": [
+        {
+            "date": "2026-05-04",
+            "store_code": "00-000057",
+            "store_name": "БРН №206 Брянск Выгоничи",
+            "cheque_count": 634,
+            "total_amount": 445397.95,
+            "average_amount": 702.52,
+            "is_total": false
+        }
+    ]
+}'
+
+
+ curl -X POST http://localhost:8000/api/v1/ml/torch/push/sales-fact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "batch_id": "550e8400-e29b-41d4-a716-446655440000",
+    "records": [
+        {
+            "date": "2026-05-01",
+            "sku_code": "РН012912",
+            "sku_name": "Кофе в зернах",
+            "store_code": "00-000001",
+            "store_name": "МОС №1 Домодедово",
+            "region": "Московская область",
+            "quantity": 50,
+            "revenue": 24950.00
+        }
+    ]
+}'
+
+
+curl -X POST http://localhost:8000/api/v1/ml/torch/push/exchange-rates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+        {"date": "2026-05-01", "currency": "USD", "rate": 75.34},
+        {"date": "2026-05-01", "currency": "EUR", "rate": 88.35},
+        {"date": "2026-05-01", "currency": "CNY", "rate": 11.02}
+    ]
+}'
+
+
+curl -X POST http://localhost:8000/api/v1/ml/torch/push/calendar \
+  -H "Content-Type: application/json" \
+  -d '{
+    "records": [
+        {"date": "2026-05-08", "day_type": "Предпраздничный", "week": 19, "year": 2026},
+        {"date": "2026-05-09", "day_type": "Праздник", "week": 19, "year": 2026},
+        {"date": "2026-05-10", "day_type": "Воскресенье", "week": 19, "year": 2026},
+        {"date": "2026-05-11", "day_type": "Суббота", "week": 20, "year": 2026},
+        {"date": "2026-05-12", "day_type": "Рабочий", "week": 20, "year": 2026}
+    ]
+}'
+
+## ✅ REQUEST TRAIN
+
+ curl -X POST http://localhost:8000/api/v1/ml/torch/train/lstm   -H "Content-Type: application/json"  \
+ -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MjMyNzQ3fQ.jd2ihUJ-RaKYV4IhamKjvps-1DGW7pqimTME9ERNRP8"  \
+ -d '{
+    "sku": "РН012912",
+    "days": 30,                        
+    "seq_len": 7,
+    "hidden_size": 16,
+    "num_layers": 1,
+    "learning_rate": 0.001,
+    "batch_size": 8,
+    "epochs": 10,
+    "promote": false
+  }'
+
+## RESPONSE:
+{"status":"success","model_id":336,"sku":"РН012912","val_loss":12954.0634765625,"epochs_completed":10,"promoted":false}
+
+
+
+
+## ✅ REQUEST FOR ACTIVE MODELS
+
+ curl -X GET http://localhost:8000/api/v1/ml/models \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MjMyNzQ3fQ.jd2ihUJ-RaKYV4IhamKjvps-1DGW7pqimTME9ERNRP8" \
+  | jq '.[] | {id, name, algorithm, is_active}'
+ 
+## RESPONSE:
+{
+  "id": 336,
+  "name": "lstm_uplift_РН012912",
+  "algorithm": "pytorch_lstm",
+  "is_active": false
+}
+{
+  "id": 335,
+  "name": "promo_uplift",
+  "algorithm": "catboost",
+  "is_active": false
+}

@@ -4,7 +4,7 @@ import logging
 import shutil
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -401,6 +401,26 @@ class ModelRegistryService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
+
+
+    def get_active_models_by_type(self, model_type: str) -> List[MLModel]:
+        """
+        Возвращает список активных моделей указанного типа.
+
+        Args:
+            model_type: 'tabular', 'time_series'
+        """
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.model_type == model_type,
+                MLModel.is_active == True,
+                MLModel.is_deleted == False,
+            )
+        )
+        return self.db.execute(stmt).scalars().all()    # type: ignore
+
+
+
     def list_models(self):
         return (
             self.db.query(MLModel)
@@ -418,6 +438,8 @@ class ModelRegistryService:
         self.db.refresh(model)
         logger.info(f"Model {model_id} deactivated")
         return model
+
+
 
     def validate_promotion(self, current_model: MLModel, new_model: MLModel) -> None:
         """Проверяет, можно ли продвигать новую модель."""
@@ -450,3 +472,63 @@ class ModelRegistryService:
         else:
             if new_value < current_value:
                 raise ValueError(f"Promotion rejected: new model has worse {metric_name}")
+
+    # =========================================
+    # FILTER BY ALGORITHM
+    # =========================================
+
+    def get_active_model_by_algorithm(self, algorithm: str) -> Optional[MLModel]:
+        """
+        Возвращает активную модель с указанным алгоритмом.
+
+        Args:
+            algorithm: 'catboost', 'pytorch_lstm', 'pytorch_mlp'
+        """
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.algorithm == algorithm,
+                MLModel.is_active == True,
+                MLModel.is_deleted == False,
+            )
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+
+    def get_models_by_algorithm(self, algorithm: str, limit: int = 100) -> List[MLModel]:
+        """
+        Возвращает список моделей с указанным алгоритмом (не только активных).
+
+        Args:
+            algorithm: 'catboost', 'pytorch_lstm', 'pytorch_lstm_with_embeddings', 'pytorch_mlp'
+            limit: максимальное количество записей
+        """
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.algorithm == algorithm,
+                MLModel.is_deleted == False,
+            )
+        ).order_by(MLModel.created_at.desc()).limit(limit)
+        return self.db.execute(stmt).scalars().all()  # type: ignore
+
+
+    def get_active_lstm_model(self) -> Optional[MLModel]:
+        """
+        Удобный метод для получения активной LSTM модели.
+        Ищет алгоритмы: 'pytorch_lstm' или 'pytorch_lstm_with_embeddings'
+        """
+        stmt = select(MLModel).where(
+            and_(
+                MLModel.algorithm.in_(['pytorch_lstm', 'pytorch_lstm_with_embeddings']),
+                MLModel.is_active == True,
+                MLModel.is_deleted == False,
+            )
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_active_catboost_model(self) -> Optional[MLModel]:
+        """
+        Удобный метод для получения активной CatBoost модели.
+        """
+        return self.get_active_model_by_algorithm('catboost')
+
+

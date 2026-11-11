@@ -1,0 +1,83 @@
+# . docker-compose.dev.yml
+services:
+
+  backend:
+    image: promo-ml:latest
+    container_name: promo_ml_backend
+    build:
+      context: .
+      dockerfile: Dockerfile  # простой Dockerfile для разработки
+    restart: unless-stopped
+    environment:
+      ENV: dev
+      LOG_LEVEL: DEBUG
+    volumes:
+      - ./app:/app  # ← монтируем код для быстрой разработки
+      - ./models:/app/models
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - promo_net
+
+  postgres:
+    image: postgres:15
+    container_name: promo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: promo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - promo_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    container_name: promo_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - promo_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  frontend:
+    container_name: promo_ml_frontend
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_GRAFANA_URL=http://localhost:3000
+    depends_on:
+      - backend
+    networks:
+      - promo_net
+
+networks:
+  promo_net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:

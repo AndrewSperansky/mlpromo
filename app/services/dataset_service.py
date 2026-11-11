@@ -32,6 +32,7 @@ class DatasetService:
                     {
                         "id": h.id,
                         "batch_id": str(h.batch_id),
+                        "promo_id": h.promo_id,
                         "uploaded_at": h.uploaded_at.isoformat(),
                         "records_added": h.records_added,
                         "total_records_after": h.total_records_after,

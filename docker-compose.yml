@@ -4,31 +4,49 @@ services:
   # -------------------- BACKEND --------------------
   backend:
     container_name: promo_ml_backend
-    image: promo-ml:latest
+
     build:
       context: .
       dockerfile: Dockerfile
+
     restart: unless-stopped
 
     environment:
-      ENV: env
-      LOG_LEVEL: INFO
+      ENV: dev
+      LOG_LEVEL: DEBUG
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/promo
+      REDIS_URL: redis://redis:6379/0
 
     volumes:
-      - backend-logs:/app/logs
-      - ./models:/app/models
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./models/current:/app/models/current
+      - ./models/candidate:/app/models/candidate
+      - ./models/archive:/app/models/archive
+      - ./models/history:/app/models/history
+      - ./models/metrics:/app/models/metrics
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --timeout-keep-alive 7200
+      --timeout-graceful-shutdown 7200
+      
 
     ports:
       - "8000:8000"
+
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
     networks:
       - promo_net
+
     healthcheck:
       test: [
         "CMD-SHELL",
@@ -37,15 +55,35 @@ services:
       interval: 30s          # проверять каждые 30 секунд
       timeout: 10s         # ждать ответа не более 10 секунд
       retries: 3          # после 3 неудач считать контейнер unhealthy
-      start_period: 30s   # игнорировать проверки первые 60 секунд после старта
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: 1024M
-        reservations:
-          cpus: "0.3"
-          memory: 256M
+      start_period: 180s   # игнорировать проверки первые 180 секунд после старта
+
+  # -------------------- FRONTEND --------------------
+
+  frontend:
+    container_name: promo_ml_frontend
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+
+    environment:
+      - VITE_GRAFANA_URL=http://localhost:3000
+
+    depends_on:
+      - backend
+    networks:
+      - promo_net
+
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:5173 || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 
   # -------------------- POSTGRES --------------------
   postgres:
@@ -77,17 +115,32 @@ services:
         limits:
           memory: 1G
 
+  # -------------------- PgAdmin --------------------
+#  pgadmin:
+#    image: dpage/pgadmin4
+#    container_name: promo_pgadmin
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+#      PGADMIN_DEFAULT_PASSWORD: admin
+#    ports:
+#      - "5050:80"            # http://localhost:5050
+#    networks:
+#      - promo_net
+
+
   # ------------ POSTGRES EXPORTER ------------------
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter
     container_name: promo_postgres_exporter
     environment:
-      DATA_SOURCE_NAME: "postgresql://promo:promo@postgres:5432/promo?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/promo?sslmode=disable"
     ports:
       - "9187:9187"
     depends_on:
       - postgres
+    networks:
+      - promo_net
 
 
   # -------------------- REDIS --------------------
@@ -101,8 +154,7 @@ services:
     volumes:
       - redis-data:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
-    networks:
-      - promo_net
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -112,6 +164,9 @@ services:
         limits:
           memory: 512M
 
+    networks:
+      - promo_net
+
   # ------------- REDIS EXPORTER ----------------
 
   redis-exporter:
@@ -119,9 +174,12 @@ services:
     container_name: promo_redis_exporter
     restart: unless-stopped
     environment:
-      - REDIS_ADDR=redis://promo_redis:6379
+      - REDIS_ADDR=redis://172.18.0.2:6379
     ports:
       - "9121:9121"
+
+    networks:
+      - promo_net
 
   # -------------------- NGINX --------------------
   nginx:
@@ -147,6 +205,22 @@ services:
         limits:
           cpus: "0.5"
           memory: 512M
+
+  # -------------------- NGINX EXPORTER --------------------
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:0.11.0
+    container_name: promo_nginx_exporter
+    restart: unless-stopped
+    command:
+      - -nginx.scrape-uri=http://nginx:80/nginx_status
+      - -web.listen-address=:9113
+    ports:
+      - "9113:9113"
+    depends_on:
+      - nginx
+
+    networks:
+      - promo_net
 
   # -------------------- LOKI --------------------
   loki:
@@ -177,7 +251,7 @@ services:
     restart: unless-stopped
     command: -config.file=/etc/promtail/promtail-config.yml
     volumes:
-      - backend-logs:/app/logs
+      - ./logs:/app/logs
       - ./docker/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
       - postgres-logs:/var/log/postgresql:ro
       - nginx-logs:/var/log/nginx:ro
@@ -204,12 +278,14 @@ services:
     depends_on:
       loki:
         condition: service_healthy
-    networks:
-      - promo_net
+
     deploy:
       resources:
         limits:
           memory: 512M
+
+    networks:
+      - promo_net
 
   # -------------------- PROMETHEUS --------------------
 
@@ -229,25 +305,8 @@ services:
     networks:
       - promo_net
 
-  # -------------------- FRONTEND --------------------
 
-  frontend:
-    container_name: promo_ml_frontend
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    command: sh -c "npm install && npm run dev -- --host"
-    ports:
-      - "5173:5173"
 
-    environment:
-      - VITE_GRAFANA_URL=http://localhost:3000
-
-    depends_on:
-      - backend
-    networks:
-      - promo_net
 
 # -------------------- NETWORKS --------------------
 networks:
@@ -256,8 +315,6 @@ networks:
 
 # -------------------- VOLUMES --------------------
 volumes:
-  lineage:
-  metrics:
   postgres-data:
   postgres-logs:
   grafana-data:

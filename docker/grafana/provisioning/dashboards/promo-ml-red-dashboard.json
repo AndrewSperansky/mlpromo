@@ -16,7 +16,7 @@
       "id": 1,
       "type": "timeseries",
       "title": "Backend — Request Rate",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "sum(rate(http_requests_total[1m]))",
@@ -44,7 +44,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "Backend — Latency (p95)",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))",
@@ -58,7 +58,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "Nginx — Requests",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "sum(rate(nginx_http_requests_total[1m]))",
@@ -72,7 +72,7 @@
       "id": 5,
       "type": "timeseries",
       "title": "Nginx — 5xx Errors",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "sum(rate(nginx_http_requests_total{status=~\"5..\"}[1m]))",
@@ -86,7 +86,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "Postgres — Slow Queries",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "rate(pg_stat_statements_total_time_seconds[5m])",
@@ -100,7 +100,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Redis — Ops/sec",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "rate(redis_commands_processed_total[1m])",
@@ -114,7 +114,7 @@
       "id": 8,
       "type": "timeseries",
       "title": "Redis — Memory Usage",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": { "type": "prometheus", "uid": "d4228419-cf1b-4b06-9a0c-c8acedc36e21" },
       "targets": [
         {
           "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",

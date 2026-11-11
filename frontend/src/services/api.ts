@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
     baseURL: '/api/v1',
-    timeout: 5000
+    timeout: 7200000,  // ← 2 часа
 })
 
 // Добавляем интерцепторы для логирования ВСЕХ запросов и ответов
@@ -42,6 +42,8 @@ api.interceptors.response.use(
             method: error.config?.method?.toUpperCase(),
             data: error.response?.data,
             headers: error.response?.headers,
+            code: error.code,
+            message: error.message,
         })
         
         // Если 401 Unauthorized — выходим из системы
@@ -172,17 +174,17 @@ export const rollbackModel = () =>
 
 
 export const trainModel = async (data: TrainModelParams) => {
-    console.log('🚀 Starting model training...', data)
+    const startTime = Date.now()
+    console.log('🚀 Starting model training...', { data, startTime: new Date().toISOString() })
 
     try {
-        const response = await api.post('/ml/train', data, {
-            timeout: 300000  // 5 минут
-        })
-
-        console.log('✅ Training completed:', response.data)
+        const response = await api.post('/ml/train', data)
+        console.log(`✅ Training completed in ${(Date.now() - startTime) / 1000} seconds:`, response.data)
         return response
 
     } catch (error: unknown) {
+        console.error(`❌ Error after ${(Date.now() - startTime) / 1000} seconds:`, error)
+        
         // Проверяем тип ошибки
         if (error && typeof error === 'object' && 'code' in error && error.code === 'ECONNABORTED') {
             console.error('❌ Training timeout - operation took too long')
@@ -207,10 +209,7 @@ export const trainModelDirect = async (promote: boolean = false) => {
     console.log('🚀 Starting direct model training...', { promote })
     
     try {
-        const response = await api.post('/ml/train', { promote }, {
-            timeout: 300000  // 5 минут
-        })
-        
+        const response = await api.post('/ml/train', { promote })
         console.log('✅ Training completed:', response.data)
         return response
         
@@ -363,3 +362,78 @@ export const deleteDataset = (datasetId: string, force: boolean = false) => {
 // Docker Containers Status
 // ============================
 export const getContainersStatus = () => api.get('/system/containers-status')
+
+
+// ============================
+// LSTM PREDICT
+// ============================
+
+export interface LSTMPredictResponse {
+  sku: string
+  days_ahead: number
+  predictions: Array<{
+    date: string
+    predicted_sales: number
+  }>
+  model_id: number | null
+}
+
+export const predictLSTM = (data: { sku: string; days_ahead: number; store_id?: string }) =>
+    api.post<LSTMPredictResponse>('/ml/torch/predict/lstm', data)
+
+
+
+
+// ============================
+// LSTM STATUS & HITL TYPES
+// ============================
+
+export interface LSTMStatusResponse {
+  lstm: {
+    exists: boolean
+    has_candidate: boolean
+    id: number | null
+    version: string | null
+    metrics: {
+      val_loss?: number
+      rmse?: number
+      coverage?: number
+      [key: string]: any
+    } | null
+    is_active: boolean
+    activated_at: string | null
+  }
+  catboost: {
+    id: number | null
+    version: string | null
+    metrics: {
+      rmse?: number
+      coverage?: number
+      [key: string]: any
+    } | null
+    is_active: boolean
+  }
+}
+
+
+// ============================
+// LSTM STATUS & HITL
+// ============================
+
+export const getLSTMStatus = () =>
+    api.get<LSTMStatusResponse>('/ml/torch/status')
+
+export const activateLSTM = () =>
+    api.post('/ml/torch/activate')
+
+export const deactivateLSTM = () =>
+    api.post('/ml/torch/deactivate')
+
+
+// ============================
+// LSTM TRAINING METRICS FOR CHART
+// ============================
+
+export const getLSTMTrainingMetrics = () =>
+    api.get('/ml/torch/training/metrics')
+

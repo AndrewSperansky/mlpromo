@@ -80,7 +80,7 @@
           </thead>
           <tbody>
             <tr v-for="upload in stats.upload_history" :key="upload.id">
-              <td><code>{{ upload.batch_id.slice(0, 8) }}...</code></td>
+              <td><code>{{ upload.promo_id || '—'  }}...</code></td>
               <td>{{ formatDate(upload.uploaded_at) }}</td>
               <td class="text-success fw-bold">{{ upload.records_added }}</td>
               <td>{{ upload.total_records_after }}</td>
@@ -116,6 +116,7 @@
         <h5 class="text-danger">⚠️ Confirm Deletion</h5>
         <p>Are you sure you want to delete this batch?</p>
         <p class="text-muted small">Batch ID: <code>{{ batchToDelete }}</code></p>
+        <p class="text-muted small">Promo: <code>{{ deleteBatchPromoId || '—' }}</code></p>
         <p class="text-warning small">⚠️ This will delete {{ deleteBatchRecords }} records and cannot be undone!</p>
         
         <div class="mt-3 d-flex justify-content-end gap-2">
@@ -140,6 +141,7 @@ import api from "../services/api"
 interface UploadHistory {
   id: number
   batch_id: string
+  promo_id?: string
   uploaded_at: string
   records_added: number
   total_records_after: number
@@ -173,6 +175,7 @@ const error = ref("")
 const showDeleteModal = ref(false)
 const batchToDelete = ref<string | null>(null)
 const deleteBatchRecords = ref(0)
+const deleteBatchPromoId = ref<string | null>(null)
 
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '-'

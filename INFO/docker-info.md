@@ -488,25 +488,30 @@ docker images | grep promo-ml
 🔹 Важно:  
 Это не копия, не rebuild — это ещё одна ссылка на тот же image ID.
 
+
+
+
 ### 6. Собрать образ Backend
-docker build -t asperansky/promo-ml:v1.2  .  
-docker build -t asperansky/promo-ml:v1.2 -f Dockerfile . 
+docker build -t asperansky/promo-ml:v1.5  .  
+docker build -t asperansky/promo-ml:v1.5 -f Dockerfile . 
+
+
 🔹  -t     задает имя  
 🔹 (.)    путь к Dockerfile (текущая директория)
 
 
 ### 7. Отправить образ Backend на Docker Hub
 
-docker push asperansky/promo-ml:v1.2
+docker push asperansky/promo-ml:v1.5
 
 
 # Собрать Frontend
 
-docker build -t asperansky/promo-ml-front:v1.2 -f Dockerfile.frontend .
+docker build -t asperansky/promo-ml-front:v1.5 -f Dockerfile.frontend .
 
 # Запушить  Frontend на Docker Hub
 
-docker push asperansky/promo-ml-front:v1.2
+docker push asperansky/promo-ml-front:v1.5
 
 
 
@@ -514,13 +519,13 @@ docker push asperansky/promo-ml-front:v1.2
 ### 8. Проверка на Docker Hub
 
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:stage5 | grep Id 
+docker inspect asperansky/promo-ml:v1.5 | grep Id 
 ### Production
 docker images asperansky/promo-ml
-docker inspect asperansky/promo-ml:prod5 --format='{{.Id}}'
+docker inspect asperansky/promo-ml:v1.5 --format='{{.Id}}'
 ### Frontend
 docker images asperansky/promo-ml-front
-docker inspect asperansky/promo-ml-front:stage5
+docker inspect asperansky/promo-ml-front:v1.5
 
 
 
@@ -553,11 +558,32 @@ git  pull
 ### Скачать новые образы
 docker compose -f docker-compose.prod.yml pull
 ### или
-docker pull asperansky/promo-ml:v1.2
-docker pull asperansky/promo-ml-front:v1.2
+docker pull asperansky/promo-ml:v1.5
+docker pull asperansky/promo-ml-front:v1.5
 
 ### Перезапустить
 docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml up -d
 
 
+### 2. Очистить build cache
+docker builder prune -a
+
+
+### Запуск нестандартного Dockerfile
+docker build -t promo-ml:latest -f Dockerfile.simple . 
+
+### Удаление зависших имиджей
+#### сначала контейнер    
+docker rm ca6849b6960b  
+
+#### затем имидж 
+docker rmi 9c7bf4362851
+#### принудительно
+docker rmi -f 9c7bf4362851
+
+
+
+### Проверить куда монтируются папки
+docker inspect promo_ml_backend
+docker inspect promo_promtail

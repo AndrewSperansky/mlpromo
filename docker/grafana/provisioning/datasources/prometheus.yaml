@@ -1,0 +1,15 @@
+# docker/grafana/provisioning/datasources/prometheus.yaml
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: d4228419-cf1b-4b06-9a0c-c8acedc36e21           # ← ДОЛЖНО СОВПАДАТЬ С JSON!
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: false
+    readOnly: true
+
+    jsonData:
+      timeInterval: 15s
