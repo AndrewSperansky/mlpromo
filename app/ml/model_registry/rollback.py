@@ -34,7 +34,7 @@ def rollback_current_to_archive(
 
 
     current_dir = Path(settings.ML_CURRENT_DIR)
-    archive_dir = Path(settings.ML_ARCYIVE_DIR)
+    archive_dir = Path(settings.ML_ARCHIVE_DIR)
 
     current_dir.mkdir(parents=True, exist_ok=True)
     archive_dir.mkdir(parents=True, exist_ok=True)

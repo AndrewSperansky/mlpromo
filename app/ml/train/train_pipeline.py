@@ -89,6 +89,8 @@ def load_full_dataset(db: Session) -> pd.DataFrame:
             extra_features
         FROM industrial_dataset_raw
         WHERE k_uplift IS NOT NULL
+        --ORDER BY id
+        --LIMIT 10000
     """)
 
     df = pd.read_sql(query, db.bind)

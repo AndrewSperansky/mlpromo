@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "AI Operating System/User_AI_Contract.md",
+                "file": "Theory/CatBost.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "User_AI_Contract"
+              "title": "CatBost"
             }
           }
         ]
@@ -187,6 +187,15 @@
   },
   "active": "f1d289a6202ec6b1",
   "lastOpenFiles": [
+    "Management/Stage_6/Roadmap_Stage_6.md",
+    "Management/Stage_6/Logbook_Stage_6.md",
+    "Management/Stage_6",
+    "Management",
+    "promo-ml-temporal-baseline-architecture.md~",
+    "promo-ml-temporal-baseline-architecture.md",
+    "AI Operating System/User_AI_Contract.md",
+    "Theory/CatBost.md",
+    "Theory",
     "AI Operating System/AI plagins/Graphify.md",
     "AI Operating System/AI plagins/Claude-mem.md",
     "AI Operating System/AIOS_Session_Memory/aios-mem-roadmap.md",
